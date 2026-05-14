@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>月度奖金与季度OKR系统</title>
-<script src="https://unpkg.com/vue@3.4/dist/vue.global.prod.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script src="./vendor/vue.global.prod.js"></script>
+<script src="./vendor/xlsx.full.min.js"></script>
 <style>
 :root {
   --primary: #3B82F6;
@@ -661,8 +661,7 @@ const { createApp, ref, computed, watch, onMounted } = Vue;
 createApp({
   setup() {
     const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const initial = saved ? JSON.parse(saved) : deepClone(DEFAULT_TEMPLATE);
+    const initial = loadInitialData(STORAGE_KEY);
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
     }
@@ -1012,6 +1011,18 @@ createApp({
     };
   }
 }).mount('#app');
+
+function loadInitialData(storageKey) {
+  const saved = localStorage.getItem(storageKey);
+  if(saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {
+      localStorage.removeItem(storageKey);
+    }
+  }
+  return deepClone(DEFAULT_TEMPLATE);
+}
 </script>
 </body>
 </html>
