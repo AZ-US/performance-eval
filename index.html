@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>季度OKR绩效考核系统</title>
+<title>月度奖金与季度OKR系统</title>
 <script src="https://unpkg.com/vue@3.4/dist/vue.global.prod.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -191,6 +191,39 @@ body {
 /* File input hidden */
 .hidden-input { display:none; }
 
+/* Monthly bonus */
+.bonus-card {
+  background: var(--card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,0.5);
+}
+.section-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
+.section-title { font-size:18px; font-weight:800; margin-bottom:6px; }
+.section-subtitle { font-size:13px; color:var(--text-light); line-height:1.6; max-width:680px; }
+.bonus-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; color:var(--text-light); }
+.bonus-controls input { border:1px solid #E2E8F0; border-radius:8px; padding:6px 10px; font-size:13px; background:white; outline:none; font-family:inherit; }
+.bonus-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.bonus-stat { background:rgba(255,255,255,0.62); border:1px solid rgba(226,232,240,0.9); border-radius:12px; padding:12px 14px; }
+.bonus-stat-label { font-size:12px; color:var(--text-light); margin-bottom:4px; }
+.bonus-stat-value { font-size:20px; font-weight:800; }
+.bonus-table-wrap { overflow-x:auto; border:1px solid rgba(226,232,240,0.9); border-radius:12px; background:rgba(255,255,255,0.54); }
+.bonus-table { width:100%; border-collapse:collapse; min-width:900px; }
+.bonus-table th, .bonus-table td { padding:10px 12px; border-bottom:1px solid #E2E8F0; text-align:left; vertical-align:middle; font-size:13px; }
+.bonus-table th { color:var(--text-light); font-weight:700; background:rgba(248,250,252,0.86); }
+.bonus-table tr:last-child td { border-bottom:none; }
+.bonus-table select, .bonus-table input, .bonus-table textarea {
+  width:100%; border:1px solid #E2E8F0; border-radius:8px; padding:7px 9px; font-size:13px; background:white; outline:none; font-family:inherit;
+}
+.bonus-table textarea { min-height:38px; resize:vertical; }
+.bonus-amount { font-weight:800; white-space:nowrap; }
+.bonus-grade { min-width:96px; }
+.bonus-note { min-width:220px; }
+
 /* Animations */
 @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 .dimension-section { animation:fadeIn 0.4s ease forwards; }
@@ -200,7 +233,7 @@ body {
 @media print {
   .app-header, .header-actions, .save-indicator, .drawer, .drawer-overlay, .kpi-comment, .btn { display:none !important; }
   body { background:white !important; }
-  .summary-card, .dimension-header, .kpi-card { box-shadow:none !important; border:1px solid #ddd !important; backdrop-filter:none !important; background:white !important; break-inside:avoid; }
+  .summary-card, .bonus-card, .dimension-header, .kpi-card { box-shadow:none !important; border:1px solid #ddd !important; backdrop-filter:none !important; background:white !important; break-inside:avoid; }
   .tier-btn:not(.selected) { opacity:0.3; }
   .main-container { max-width:100%; padding:0; }
 }
@@ -208,6 +241,7 @@ body {
 @media (max-width:768px) {
   .tier-group { grid-template-columns:repeat(2,1fr); }
   .summary-card { flex-direction:column; align-items:stretch; text-align:center; }
+  .bonus-stats { grid-template-columns:1fr; }
   .dim-bar-label { width:70px; font-size:12px; }
   .header-top { flex-direction:column; }
   .kpi-list { padding-left:0; }
@@ -229,7 +263,7 @@ body {
   <!-- Header -->
   <header class="app-header">
     <div class="header-top">
-      <div class="app-title">季度OKR绩效考核系统</div>
+      <div class="app-title">月度奖金与季度OKR系统</div>
       <div class="header-inputs">
         <label>被考核人 <input v-model="meta.employeeName" placeholder="姓名"></label>
         <label>考核人 <input v-model="meta.evaluatorName" placeholder="姓名"></label>
@@ -274,7 +308,7 @@ body {
           {{finalGrade.grade}} - {{finalGrade.label}}
         </div>
         <div class="bonus-line">
-          季度绩效参考: {{bonusCurrency}} {{bonusBase}} x {{finalGrade.coefficient}} = <strong>{{bonusCurrency}} {{bonusAmount}}</strong>
+          月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。
         </div>
         <div class="dim-bars">
           <div class="dim-bar-row" v-for="dim in dimensions" :key="dim.id">
@@ -287,6 +321,69 @@ body {
         </div>
       </div>
     </div>
+
+    <!-- Monthly Bonus -->
+    <section class="bonus-card">
+      <div class="section-title-row">
+        <div>
+          <div class="section-title">月度绩效奖金发放</div>
+          <div class="section-subtitle">按当月可观察行为和证据发放：异常闭环、节点同步、团队动作、证据留档。季度OKR保留为复盘，不参与月度奖金追回。</div>
+        </div>
+        <div class="bonus-controls">
+          <span>月奖金基准</span>
+          <input type="number" v-model.number="bonusBase" style="width:96px">
+          <input v-model="bonusCurrency" style="width:64px">
+          <button class="btn btn-outline" @click="applyBaseToMonths">应用基准</button>
+          <button class="btn btn-outline" @click="fillPaidFromDue">应发填入实发</button>
+          <button class="btn btn-outline" @click="syncBonusMonths">同步季度月份</button>
+        </div>
+      </div>
+      <div class="bonus-stats">
+        <div class="bonus-stat">
+          <div class="bonus-stat-label">本季度应发合计</div>
+          <div class="bonus-stat-value">{{bonusCurrency}} {{monthlyDueTotal}}</div>
+        </div>
+        <div class="bonus-stat">
+          <div class="bonus-stat-label">本季度实发合计</div>
+          <div class="bonus-stat-value">{{bonusCurrency}} {{monthlyPaidTotal}}</div>
+        </div>
+        <div class="bonus-stat">
+          <div class="bonus-stat-label">已评月份</div>
+          <div class="bonus-stat-value">{{ratedMonthCount}} / {{monthlyBonuses.length}}</div>
+        </div>
+      </div>
+      <div class="bonus-table-wrap">
+        <table class="bonus-table">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th>月度等级</th>
+              <th>系数</th>
+              <th>月奖金基准</th>
+              <th>应发奖金</th>
+              <th>实发奖金</th>
+              <th>证据/备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in monthlyBonuses" :key="row.month">
+              <td><input v-model="row.month"></td>
+              <td class="bonus-grade">
+                <select v-model="row.grade">
+                  <option value="">未评</option>
+                  <option v-for="g in gradeScale" :key="g.grade" :value="g.grade">{{g.grade}} - {{g.label}}</option>
+                </select>
+              </td>
+              <td>{{monthlyCoefficient(row)}}</td>
+              <td><input type="number" v-model.number="row.base"></td>
+              <td class="bonus-amount">{{bonusCurrency}} {{monthlyDue(row)}}</td>
+              <td><input type="number" v-model.number="row.paid"></td>
+              <td class="bonus-note"><textarea v-model="row.comment" placeholder="异常闭环、同步记录、带教动作、证据链接..."></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- Dimensions & KPIs -->
     <div class="dimension-section" v-for="(dim, di) in dimensions" :key="dim.id" :style="{animationDelay: di*0.1+'s'}">
@@ -397,14 +494,15 @@ body {
 <script>
 const DEFAULT_TEMPLATE = {
   meta: {
-    templateName: "进口副主管季度OKR",
-    templateVersion: "2.0",
+    templateName: "进口副主管月度奖金+季度OKR",
+    templateVersion: "3.0",
     employeeName: "",
     evaluatorName: "",
     period: currentQuarterLabel()
   },
   bonusBase: 300,
   bonusCurrency: "USD",
+  monthlyBonuses: buildMonthlyBonuses(currentQuarterLabel(), 300),
   gradeScale: [
     { grade:"S", label:"高度达成 Stretch Achieved", minScore:90, maxScore:100, coefficient:1.2 },
     { grade:"A", label:"达成 Achieved", minScore:75, maxScore:89, coefficient:1.0 },
@@ -537,19 +635,42 @@ function currentQuarterLabel() {
   return `${now.getFullYear()}-Q${quarter}`;
 }
 
+function getQuarterMonths(period) {
+  const fallback = currentQuarterLabel();
+  const match = String(period || fallback).trim().match(/^(\d{4})-Q([1-4])$/i);
+  const year = match ? Number(match[1]) : Number(fallback.slice(0, 4));
+  const quarter = match ? Number(match[2]) : Number(fallback.slice(-1));
+  const startMonth = (quarter - 1) * 3 + 1;
+  return [0, 1, 2].map(offset => `${year}-${String(startMonth + offset).padStart(2, '0')}`);
+}
+
+function buildMonthlyBonuses(period, base) {
+  return getQuarterMonths(period).map(month => ({
+    month,
+    grade: '',
+    base,
+    paid: 0,
+    comment: ''
+  }));
+}
+
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 const { createApp, ref, computed, watch, onMounted } = Vue;
 
 createApp({
   setup() {
-    const STORAGE_KEY = 'quarterly_okr_eval_draft_v2';
+    const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
     const saved = localStorage.getItem(STORAGE_KEY);
     const initial = saved ? JSON.parse(saved) : deepClone(DEFAULT_TEMPLATE);
+    if(!initial.monthlyBonuses) {
+      initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
+    }
 
     const meta = ref(initial.meta);
     const bonusBase = ref(initial.bonusBase);
     const bonusCurrency = ref(initial.bonusCurrency);
+    const monthlyBonuses = ref(initial.monthlyBonuses);
     const gradeScale = ref(initial.gradeScale);
     const dimensions = ref(initial.dimensions);
     const collapsedDims = ref({});
@@ -604,6 +725,42 @@ createApp({
 
     const bonusAmount = computed(()=> Math.round(bonusBase.value * finalGrade.value.coefficient));
 
+    function gradeConfig(grade) {
+      return gradeScale.value.find(g=>g.grade===grade) || null;
+    }
+
+    function monthlyCoefficient(row) {
+      return gradeConfig(row.grade)?.coefficient || 0;
+    }
+
+    function monthlyDue(row) {
+      const base = Number(row.base ?? bonusBase.value) || 0;
+      return Math.round(base * monthlyCoefficient(row));
+    }
+
+    const monthlyDueTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+monthlyDue(row), 0));
+    const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
+    const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
+
+    function syncBonusMonths() {
+      const existing = new Map(monthlyBonuses.value.map(row=>[row.month, row]));
+      monthlyBonuses.value = getQuarterMonths(meta.value.period).map(month => {
+        const old = existing.get(month);
+        return old || { month, grade:'', base:bonusBase.value, paid:0, comment:'' };
+      });
+      showToast('季度月份已同步');
+    }
+
+    function applyBaseToMonths() {
+      monthlyBonuses.value.forEach(row=>{ row.base = bonusBase.value; });
+      showToast('月奖金基准已应用');
+    }
+
+    function fillPaidFromDue() {
+      monthlyBonuses.value.forEach(row=>{ row.paid = monthlyDue(row); });
+      showToast('已按应发填入实发');
+    }
+
     function selectTier(kpi, grade) {
       if(kpi.selectedTier === grade) {
         kpi.selectedTier = null;
@@ -628,7 +785,7 @@ createApp({
     // Auto-save
     let saveTimer = null;
     function getData() {
-      return { meta:meta.value, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, gradeScale:gradeScale.value, dimensions:dimensions.value };
+      return { meta:meta.value, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, monthlyBonuses:monthlyBonuses.value, gradeScale:gradeScale.value, dimensions:dimensions.value };
     }
     function autoSave() {
       clearTimeout(saveTimer);
@@ -637,12 +794,12 @@ createApp({
         saveTime.value = new Date().toLocaleTimeString('zh-CN');
       }, 2000);
     }
-    watch([meta, bonusBase, bonusCurrency, gradeScale, dimensions], autoSave, {deep:true});
+    watch([meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions], autoSave, {deep:true});
 
     // Export JSON
     function exportJSON() {
       const data = getData();
-      const name = `季度OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.json`;
+      const name = `月度奖金_OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.json`;
       const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -664,6 +821,7 @@ createApp({
             meta.value = data.meta || meta.value;
             bonusBase.value = data.bonusBase || 300;
             bonusCurrency.value = data.bonusCurrency || 'USD';
+            monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || meta.value.period, data.bonusBase || bonusBase.value);
             gradeScale.value = data.gradeScale || gradeScale.value;
             dimensions.value = data.dimensions;
             showToast('导入成功');
@@ -679,7 +837,33 @@ createApp({
     // Export Excel
     function exportExcel() {
       const wb = XLSX.utils.book_new();
-      // Sheet 1: Results
+
+      // Sheet 1: Monthly bonus
+      const monthlyRows = [
+        [`${meta.value.templateName} 月度绩效奖金发放表`],
+        [`被考核人: ${meta.value.employeeName}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`],
+        [`月奖金基准: ${bonusCurrency.value} ${bonusBase.value}`, `本季度应发合计: ${bonusCurrency.value} ${monthlyDueTotal.value}`, `本季度实发合计: ${bonusCurrency.value} ${monthlyPaidTotal.value}`],
+        [],
+        ['月份','月度等级','系数','月奖金基准','应发奖金','实发奖金','证据/备注']
+      ];
+      for(const row of monthlyBonuses.value) {
+        monthlyRows.push([
+          row.month,
+          row.grade || '未评',
+          monthlyCoefficient(row),
+          `${bonusCurrency.value} ${row.base ?? bonusBase.value}`,
+          `${bonusCurrency.value} ${monthlyDue(row)}`,
+          `${bonusCurrency.value} ${Number(row.paid)||0}`,
+          row.comment || ''
+        ]);
+      }
+      monthlyRows.push([]);
+      monthlyRows.push(['说明','月度奖金按当月可观察行为和证据正式发放，季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。']);
+      const wsMonthly = XLSX.utils.aoa_to_sheet(monthlyRows);
+      wsMonthly['!cols'] = [{wch:10},{wch:14},{wch:8},{wch:14},{wch:14},{wch:14},{wch:36}];
+      XLSX.utils.book_append_sheet(wb, wsMonthly, '月度奖金');
+
+      // Sheet 2: Quarterly OKR results
       const rows = [
         [`${meta.value.templateName} 季度OKR考核表`],
         [`被考核人: ${meta.value.employeeName}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`],
@@ -695,12 +879,12 @@ createApp({
       rows.push(['合计','','','','',' ',totalScore.value,'']);
       rows.push(['季度结果','','',finalGrade.value.grade+' - '+finalGrade.value.label]);
       rows.push(['绩效系数','','',finalGrade.value.coefficient]);
-      rows.push(['绩效参考','','',`${bonusCurrency.value} ${bonusAmount.value}`]);
+      rows.push(['结果用途','','','季度复盘、下季度目标校准、岗位模板优化']);
       const ws1 = XLSX.utils.aoa_to_sheet(rows);
       ws1['!cols'] = [{wch:14},{wch:8},{wch:28},{wch:8},{wch:30},{wch:8},{wch:6},{wch:20}];
-      XLSX.utils.book_append_sheet(wb, ws1, '评估结果');
+      XLSX.utils.book_append_sheet(wb, ws1, '季度OKR');
 
-      // Sheet 2: Scoring criteria
+      // Sheet 3: Scoring criteria
       const rows2 = [
         ['OKR 完成档位说明'],
         ['编号','关键结果','满分','S档','A档','B档','C档']
@@ -720,7 +904,7 @@ createApp({
       ws2['!cols'] = [{wch:6},{wch:28},{wch:6},{wch:22},{wch:22},{wch:22},{wch:22}];
       XLSX.utils.book_append_sheet(wb, ws2, '评分标准');
 
-      const name = `季度OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.xlsx`;
+      const name = `月度奖金_OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.xlsx`;
       XLSX.writeFile(wb, name);
       showToast('Excel 已导出');
     }
@@ -733,6 +917,7 @@ createApp({
       meta.value = fresh.meta;
       bonusBase.value = fresh.bonusBase;
       bonusCurrency.value = fresh.bonusCurrency;
+      monthlyBonuses.value = fresh.monthlyBonuses;
       gradeScale.value = fresh.gradeScale;
       dimensions.value = fresh.dimensions;
       localStorage.removeItem(STORAGE_KEY);
@@ -768,12 +953,13 @@ createApp({
       });
     }
     function removeDim(i) {
-      if(confirm('确定删除该维度？')) dimensions.value.splice(i,1);
+      if(confirm('确定删除该目标？')) dimensions.value.splice(i,1);
     }
 
     function exportTemplate() {
       const tpl = deepClone(getData());
       tpl.dimensions.forEach(d=>d.kpis.forEach(k=>{ k.selectedTier=null; k.score=0; k.comment=''; }));
+      tpl.monthlyBonuses = buildMonthlyBonuses(tpl.meta.period, tpl.bonusBase);
       tpl.meta.employeeName = '';
       tpl.meta.evaluatorName = '';
       const blob = new Blob([JSON.stringify(tpl,null,2)], {type:'application/json'});
@@ -796,6 +982,7 @@ createApp({
             meta.value = { ...meta.value, templateName:data.meta?.templateName||meta.value.templateName, templateVersion:data.meta?.templateVersion||'1.0' };
             bonusBase.value = data.bonusBase || bonusBase.value;
             bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
+            monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(meta.value.period, bonusBase.value);
             gradeScale.value = data.gradeScale || gradeScale.value;
             dimensions.value = data.dimensions;
             showToast('模版导入成功');
@@ -810,10 +997,12 @@ createApp({
     }
 
     return {
-      meta, bonusBase, bonusCurrency, gradeScale, dimensions,
+      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
       collapsedDims, drawerOpen, saveTime, toastMsg, toastVisible,
       fileInput, templateInput,
       totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
+      monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
+      monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
       exportJSON, triggerImport, importJSON,
