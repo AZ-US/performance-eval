@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>绩效考核评估系统</title>
+<title>季度OKR绩效考核系统</title>
 <script src="https://unpkg.com/vue@3.4/dist/vue.global.prod.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 <style>
@@ -229,11 +229,11 @@ body {
   <!-- Header -->
   <header class="app-header">
     <div class="header-top">
-      <div class="app-title">绩效考核评估系统</div>
+      <div class="app-title">季度OKR绩效考核系统</div>
       <div class="header-inputs">
         <label>被考核人 <input v-model="meta.employeeName" placeholder="姓名"></label>
         <label>考核人 <input v-model="meta.evaluatorName" placeholder="姓名"></label>
-        <label>月份 <input type="month" v-model="meta.period"></label>
+        <label>季度 <input v-model="meta.period" placeholder="2026-Q2"></label>
       </div>
       <div class="header-actions">
         <button class="btn btn-outline" @click="exportJSON">JSON</button>
@@ -274,7 +274,7 @@ body {
           {{finalGrade.grade}} - {{finalGrade.label}}
         </div>
         <div class="bonus-line">
-          绩效奖金: {{bonusCurrency}} {{bonusBase}} x {{finalGrade.coefficient}} = <strong>{{bonusCurrency}} {{bonusAmount}}</strong>
+          季度绩效参考: {{bonusCurrency}} {{bonusBase}} x {{finalGrade.coefficient}} = <strong>{{bonusCurrency}} {{bonusAmount}}</strong>
         </div>
         <div class="dim-bars">
           <div class="dim-bar-row" v-for="dim in dimensions" :key="dim.id">
@@ -310,7 +310,7 @@ body {
             <span class="kpi-name">{{kpi.name}}</span>
             <span class="kpi-weight-badge">满分 {{kpi.weight}} 分</span>
           </div>
-          <div class="kpi-desc" v-if="kpi.target">目标值: {{kpi.target}}</div>
+          <div class="kpi-desc" v-if="kpi.target">关键结果 / 证据口径: {{kpi.target}}</div>
           <div class="tier-group">
             <div v-for="tier in kpi.tiers" :key="tier.grade"
                  class="tier-btn"
@@ -321,7 +321,7 @@ body {
               <div class="tier-desc">{{tier.description}}</div>
             </div>
           </div>
-          <textarea class="kpi-comment" v-model="kpi.comment" placeholder="评分说明 / 备注..." rows="1"></textarea>
+          <textarea class="kpi-comment" v-model="kpi.comment" placeholder="完成说明 / 证据链接 / 取数困难说明..." rows="1"></textarea>
         </div>
       </div>
     </div>
@@ -347,7 +347,7 @@ body {
         <input v-model="meta.templateName" style="flex:1">
       </div>
       <div class="editor-row">
-        <label>奖金基准</label>
+        <label>绩效基准</label>
         <input type="number" v-model.number="bonusBase" style="width:100px">
         <input v-model="bonusCurrency" style="width:60px">
       </div>
@@ -363,28 +363,28 @@ body {
     </div>
 
     <div class="editor-section" v-for="(dim, di) in dimensions" :key="'ed-'+dim.id">
-      <h3>{{dim.id}} {{dim.name}} <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;margin-left:8px" @click="removeDim(di)">删除维度</button></h3>
+      <h3>{{dim.id}} {{dim.name}} <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;margin-left:8px" @click="removeDim(di)">删除目标</button></h3>
       <div class="editor-row">
-        <label>维度名</label><input v-model="dim.name" style="flex:1">
+        <label>目标名</label><input v-model="dim.name" style="flex:1">
         <label>ID</label><input v-model="dim.id" style="width:40px">
       </div>
       <div v-for="(kpi,ki) in dim.kpis" :key="'ek-'+kpi.id" style="border-top:1px solid #E2E8F0;padding-top:10px;margin-top:10px;">
         <div class="editor-row">
           <label>{{kpi.id}}</label>
-          <input v-model="kpi.name" style="flex:1" placeholder="KPI名称">
+          <input v-model="kpi.name" style="flex:1" placeholder="KR名称">
           <label>满分</label><input type="number" v-model.number="kpi.weight" style="width:60px">
           <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" @click="dim.kpis.splice(ki,1)">删</button>
         </div>
-        <div class="editor-row"><label>目标值</label><input v-model="kpi.target" style="flex:1"></div>
+        <div class="editor-row"><label>证据口径</label><input v-model="kpi.target" style="flex:1"></div>
         <div class="tier-editor" v-for="t in kpi.tiers" :key="t.grade">
           <span>{{t.grade}}</span>
           <input type="number" v-model.number="t.points">
           <input v-model="t.description" placeholder="评分描述">
         </div>
       </div>
-      <button class="btn btn-outline" style="margin-top:10px;font-size:12px" @click="addKpi(dim)">+ 添加KPI</button>
+      <button class="btn btn-outline" style="margin-top:10px;font-size:12px" @click="addKpi(dim)">+ 添加KR</button>
     </div>
-    <button class="btn btn-outline" style="margin-top:10px;width:100%" @click="addDimension">+ 添加考核维度</button>
+    <button class="btn btn-outline" style="margin-top:10px;width:100%" @click="addDimension">+ 添加目标</button>
 
     <div style="margin-top:20px;display:flex;gap:8px">
       <button class="btn btn-primary" @click="exportTemplate">导出模版</button>
@@ -397,123 +397,145 @@ body {
 <script>
 const DEFAULT_TEMPLATE = {
   meta: {
-    templateName: "进口副主管",
-    templateVersion: "1.0",
+    templateName: "进口副主管季度OKR",
+    templateVersion: "2.0",
     employeeName: "",
     evaluatorName: "",
-    period: new Date().toISOString().slice(0,7)
+    period: currentQuarterLabel()
   },
   bonusBase: 300,
   bonusCurrency: "USD",
   gradeScale: [
-    { grade:"S", label:"卓越 Outstanding", minScore:90, maxScore:100, coefficient:1.2 },
-    { grade:"A", label:"优秀 Excellent", minScore:75, maxScore:89, coefficient:1.0 },
-    { grade:"B", label:"达标 Meets Expectations", minScore:60, maxScore:74, coefficient:0.7 },
-    { grade:"C", label:"待改进 Needs Improvement", minScore:0, maxScore:59, coefficient:0.0 }
+    { grade:"S", label:"高度达成 Stretch Achieved", minScore:90, maxScore:100, coefficient:1.2 },
+    { grade:"A", label:"达成 Achieved", minScore:75, maxScore:89, coefficient:1.0 },
+    { grade:"B", label:"部分达成 Partially Achieved", minScore:60, maxScore:74, coefficient:0.7 },
+    { grade:"C", label:"未达成 Not Achieved", minScore:0, maxScore:59, coefficient:0.0 }
   ],
   dimensions: [
     {
-      id:"A", name:"业务管理",
+      id:"O1", name:"进口交付稳定与异常闭环",
       kpis:[
-        { id:"A1", name:"进口团队整体柜量 & 毛利双达成", weight:15,
-          target:"柜量达成率 ≥ 95% 且毛利达成率 ≥ 90%（两项同时满足得满分）",
+        { id:"KR1", name:"高风险 / 异常案件闭环质量", weight:12,
+          target:"以异常清单、沟通记录、复盘纪要为证据；无法完整取数时，以重大异常是否及时识别、推进、闭环为准",
           tiers:[
-            {grade:"S",points:15,description:"两项均达标"},
-            {grade:"A",points:10,description:"仅柜量≥95%:10 / 仅毛利≥90%:8"},
-            {grade:"B",points:6,description:"两项均 70-89%"},
-            {grade:"C",points:3,description:"两项均 <70%"}
+            {grade:"S",points:12,description:"主动预警，闭环及时，季度复盘有改进"},
+            {grade:"A",points:9,description:"主要异常均跟进，有记录"},
+            {grade:"B",points:6,description:"能处理异常，但记录或复盘不足"},
+            {grade:"C",points:2,description:"响应滞后，闭环不清"}
           ], selectedTier:null, score:0, comment:"" },
-        { id:"A2", name:"异常 / 退运案件推进及时率", weight:15,
-          target:"≥ 90% 案件在时限内首次推进（首次响应 ≤ 1个工作日）",
+        { id:"KR2", name:"进口关键节点透明度", weight:12,
+          target:"以ETA、清关、派送、异常节点的主动同步记录为证据；没有系统数据时，以周报/聊天记录/表格留档评估",
           tiers:[
-            {grade:"S",points:15,description:"≥90% 及时"},
-            {grade:"A",points:11,description:"80-89%"},
-            {grade:"B",points:7,description:"70-79%"},
-            {grade:"C",points:3,description:"<70%"}
+            {grade:"S",points:12,description:"节点清晰，风险提前同步"},
+            {grade:"A",points:9,description:"关键节点基本同步"},
+            {grade:"B",points:6,description:"被动同步较多"},
+            {grade:"C",points:2,description:"信息滞后或缺失"}
           ], selectedTier:null, score:0, comment:"" },
-        { id:"A3", name:"在途货物信息更新准确率", weight:10,
-          target:"每周五前更新，准确率 ≥ 95%（柜子清单 + 异常跟踪表）",
+        { id:"KR3", name:"跨部门协同推动", weight:11,
+          target:"以销售、客服、仓储、财务等协作记录和问题推动结果为证据；重点看推动质量而非单纯数量",
           tiers:[
-            {grade:"S",points:10,description:"每周更新，准确率≥95%"},
-            {grade:"A",points:7,description:"≥90%"},
-            {grade:"B",points:5,description:"≥80%"},
-            {grade:"C",points:2,description:"<80%"}
+            {grade:"S",points:11,description:"主动协调，问题推进有结果"},
+            {grade:"A",points:8,description:"能推动主要协作事项"},
+            {grade:"B",points:5,description:"协作依赖上级推动"},
+            {grade:"C",points:2,description:"协作断点明显"}
           ], selectedTier:null, score:0, comment:"" }
       ]
     },
     {
-      id:"B", name:"团队管理",
+      id:"O2", name:"业务质量与成本意识",
       kpis:[
-        { id:"B1", name:"每周团队对齐会议执行率", weight:8,
-          target:"≥ 100%（每周至少1次，含会议纪要留存）",
+        { id:"KR1", name:"费用 / 利润异常识别与跟进", weight:10,
+          target:"当利润、柜量等数据无法稳定取得时，以费用异常、账单差异、毛利风险提示和处理记录作为替代证据",
           tiers:[
-            {grade:"S",points:8,description:"100% 执行"},
-            {grade:"A",points:6,description:"75-99%"},
-            {grade:"B",points:4,description:"50-74%"},
-            {grade:"C",points:1,description:"<50%"}
+            {grade:"S",points:10,description:"能提前识别并推动改善"},
+            {grade:"A",points:8,description:"能发现并跟进主要异常"},
+            {grade:"B",points:5,description:"发现问题但闭环不足"},
+            {grade:"C",points:2,description:"缺少成本意识"}
           ], selectedTier:null, score:0, comment:"" },
-        { id:"B2", name:"团队分工机制落地情况", weight:8,
-          target:"分工文档齐备，执行有记录",
+        { id:"KR2", name:"流程合规与文档质量", weight:8,
+          target:"以SOP、清单、表格、邮件/IM记录、文件归档为证据；重点看是否减少重复错误和交接成本",
           tiers:[
-            {grade:"S",points:8,description:"分工明确，有记录，执行到位"},
-            {grade:"A",points:5,description:"部分落地"},
-            {grade:"B",points:3,description:"有分工但执行模糊"},
-            {grade:"C",points:1,description:"未建立"}
+            {grade:"S",points:8,description:"规范清晰，可复用"},
+            {grade:"A",points:6,description:"文档齐备，执行稳定"},
+            {grade:"B",points:4,description:"有文档但不够一致"},
+            {grade:"C",points:1,description:"缺少留档或多次返工"}
           ], selectedTier:null, score:0, comment:"" },
-        { id:"B3", name:"带人量化输出（问题/流程/案例）", weight:9,
-          target:"每月合计 ≥ 3 件留档输出（三类中任意组合均可）",
+        { id:"KR3", name:"季度问题复盘与改进输出", weight:7,
+          target:"季度至少形成可复盘的问题、流程或案例输出；无法量化时，以可读、可执行、可追踪为评分标准",
           tiers:[
-            {grade:"S",points:9,description:"≥4件留档"},
-            {grade:"A",points:7,description:"3件"},
-            {grade:"B",points:4,description:"2件"},
-            {grade:"C",points:2,description:"1件:2 / 0件:0"}
+            {grade:"S",points:7,description:"输出可复制，并推动落地"},
+            {grade:"A",points:5,description:"有明确复盘和改进项"},
+            {grade:"B",points:3,description:"有总结但行动弱"},
+            {grade:"C",points:1,description:"缺少复盘输出"}
           ], selectedTier:null, score:0, comment:"" }
       ]
     },
     {
-      id:"C", name:"主动沟通",
+      id:"O3", name:"团队管理与能力建设",
       kpis:[
-        { id:"C1", name:"关键节点主动反馈率", weight:10,
-          target:"≥ 90% 关键节点有主动反馈（ETA/清关/派送节点）",
+        { id:"KR1", name:"分工与任务看板运行", weight:9,
+          target:"以任务看板、分工表、周会纪要为证据；重点看职责边界、优先级和执行追踪是否清楚",
           tiers:[
-            {grade:"S",points:10,description:"≥90% 节点有主动推送"},
-            {grade:"A",points:7,description:"80-89%"},
-            {grade:"B",points:5,description:"70-79%"},
-            {grade:"C",points:2,description:"<70%"}
+            {grade:"S",points:9,description:"分工清晰，追踪稳定"},
+            {grade:"A",points:7,description:"主要任务能持续追踪"},
+            {grade:"B",points:4,description:"有分工但追踪不稳"},
+            {grade:"C",points:1,description:"职责混乱或缺记录"}
           ], selectedTier:null, score:0, comment:"" },
-        { id:"C2", name:"工作报告 / 信息同步及时率", weight:10,
-          target:"每周五前提交，≥ 95%",
+        { id:"KR2", name:"关键岗位带教与备份", weight:8,
+          target:"以带教记录、案例讲解、交叉备份安排和成员独立处理案例为证据",
           tiers:[
-            {grade:"S",points:10,description:"≥95% 准时提交"},
-            {grade:"A",points:7,description:"85-94%"},
-            {grade:"B",points:5,description:"75-84%"},
-            {grade:"C",points:2,description:"<75%"}
+            {grade:"S",points:8,description:"形成备份能力，成员能独立处理"},
+            {grade:"A",points:6,description:"有带教和备份安排"},
+            {grade:"B",points:4,description:"带教零散，效果一般"},
+            {grade:"C",points:1,description:"无明确带教"}
+          ], selectedTier:null, score:0, comment:"" },
+        { id:"KR3", name:"团队会议与问题升级机制", weight:8,
+          target:"以会议纪要、问题清单、升级记录为证据；重点看是否及时暴露风险并推进解决",
+          tiers:[
+            {grade:"S",points:8,description:"会议高效，问题升级及时"},
+            {grade:"A",points:6,description:"机制基本稳定"},
+            {grade:"B",points:4,description:"有会议但沉淀不足"},
+            {grade:"C",points:1,description:"机制缺失或低效"}
           ], selectedTier:null, score:0, comment:"" }
       ]
     },
     {
-      id:"D", name:"综合评价",
+      id:"O4", name:"主动沟通与综合贡献",
       kpis:[
-        { id:"D1", name:"上级综合管理能力评分", weight:10,
-          target:"≥ 8分（满分10分，含沟通/全局视角/问题解决）",
+        { id:"KR1", name:"管理层同步与风险上报质量", weight:7,
+          target:"以周报、月度/季度汇报、风险提示记录为证据；重点看表达清晰度、优先级判断和解决建议",
           tiers:[
-            {grade:"S",points:10,description:"8-10分"},
-            {grade:"A",points:7,description:"6-7分"},
-            {grade:"B",points:5,description:"4-5分"},
-            {grade:"C",points:2,description:"<4分"}
+            {grade:"S",points:7,description:"同步主动，判断准确，有建议"},
+            {grade:"A",points:5,description:"主要信息同步到位"},
+            {grade:"B",points:3,description:"同步被动或不够结构化"},
+            {grade:"C",points:1,description:"关键信息遗漏"}
           ], selectedTier:null, score:0, comment:"" },
-        { id:"D2", name:"专项贡献 / 流程优化加分", weight:5,
-          target:"≥1项有实质贡献（需有具体案例说明）",
+        { id:"KR2", name:"专项优化 / 临时项目贡献", weight:5,
+          target:"以具体项目、优化动作、节省成本/时间、降低风险或提升协作为证据；没有量化结果时写清前后变化",
           tiers:[
-            {grade:"S",points:5,description:"≥2项实质贡献"},
-            {grade:"A",points:3,description:"1项"},
-            {grade:"B",points:1,description:"提出但未落地"},
-            {grade:"C",points:0,description:"无贡献"}
+            {grade:"S",points:5,description:"有明显业务价值"},
+            {grade:"A",points:4,description:"完成1项有效贡献"},
+            {grade:"B",points:2,description:"有参与但价值有限"},
+            {grade:"C",points:0,description:"无可说明贡献"}
+          ], selectedTier:null, score:0, comment:"" },
+        { id:"KR3", name:"职业化与价值观行为", weight:3,
+          target:"以责任心、协作态度、问题承担、信息透明为综合证据；作为季度管理判断补充项",
+          tiers:[
+            {grade:"S",points:3,description:"稳定正向，能影响团队"},
+            {grade:"A",points:2,description:"表现稳定可靠"},
+            {grade:"B",points:1,description:"偶有波动需提醒"},
+            {grade:"C",points:0,description:"影响协作或结果"}
           ], selectedTier:null, score:0, comment:"" }
       ]
     }
   ]
 };
+
+function currentQuarterLabel() {
+  const now = new Date();
+  const quarter = Math.floor(now.getMonth() / 3) + 1;
+  return `${now.getFullYear()}-Q${quarter}`;
+}
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -521,7 +543,7 @@ const { createApp, ref, computed, watch, onMounted } = Vue;
 
 createApp({
   setup() {
-    const STORAGE_KEY = 'perf_eval_draft';
+    const STORAGE_KEY = 'quarterly_okr_eval_draft_v2';
     const saved = localStorage.getItem(STORAGE_KEY);
     const initial = saved ? JSON.parse(saved) : deepClone(DEFAULT_TEMPLATE);
 
@@ -620,7 +642,7 @@ createApp({
     // Export JSON
     function exportJSON() {
       const data = getData();
-      const name = `绩效考核_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.json`;
+      const name = `季度OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.json`;
       const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -659,10 +681,10 @@ createApp({
       const wb = XLSX.utils.book_new();
       // Sheet 1: Results
       const rows = [
-        [`${meta.value.templateName} 月度绩效考核表`],
-        [`被考核人: ${meta.value.employeeName}`, `考核人: ${meta.value.evaluatorName}`, `月份: ${meta.value.period}`],
+        [`${meta.value.templateName} 季度OKR考核表`],
+        [`被考核人: ${meta.value.employeeName}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`],
         [],
-        ['考核维度','KPI编号','KPI指标','权重(分)','目标值','评分档位','得分','评分说明']
+        ['目标','KR编号','关键结果','权重(分)','证据口径','完成档位','得分','完成说明/证据']
       ];
       for(const dim of dimensions.value) {
         for(const kpi of dim.kpis) {
@@ -671,17 +693,17 @@ createApp({
       }
       rows.push([]);
       rows.push(['合计','','','','',' ',totalScore.value,'']);
-      rows.push(['绩效等级','','',finalGrade.value.grade+' - '+finalGrade.value.label]);
+      rows.push(['季度结果','','',finalGrade.value.grade+' - '+finalGrade.value.label]);
       rows.push(['绩效系数','','',finalGrade.value.coefficient]);
-      rows.push(['绩效奖金','','',`${bonusCurrency.value} ${bonusAmount.value}`]);
+      rows.push(['绩效参考','','',`${bonusCurrency.value} ${bonusAmount.value}`]);
       const ws1 = XLSX.utils.aoa_to_sheet(rows);
       ws1['!cols'] = [{wch:14},{wch:8},{wch:28},{wch:8},{wch:30},{wch:8},{wch:6},{wch:20}];
       XLSX.utils.book_append_sheet(wb, ws1, '评估结果');
 
       // Sheet 2: Scoring criteria
       const rows2 = [
-        ['KPI 评分标准说明'],
-        ['编号','KPI指标','满分','S档','A档','B档','C档']
+        ['OKR 完成档位说明'],
+        ['编号','关键结果','满分','S档','A档','B档','C档']
       ];
       for(const dim of dimensions.value) {
         for(const kpi of dim.kpis) {
@@ -698,7 +720,7 @@ createApp({
       ws2['!cols'] = [{wch:6},{wch:28},{wch:6},{wch:22},{wch:22},{wch:22},{wch:22}];
       XLSX.utils.book_append_sheet(wb, ws2, '评分标准');
 
-      const name = `绩效考核_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.xlsx`;
+      const name = `季度OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.xlsx`;
       XLSX.writeFile(wb, name);
       showToast('Excel 已导出');
     }
@@ -721,8 +743,8 @@ createApp({
     function addKpi(dim) {
       const idx = dim.kpis.length + 1;
       dim.kpis.push({
-        id: dim.id + idx,
-        name: '新KPI指标',
+        id: 'KR' + idx,
+        name: '新关键结果',
         weight: 10,
         target: '',
         tiers: [
@@ -738,10 +760,10 @@ createApp({
     }
     function addDimension() {
       const ids = dimensions.value.map(d=>d.id);
-      const next = String.fromCharCode(65 + dimensions.value.length);
+      const next = 'O' + (dimensions.value.length + 1);
       dimensions.value.push({
-        id: ids.includes(next) ? next+'2' : next,
-        name: '新维度',
+        id: ids.includes(next) ? next+'-2' : next,
+        name: '新目标',
         kpis: []
       });
     }
