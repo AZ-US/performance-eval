@@ -224,6 +224,42 @@ body {
 .bonus-grade { min-width:96px; }
 .bonus-note { min-width:220px; }
 
+/* Workflow and records */
+.workflow-card, .records-card, .okr-panel-card {
+  background: var(--card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius);
+  padding: 22px 26px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,0.5);
+}
+.workflow-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.workflow-item { background:rgba(255,255,255,0.64); border:1px solid rgba(226,232,240,0.9); border-radius:12px; padding:14px 16px; }
+.workflow-tag { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:800; margin-bottom:8px; }
+.workflow-tag.required { background:#DBEAFE; color:#1D4ED8; }
+.workflow-tag.optional { background:#FEF3C7; color:#92400E; }
+.workflow-title { font-size:15px; font-weight:800; margin-bottom:6px; }
+.workflow-copy { font-size:13px; color:var(--text-light); line-height:1.65; }
+.records-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.records-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.records-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:13px; color:var(--text-light); }
+.records-filters input, .records-filters select { border:1px solid #E2E8F0; border-radius:8px; padding:7px 10px; font-size:13px; background:white; outline:none; font-family:inherit; }
+.records-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.record-stat { background:rgba(255,255,255,0.62); border:1px solid rgba(226,232,240,0.9); border-radius:12px; padding:12px 14px; }
+.record-stat-label { font-size:12px; color:var(--text-light); margin-bottom:4px; }
+.record-stat-value { font-size:20px; font-weight:800; }
+.record-table-wrap { overflow-x:auto; border:1px solid rgba(226,232,240,0.9); border-radius:12px; background:rgba(255,255,255,0.54); margin-bottom:16px; }
+.record-table { width:100%; border-collapse:collapse; min-width:920px; }
+.record-table th, .record-table td { padding:10px 12px; border-bottom:1px solid #E2E8F0; text-align:left; vertical-align:middle; font-size:13px; }
+.record-table th { color:var(--text-light); font-weight:700; background:rgba(248,250,252,0.86); }
+.record-table tr:last-child td { border-bottom:none; }
+.record-actions-cell { display:flex; gap:6px; flex-wrap:wrap; }
+.empty-state { padding:18px; text-align:center; color:var(--text-light); font-size:13px; }
+.okr-panel-card { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.okr-panel-note { font-size:13px; color:var(--text-light); line-height:1.6; max-width:720px; }
+
 /* Animations */
 @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 .dimension-section { animation:fadeIn 0.4s ease forwards; }
@@ -242,6 +278,7 @@ body {
   .tier-group { grid-template-columns:repeat(2,1fr); }
   .summary-card { flex-direction:column; align-items:stretch; text-align:center; }
   .bonus-stats { grid-template-columns:1fr; }
+  .workflow-grid, .records-grid { grid-template-columns:1fr; }
   .dim-bar-label { width:70px; font-size:12px; }
   .header-top { flex-direction:column; }
   .kpi-list { padding-left:0; }
@@ -282,13 +319,44 @@ body {
   </header>
 
   <div class="main-container">
+    <!-- Workflow rule -->
+    <section class="workflow-card">
+      <div class="section-title-row">
+        <div>
+          <div class="section-title">月度与季度填写规则</div>
+          <div class="section-subtitle">给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。</div>
+        </div>
+      </div>
+      <div class="workflow-grid">
+        <div class="workflow-item">
+          <div class="workflow-tag required">每月必填</div>
+          <div class="workflow-title">月度绩效奖金发放</div>
+          <div class="workflow-copy">用于当月正式发放奖金。只需要选择当月等级、确认应发/实发金额，并留下异常闭环、节点同步、团队动作、证据留档等说明。</div>
+        </div>
+        <div class="workflow-item">
+          <div class="workflow-tag optional">季度末填写</div>
+          <div class="workflow-title">季度OKR复盘</div>
+          <div class="workflow-copy">用于季度总结、横向校准、个人发展追踪和下季度目标设定。平时可以不填，不作为月度奖金扣回依据。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quarterly OKR switch -->
+    <section class="okr-panel-card">
+      <div>
+        <div class="section-title">季度OKR复盘区</div>
+        <div class="okr-panel-note">当前状态：{{okrExpanded ? '已展开，可填写季度复盘' : '暂不需要填写。月度考核先完成下方奖金发放表即可。'}}</div>
+      </div>
+      <button class="btn btn-primary" @click="okrExpanded=!okrExpanded">{{okrExpanded ? '收起季度OKR' : '展开季度OKR'}}</button>
+    </section>
+
     <!-- Weight Warning -->
-    <div class="weight-warning" v-if="totalWeight !== 100">
+    <div class="weight-warning" v-if="okrExpanded && totalWeight !== 100">
       &#9888; 当前总权重为 {{totalWeight}} 分，建议调整为 100 分
     </div>
 
     <!-- Summary -->
-    <div class="summary-card">
+    <div class="summary-card" v-show="okrExpanded">
       <div class="score-ring">
         <svg viewBox="0 0 140 140">
           <circle class="bg" cx="70" cy="70" r="58"></circle>
@@ -385,8 +453,115 @@ body {
       </div>
     </section>
 
+    <!-- Employee Records -->
+    <section class="records-card">
+      <div class="records-toolbar">
+        <div>
+          <div class="section-title">员工记录库与横向比较</div>
+          <div class="section-subtitle">保存当前员工考评后，可在同一浏览器中比较不同员工，也可以导入/导出记录库做汇总。公网静态版没有后台数据库，跨电脑汇总需要导入记录库JSON。</div>
+        </div>
+        <div class="records-actions">
+          <button class="btn btn-primary" @click="saveCurrentRecord">保存当前员工</button>
+          <button class="btn btn-outline" @click="exportRecordLibrary">导出记录库</button>
+          <button class="btn btn-outline" @click="triggerRecordImport">导入记录库</button>
+          <input type="file" ref="recordInput" class="hidden-input" accept=".json" @change="importRecordLibrary">
+        </div>
+      </div>
+      <div class="records-grid">
+        <div class="record-stat">
+          <div class="record-stat-label">已保存记录</div>
+          <div class="record-stat-value">{{records.length}}</div>
+        </div>
+        <div class="record-stat">
+          <div class="record-stat-label">员工人数</div>
+          <div class="record-stat-value">{{employeeNames.length}}</div>
+        </div>
+        <div class="record-stat">
+          <div class="record-stat-label">当前期间记录</div>
+          <div class="record-stat-value">{{comparisonRecords.length}}</div>
+        </div>
+      </div>
+
+      <div class="records-filters">
+        <span>横向比较期间</span>
+        <input v-model="comparePeriod" placeholder="2026-Q2">
+        <span>个人追踪</span>
+        <select v-model="selectedEmployee">
+          <option value="">选择员工</option>
+          <option v-for="name in employeeNames" :key="name" :value="name">{{name}}</option>
+        </select>
+      </div>
+
+      <div class="record-table-wrap">
+        <table class="record-table">
+          <thead>
+            <tr>
+              <th>员工</th>
+              <th>期间</th>
+              <th>月度应发</th>
+              <th>月度实发</th>
+              <th>已评月份</th>
+              <th>季度OKR</th>
+              <th>OKR状态</th>
+              <th>保存时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody v-if="comparisonRecords.length">
+            <tr v-for="record in comparisonRecords" :key="record.id">
+              <td>{{record.employeeName}}</td>
+              <td>{{record.period}}</td>
+              <td>{{record.currency}} {{record.monthlyDueTotal}}</td>
+              <td>{{record.currency}} {{record.monthlyPaidTotal}}</td>
+              <td>{{record.ratedMonthCount}} / {{record.monthCount}}</td>
+              <td>{{record.quarterScore}} / {{record.quarterWeight}} · {{record.quarterGrade}}</td>
+              <td>{{record.okrFilledCount ? '已填写' : '暂未填写'}}</td>
+              <td>{{formatDateTime(record.savedAt)}}</td>
+              <td class="record-actions-cell">
+                <button class="btn btn-outline" @click="loadRecord(record)">载入</button>
+                <button class="btn btn-danger" @click="deleteRecord(record.id)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+          <tbody v-else>
+            <tr><td colspan="9" class="empty-state">当前期间还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="record-table-wrap">
+        <table class="record-table">
+          <thead>
+            <tr>
+              <th>员工</th>
+              <th>期间</th>
+              <th>月度应发</th>
+              <th>月度实发</th>
+              <th>季度OKR</th>
+              <th>季度等级</th>
+              <th>发展备注</th>
+            </tr>
+          </thead>
+          <tbody v-if="timelineRecords.length">
+            <tr v-for="record in timelineRecords" :key="'tl-'+record.id">
+              <td>{{record.employeeName}}</td>
+              <td>{{record.period}}</td>
+              <td>{{record.currency}} {{record.monthlyDueTotal}}</td>
+              <td>{{record.currency}} {{record.monthlyPaidTotal}}</td>
+              <td>{{record.quarterScore}} / {{record.quarterWeight}}</td>
+              <td>{{record.quarterGrade}}</td>
+              <td>{{record.developmentNote || '可在季度OKR备注中沉淀'}}</td>
+            </tr>
+          </tbody>
+          <tbody v-else>
+            <tr><td colspan="7" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Dimensions & KPIs -->
-    <div class="dimension-section" v-for="(dim, di) in dimensions" :key="dim.id" :style="{animationDelay: di*0.1+'s'}">
+    <div class="dimension-section" v-for="(dim, di) in dimensions" :key="dim.id" v-show="okrExpanded" :style="{animationDelay: di*0.1+'s'}">
       <div class="dimension-header" @click="toggleDim(dim.id)">
         <div class="dim-left">
           <div class="dim-id" :style="{background: dimGradient(di)}">{{dim.id}}</div>
@@ -495,7 +670,7 @@ body {
 const DEFAULT_TEMPLATE = {
   meta: {
     templateName: "进口副主管月度奖金+季度OKR",
-    templateVersion: "3.0",
+    templateVersion: "4.0",
     employeeName: "",
     evaluatorName: "",
     period: currentQuarterLabel()
@@ -661,6 +836,7 @@ const { createApp, ref, computed, watch, onMounted } = Vue;
 createApp({
   setup() {
     const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
+    const RECORDS_KEY = 'employee_eval_records_v1';
     const initial = loadInitialData(STORAGE_KEY);
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
@@ -674,11 +850,16 @@ createApp({
     const dimensions = ref(initial.dimensions);
     const collapsedDims = ref({});
     const drawerOpen = ref(false);
+    const okrExpanded = ref(false);
     const saveTime = ref('');
     const toastMsg = ref('');
     const toastVisible = ref(false);
     const fileInput = ref(null);
     const templateInput = ref(null);
+    const recordInput = ref(null);
+    const records = ref(loadRecords(RECORDS_KEY));
+    const comparePeriod = ref(meta.value.period || currentQuarterLabel());
+    const selectedEmployee = ref('');
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -740,6 +921,15 @@ createApp({
     const monthlyDueTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+monthlyDue(row), 0));
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
+    const employeeNames = computed(()=> [...new Set(records.value.map(record=>record.employeeName).filter(Boolean))].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
+    const comparisonRecords = computed(()=> records.value
+      .filter(record=>record.period === comparePeriod.value)
+      .sort((a,b)=> b.monthlyPaidTotal - a.monthlyPaidTotal || b.quarterScore - a.quarterScore || a.employeeName.localeCompare(b.employeeName, 'zh-CN'))
+    );
+    const timelineRecords = computed(()=> selectedEmployee.value
+      ? records.value.filter(record=>record.employeeName === selectedEmployee.value).sort((a,b)=>a.period.localeCompare(b.period))
+      : []
+    );
 
     function syncBonusMonths() {
       const existing = new Map(monthlyBonuses.value.map(row=>[row.month, row]));
@@ -758,6 +948,97 @@ createApp({
     function fillPaidFromDue() {
       monthlyBonuses.value.forEach(row=>{ row.paid = monthlyDue(row); });
       showToast('已按应发填入实发');
+    }
+
+    function persistRecords() {
+      localStorage.setItem(RECORDS_KEY, JSON.stringify(records.value));
+    }
+
+    function saveCurrentRecord() {
+      const employeeName = (meta.value.employeeName || '').trim();
+      if(!employeeName) {
+        showToast('请先填写被考核人姓名');
+        return;
+      }
+      const data = deepClone(getData());
+      const record = buildRecordFromData(data);
+      const idx = records.value.findIndex(item=>item.employeeName === record.employeeName && item.period === record.period);
+      if(idx >= 0) {
+        records.value.splice(idx, 1, record);
+      } else {
+        records.value.unshift(record);
+      }
+      records.value = [...records.value].sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
+      comparePeriod.value = record.period;
+      selectedEmployee.value = record.employeeName;
+      persistRecords();
+      showToast('已保存到员工记录库');
+    }
+
+    function loadRecord(record) {
+      const data = deepClone(record.data);
+      if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase || bonusBase.value);
+      meta.value = data.meta || meta.value;
+      bonusBase.value = data.bonusBase || bonusBase.value;
+      bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
+      monthlyBonuses.value = data.monthlyBonuses;
+      gradeScale.value = data.gradeScale || gradeScale.value;
+      dimensions.value = data.dimensions || dimensions.value;
+      comparePeriod.value = meta.value.period;
+      selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
+      okrExpanded.value = Boolean(record.okrFilledCount);
+      showToast('已载入员工记录');
+    }
+
+    function deleteRecord(id) {
+      if(!confirm('确定删除这条员工记录？')) return;
+      records.value = records.value.filter(record=>record.id !== id);
+      persistRecords();
+      showToast('记录已删除');
+    }
+
+    function exportRecordLibrary() {
+      const payload = { version:1, exportedAt:new Date().toISOString(), records:records.value };
+      const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `员工考评记录库_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      showToast('记录库已导出');
+    }
+
+    function triggerRecordImport() { recordInput.value.click(); }
+
+    function importRecordLibrary(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        try {
+          const data = JSON.parse(ev.target.result);
+          const incoming = Array.isArray(data) ? data : data.records;
+          if(!Array.isArray(incoming)) {
+            showToast('记录库格式不正确');
+            return;
+          }
+          const merged = new Map(records.value.map(record=>[record.id, record]));
+          incoming.forEach(record=>{
+            if(record && record.id && record.data) merged.set(record.id, record);
+          });
+          records.value = [...merged.values()].sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
+          persistRecords();
+          showToast('记录库导入成功');
+        } catch {
+          showToast('记录库解析失败');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    function formatDateTime(value) {
+      if(!value) return '';
+      return new Date(value).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     }
 
     function selectTier(kpi, grade) {
@@ -794,6 +1075,9 @@ createApp({
       }, 2000);
     }
     watch([meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions], autoSave, {deep:true});
+    watch(()=>meta.value.period, (period)=>{
+      if(period) comparePeriod.value = period;
+    });
 
     // Export JSON
     function exportJSON() {
@@ -903,6 +1187,29 @@ createApp({
       ws2['!cols'] = [{wch:6},{wch:28},{wch:6},{wch:22},{wch:22},{wch:22},{wch:22}];
       XLSX.utils.book_append_sheet(wb, ws2, '评分标准');
 
+      if(records.value.length) {
+        const rows3 = [
+          ['员工横向比较与纵向追踪记录库'],
+          ['员工','期间','月度应发','月度实发','已评月份','季度OKR分数','季度等级','OKR状态','保存时间']
+        ];
+        records.value.forEach(record=>{
+          rows3.push([
+            record.employeeName,
+            record.period,
+            `${record.currency} ${record.monthlyDueTotal}`,
+            `${record.currency} ${record.monthlyPaidTotal}`,
+            `${record.ratedMonthCount}/${record.monthCount}`,
+            `${record.quarterScore}/${record.quarterWeight}`,
+            record.quarterGrade,
+            record.okrFilledCount ? '已填写' : '暂未填写',
+            formatDateTime(record.savedAt)
+          ]);
+        });
+        const ws3 = XLSX.utils.aoa_to_sheet(rows3);
+        ws3['!cols'] = [{wch:12},{wch:10},{wch:14},{wch:14},{wch:10},{wch:14},{wch:10},{wch:10},{wch:16}];
+        XLSX.utils.book_append_sheet(wb, ws3, '员工比较');
+      }
+
       const name = `月度奖金_OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.xlsx`;
       XLSX.writeFile(wb, name);
       showToast('Excel 已导出');
@@ -997,11 +1304,14 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
-      collapsedDims, drawerOpen, saveTime, toastMsg, toastVisible,
-      fileInput, templateInput,
+      records, comparePeriod, selectedEmployee, employeeNames, comparisonRecords, timelineRecords,
+      collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible,
+      fileInput, templateInput, recordInput,
       totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
+      saveCurrentRecord, loadRecord, deleteRecord,
+      exportRecordLibrary, triggerRecordImport, importRecordLibrary, formatDateTime,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
       exportJSON, triggerImport, importJSON,
@@ -1022,6 +1332,65 @@ function loadInitialData(storageKey) {
     }
   }
   return deepClone(DEFAULT_TEMPLATE);
+}
+
+function loadRecords(storageKey) {
+  const saved = localStorage.getItem(storageKey);
+  if(!saved) return [];
+  try {
+    const records = JSON.parse(saved);
+    return Array.isArray(records) ? records : [];
+  } catch {
+    localStorage.removeItem(storageKey);
+    return [];
+  }
+}
+
+function buildRecordFromData(data) {
+  const summary = summarizeEvaluationData(data);
+  const employeeName = (data.meta?.employeeName || '未填姓名').trim();
+  const period = data.meta?.period || currentQuarterLabel();
+  return {
+    id: `${employeeName}__${period}`,
+    employeeName,
+    evaluatorName: data.meta?.evaluatorName || '',
+    period,
+    savedAt: new Date().toISOString(),
+    data,
+    ...summary
+  };
+}
+
+function summarizeEvaluationData(data) {
+  const gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
+  const dimensions = data.dimensions || [];
+  const monthlyBonuses = data.monthlyBonuses || [];
+  const currency = data.bonusCurrency || 'USD';
+  const defaultBase = Number(data.bonusBase) || 0;
+  const coefficientFor = (grade) => gradeScale.find(item=>item.grade===grade)?.coefficient || 0;
+  const monthlyDueTotal = monthlyBonuses.reduce((sum,row)=>sum + Math.round((Number(row.base ?? defaultBase)||0) * coefficientFor(row.grade)), 0);
+  const monthlyPaidTotal = monthlyBonuses.reduce((sum,row)=>sum + (Number(row.paid)||0), 0);
+  const ratedMonthCount = monthlyBonuses.filter(row=>row.grade).length;
+  const allKpis = dimensions.flatMap(dim=>dim.kpis || []);
+  const quarterScore = allKpis.reduce((sum,kpi)=>sum + (Number(kpi.score)||0), 0);
+  const quarterWeight = allKpis.reduce((sum,kpi)=>sum + (Number(kpi.weight)||0), 0);
+  const pct = quarterWeight ? quarterScore / quarterWeight * 100 : 0;
+  const sorted = [...gradeScale].sort((a,b)=>b.minScore - a.minScore);
+  const quarterGrade = (sorted.find(item=>pct >= item.minScore) || sorted[sorted.length - 1] || {}).grade || 'C';
+  const okrFilledCount = allKpis.filter(kpi=>kpi.selectedTier).length;
+  const developmentNote = allKpis.map(kpi=>String(kpi.comment || '').trim()).filter(Boolean).join('；').slice(0, 80);
+  return {
+    currency,
+    monthlyDueTotal,
+    monthlyPaidTotal,
+    ratedMonthCount,
+    monthCount: monthlyBonuses.length,
+    quarterScore,
+    quarterWeight,
+    quarterGrade,
+    okrFilledCount,
+    developmentNote
+  };
 }
 </script>
 </body>
