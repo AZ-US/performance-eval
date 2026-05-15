@@ -225,7 +225,7 @@ body {
 .bonus-note { min-width:220px; }
 
 /* Workflow and records */
-.workflow-card, .records-card, .okr-panel-card {
+.quick-nav-card, .workflow-card, .records-card, .okr-panel-card {
   background: var(--card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -259,6 +259,26 @@ body {
 .empty-state { padding:18px; text-align:center; color:var(--text-light); font-size:13px; }
 .okr-panel-card { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .okr-panel-note { font-size:13px; color:var(--text-light); line-height:1.6; max-width:720px; }
+.quick-nav-card { position:sticky; top:86px; z-index:60; }
+.quick-nav-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+.quick-nav-select { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-light); }
+.quick-nav-select select { border:1px solid #E2E8F0; border-radius:8px; padding:7px 10px; font-size:13px; background:white; outline:none; font-family:inherit; min-width:150px; }
+.quick-employee-list { display:flex; gap:10px; flex-wrap:wrap; }
+.quick-employee-btn {
+  border:1px solid #E2E8F0;
+  border-radius:12px;
+  background:rgba(255,255,255,0.76);
+  padding:10px 12px;
+  min-width:150px;
+  text-align:left;
+  cursor:pointer;
+  font-family:inherit;
+  transition:all 0.2s;
+}
+.quick-employee-btn:hover { border-color:var(--primary); transform:translateY(-1px); box-shadow:0 4px 14px rgba(59,130,246,0.16); }
+.quick-employee-btn.active { border-color:var(--primary); background:#EFF6FF; }
+.quick-employee-name { font-size:14px; font-weight:800; margin-bottom:4px; color:var(--text); }
+.quick-employee-meta { font-size:12px; color:var(--text-light); line-height:1.45; }
 
 /* Animations */
 @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
@@ -279,6 +299,8 @@ body {
   .summary-card { flex-direction:column; align-items:stretch; text-align:center; }
   .bonus-stats { grid-template-columns:1fr; }
   .workflow-grid, .records-grid { grid-template-columns:1fr; }
+  .quick-nav-card { position:static; }
+  .quick-employee-btn { min-width:100%; }
   .dim-bar-label { width:70px; font-size:12px; }
   .header-top { flex-direction:column; }
   .kpi-list { padding-left:0; }
@@ -319,6 +341,35 @@ body {
   </header>
 
   <div class="main-container">
+    <!-- Employee quick nav -->
+    <section class="quick-nav-card">
+      <div class="quick-nav-header">
+        <div>
+          <div class="section-title">员工快速入口</div>
+          <div class="section-subtitle">保存过的员工会出现在这里。点击员工姓名即可载入她最新一条考评，并跳到个人结果区。</div>
+        </div>
+        <div class="quick-nav-select" v-if="quickEmployeeCards.length">
+          <span>快速选择</span>
+          <select v-model="quickEmployeeSelect" @change="quickOpenEmployee(quickEmployeeSelect)">
+            <option value="">选择员工</option>
+            <option v-for="card in quickEmployeeCards" :key="'select-'+card.employeeName" :value="card.employeeName">{{card.employeeName}}</option>
+          </select>
+        </div>
+      </div>
+      <div class="quick-employee-list" v-if="quickEmployeeCards.length">
+        <button class="quick-employee-btn"
+                v-for="card in quickEmployeeCards"
+                :key="card.employeeName"
+                :class="{active:selectedEmployee===card.employeeName}"
+                @click="quickOpenEmployee(card.employeeName)">
+          <div class="quick-employee-name">{{card.employeeName}}</div>
+          <div class="quick-employee-meta">{{card.period}} · {{card.currency}} {{card.monthlyPaidTotal}} 实发</div>
+          <div class="quick-employee-meta">月度 {{card.ratedMonthCount}}/{{card.monthCount}} · OKR {{card.okrFilledCount ? '已填' : '暂未填'}}</div>
+        </button>
+      </div>
+      <div class="empty-state" v-else>还没有员工记录。先填写一个员工并点击“保存当前员工”，这里就会出现快捷入口。</div>
+    </section>
+
     <!-- Workflow rule -->
     <section class="workflow-card">
       <div class="section-title-row">
@@ -454,7 +505,7 @@ body {
     </section>
 
     <!-- Employee Records -->
-    <section class="records-card">
+    <section class="records-card" id="employee-results">
       <div class="records-toolbar">
         <div>
           <div class="section-title">员工记录库与横向比较</div>
@@ -860,6 +911,7 @@ createApp({
     const records = ref(loadRecords(RECORDS_KEY));
     const comparePeriod = ref(meta.value.period || currentQuarterLabel());
     const selectedEmployee = ref('');
+    const quickEmployeeSelect = ref('');
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -930,6 +982,7 @@ createApp({
       ? records.value.filter(record=>record.employeeName === selectedEmployee.value).sort((a,b)=>a.period.localeCompare(b.period))
       : []
     );
+    const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>latestRecordForEmployee(name)).filter(Boolean));
 
     function syncBonusMonths() {
       const existing = new Map(monthlyBonuses.value.map(row=>[row.month, row]));
@@ -988,6 +1041,23 @@ createApp({
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
       okrExpanded.value = Boolean(record.okrFilledCount);
       showToast('已载入员工记录');
+    }
+
+    function latestRecordForEmployee(name) {
+      return records.value
+        .filter(record=>record.employeeName === name)
+        .sort((a,b)=>b.period.localeCompare(a.period) || new Date(b.savedAt) - new Date(a.savedAt))[0] || null;
+    }
+
+    function quickOpenEmployee(name) {
+      if(!name) return;
+      const record = latestRecordForEmployee(name);
+      if(!record) return;
+      quickEmployeeSelect.value = name;
+      loadRecord(record);
+      setTimeout(()=>{
+        document.getElementById('employee-results')?.scrollIntoView({ behavior:'smooth', block:'start' });
+      }, 60);
     }
 
     function deleteRecord(id) {
@@ -1304,13 +1374,15 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
-      records, comparePeriod, selectedEmployee, employeeNames, comparisonRecords, timelineRecords,
+      records, comparePeriod, selectedEmployee, quickEmployeeSelect,
+      employeeNames, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible,
       fileInput, templateInput, recordInput,
       totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
+      quickOpenEmployee,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary, formatDateTime,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
