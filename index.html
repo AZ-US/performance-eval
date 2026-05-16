@@ -346,24 +346,32 @@ body {
       <div class="section-title-row">
         <div>
           <div class="section-title">总经理测评提交区</div>
-          <div class="section-subtitle">把下面公网链接发给总经理。他填写并保存员工记录后，点击“导出提交包”，把下载的 JSON 和 Excel 发回给你；你导入 JSON 后即可查看和横向比较。</div>
+          <div class="section-subtitle">把下面公网链接发给总经理。他填写后点击“保存并提交云端”，数据会进入你的共享表；如果云端地址还没配置，就先用“导出提交包”兜底。</div>
         </div>
         <div class="records-actions">
           <input :value="publicUrl" readonly @focus="$event.target.select()" style="min-width:260px;border:1px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;background:white;">
           <button class="btn btn-outline" @click="copyPublicLink">复制链接</button>
+          <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
           <button class="btn btn-primary" @click="exportSubmissionPackage">导出提交包</button>
         </div>
+      </div>
+      <div class="records-filters">
+        <span>云端提交地址</span>
+        <input v-model="cloudEndpoint" placeholder="粘贴 Google Apps Script Web App URL" style="min-width:360px">
+        <button class="btn btn-outline" @click="saveCloudEndpoint">保存地址</button>
+        <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
+        <span>{{cloudStatus}}</span>
       </div>
       <div class="workflow-grid">
         <div class="workflow-item">
           <div class="workflow-tag required">总经理操作</div>
-          <div class="workflow-title">打开链接并保存记录</div>
-          <div class="workflow-copy">每评完一个员工，点击“保存当前员工”。所有已保存员工会进入记录库和顶部快捷入口。</div>
+          <div class="workflow-title">打开链接并提交云端</div>
+          <div class="workflow-copy">每评完一个员工，点击“保存并提交云端”。如果网络或云端地址异常，再点击“导出提交包”发回给 Amy。</div>
         </div>
         <div class="workflow-item">
           <div class="workflow-tag optional">Amy 查看</div>
-          <div class="workflow-title">导入记录库 JSON</div>
-          <div class="workflow-copy">收到总经理发回的记录库 JSON 后，在“员工记录库”点击“导入记录库”，即可在你的浏览器里查看所有员工结果。</div>
+          <div class="workflow-title">同步云端记录</div>
+          <div class="workflow-copy">配置好云端提交地址后，点击“同步云端记录”即可把总经理提交的数据拉到本机记录库中查看和比较。</div>
         </div>
       </div>
     </section>
@@ -915,6 +923,8 @@ createApp({
   setup() {
     const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
     const RECORDS_KEY = 'employee_eval_records_v1';
+    const CLOUD_ENDPOINT_KEY = 'employee_eval_cloud_endpoint_v1';
+    const DEFAULT_CLOUD_ENDPOINT = '';
     const initial = loadInitialData(STORAGE_KEY);
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
@@ -940,6 +950,8 @@ createApp({
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
+    const cloudEndpoint = ref(localStorage.getItem(CLOUD_ENDPOINT_KEY) || DEFAULT_CLOUD_ENDPOINT);
+    const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -1035,6 +1047,15 @@ createApp({
       localStorage.setItem(RECORDS_KEY, JSON.stringify(records.value));
     }
 
+    function mergeRecordList(incoming) {
+      const merged = new Map(records.value.map(record=>[record.id, record]));
+      incoming.forEach(record=>{
+        if(record && record.id && record.data) merged.set(record.id, record);
+      });
+      records.value = [...merged.values()].sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
+      persistRecords();
+    }
+
     function saveCurrentRecord() {
       const employeeName = (meta.value.employeeName || '').trim();
       if(!employeeName) {
@@ -1054,7 +1075,7 @@ createApp({
       selectedEmployee.value = record.employeeName;
       persistRecords();
       showToast('已保存到员工记录库');
-      return true;
+      return record;
     }
 
     function loadRecord(record) {
@@ -1106,6 +1127,79 @@ createApp({
       showToast('记录库已导出');
     }
 
+    function saveCloudEndpoint() {
+      cloudEndpoint.value = cloudEndpoint.value.trim();
+      localStorage.setItem(CLOUD_ENDPOINT_KEY, cloudEndpoint.value);
+      cloudStatus.value = cloudEndpoint.value ? '云端地址已保存' : '云端地址未配置';
+      showToast(cloudEndpoint.value ? '云端地址已保存' : '云端地址已清空');
+    }
+
+    async function submitCurrentToCloud() {
+      const endpoint = cloudEndpoint.value.trim();
+      if(!endpoint) {
+        showToast('请先配置云端提交地址');
+        return;
+      }
+      const record = saveCurrentRecord();
+      if(!record) return;
+      cloudStatus.value = '正在提交云端...';
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({version:1, submittedAt:new Date().toISOString(), record})
+        });
+        cloudStatus.value = `已提交云端 ${new Date().toLocaleTimeString('zh-CN')}`;
+        showToast('已提交云端');
+      } catch {
+        cloudStatus.value = '云端提交失败，请导出提交包兜底';
+        showToast('云端提交失败');
+      }
+    }
+
+    function fetchCloudJsonp(endpoint) {
+      return new Promise((resolve, reject)=>{
+        const callbackName = `employeeEvalCloud_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const separator = endpoint.includes('?') ? '&' : '?';
+        const script = document.createElement('script');
+        const cleanup = ()=>{
+          delete window[callbackName];
+          script.remove();
+        };
+        window[callbackName] = (payload)=>{
+          cleanup();
+          resolve(payload);
+        };
+        script.onerror = ()=>{
+          cleanup();
+          reject(new Error('cloud sync failed'));
+        };
+        script.src = `${endpoint}${separator}action=list&callback=${callbackName}&_=${Date.now()}`;
+        document.head.appendChild(script);
+      });
+    }
+
+    async function syncCloudRecords() {
+      const endpoint = cloudEndpoint.value.trim();
+      if(!endpoint) {
+        showToast('请先配置云端提交地址');
+        return;
+      }
+      cloudStatus.value = '正在同步云端记录...';
+      try {
+        const payload = await fetchCloudJsonp(endpoint);
+        const incoming = Array.isArray(payload) ? payload : payload.records;
+        if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
+        mergeRecordList(incoming);
+        cloudStatus.value = `已同步 ${incoming.length} 条记录`;
+        showToast('云端记录已同步');
+      } catch {
+        cloudStatus.value = '云端同步失败，请检查地址或先用JSON导入';
+        showToast('云端同步失败');
+      }
+    }
+
     async function copyPublicLink() {
       try {
         await navigator.clipboard.writeText(publicUrl);
@@ -1140,12 +1234,7 @@ createApp({
             showToast('记录库格式不正确');
             return;
           }
-          const merged = new Map(records.value.map(record=>[record.id, record]));
-          incoming.forEach(record=>{
-            if(record && record.id && record.data) merged.set(record.id, record);
-          });
-          records.value = [...merged.values()].sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
-          persistRecords();
+          mergeRecordList(incoming);
           showToast('记录库导入成功');
         } catch {
           showToast('记录库解析失败');
@@ -1423,7 +1512,7 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
-      publicUrl,
+      publicUrl, cloudEndpoint, cloudStatus,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible,
@@ -1434,6 +1523,7 @@ createApp({
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
+      saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
       copyPublicLink, exportSubmissionPackage, formatDateTime,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
