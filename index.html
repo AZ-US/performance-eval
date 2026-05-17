@@ -387,14 +387,14 @@ body {
     </section>
 
     <!-- Employee quick nav -->
-    <section class="quick-nav-card" v-if="adminToolsOpen">
+    <section class="quick-nav-card" v-if="quickEmployeeCards.length || adminToolsOpen">
       <div class="quick-nav-header">
         <div>
-          <div class="section-title">员工快速入口</div>
-          <div class="section-subtitle">保存过的员工会出现在这里。点击员工姓名即可载入她最新一条考评，并跳到个人结果区。</div>
+          <div class="section-title">人员切换</div>
+          <div class="section-subtitle">从下拉框或姓名按钮切换员工。</div>
         </div>
-        <div class="quick-nav-select" v-if="quickEmployeeCards.length">
-          <span>快速选择</span>
+        <div class="quick-nav-select">
+          <button class="btn btn-outline" @click="startNewEmployee">新增员工</button>
           <select v-model="quickEmployeeSelect" @change="quickOpenEmployee(quickEmployeeSelect)">
             <option value="">选择员工</option>
             <option v-for="card in quickEmployeeCards" :key="'select-'+card.employeeName" :value="card.employeeName">{{card.employeeName}}</option>
@@ -408,11 +408,10 @@ body {
                 :class="{active:selectedEmployee===card.employeeName}"
                 @click="quickOpenEmployee(card.employeeName)">
           <div class="quick-employee-name">{{card.employeeName}}</div>
-          <div class="quick-employee-meta">{{card.period}} · {{card.currency}} {{card.monthlyPaidTotal}} 实发</div>
-          <div class="quick-employee-meta">月度 {{card.ratedMonthCount}}/{{card.monthCount}} · OKR {{card.okrFilledCount ? '已填' : '暂未填'}}</div>
+          <div class="quick-employee-meta">{{card.period}}</div>
         </button>
       </div>
-      <div class="empty-state" v-else>还没有员工记录。先填写一个员工并点击“保存当前员工”，这里就会出现快捷入口。</div>
+      <div class="empty-state" v-else>保存员工后，姓名会显示在这里。</div>
     </section>
 
     <!-- Workflow rule -->
@@ -1130,7 +1129,24 @@ createApp({
       quickEmployeeSelect.value = name;
       loadRecord(record);
       setTimeout(()=>{
-        document.getElementById('employee-results')?.scrollIntoView({ behavior:'smooth', block:'start' });
+        document.querySelector('.bonus-card')?.scrollIntoView({ behavior:'smooth', block:'start' });
+      }, 60);
+    }
+
+    function startNewEmployee() {
+      if((meta.value.employeeName || '').trim() && !confirm('开始填写新员工？当前未提交内容请先保存。')) return;
+      meta.value = { ...meta.value, employeeName:'' };
+      monthlyBonuses.value = buildMonthlyBonuses(meta.value.period, bonusBase.value);
+      dimensions.value = dimensions.value.map(dim=>({
+        ...dim,
+        kpis: dim.kpis.map(kpi=>({ ...kpi, selectedTier:null, score:0, comment:'' }))
+      }));
+      selectedEmployee.value = '';
+      quickEmployeeSelect.value = '';
+      okrExpanded.value = false;
+      showToast('已准备新增员工');
+      setTimeout(()=>{
+        document.querySelector('.app-header')?.scrollIntoView({ behavior:'smooth', block:'start' });
       }, 60);
     }
 
@@ -1204,23 +1220,26 @@ createApp({
       });
     }
 
-    async function syncCloudRecords() {
+    async function syncCloudRecords(silent = false) {
+      silent = silent === true;
       const endpoint = cloudEndpoint.value.trim();
       if(!endpoint) {
-        showToast('请先配置云端提交地址');
+        if(!silent) showToast('请先配置云端提交地址');
         return;
       }
-      cloudStatus.value = '正在同步云端记录...';
+      if(!silent) cloudStatus.value = '正在同步云端记录...';
       try {
         const payload = await fetchCloudJsonp(endpoint);
         const incoming = Array.isArray(payload) ? payload : payload.records;
         if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
         mergeRecordList(incoming);
         cloudStatus.value = `已同步 ${incoming.length} 条记录`;
-        showToast('云端记录已同步');
+        if(!silent) showToast('云端记录已同步');
       } catch {
-        cloudStatus.value = '云端同步失败，请检查地址或先用JSON导入';
-        showToast('云端同步失败');
+        if(!silent) {
+          cloudStatus.value = '云端同步失败，请检查地址或先用JSON导入';
+          showToast('云端同步失败');
+        }
       }
     }
 
@@ -1310,6 +1329,9 @@ createApp({
     watch([meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions], autoSave, {deep:true});
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
+    });
+    onMounted(()=>{
+      if(cloudEndpoint.value.trim()) syncCloudRecords(true);
     });
 
     // Export JSON
@@ -1546,7 +1568,7 @@ createApp({
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
-      quickOpenEmployee,
+      quickOpenEmployee, startNewEmployee,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
       copyPublicLink, exportSubmissionPackage, formatDateTime,
