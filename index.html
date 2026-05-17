@@ -346,10 +346,10 @@ body {
       <div class="section-title-row">
         <div>
           <div class="section-title">总经理测评提交区</div>
-          <div class="section-subtitle">把下面公网链接发给总经理。他填写后点击“保存并提交云端”，数据会进入你的共享表；如果云端地址还没配置，就先用“导出提交包”兜底。</div>
+          <div class="section-subtitle">粘贴一次云端地址后，下面会自动生成总经理专用链接。他打开后无需配置，填写完点击“保存并提交云端”，你再同步即可看到。</div>
         </div>
         <div class="records-actions">
-          <input :value="publicUrl" readonly @focus="$event.target.select()" style="min-width:260px;border:1px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;background:white;">
+          <input :value="managerShareUrl" readonly @focus="$event.target.select()" style="min-width:260px;border:1px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;background:white;">
           <button class="btn btn-outline" @click="copyPublicLink">复制链接</button>
           <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
           <button class="btn btn-primary" @click="exportSubmissionPackage">导出提交包</button>
@@ -366,12 +366,12 @@ body {
         <div class="workflow-item">
           <div class="workflow-tag required">总经理操作</div>
           <div class="workflow-title">打开链接并提交云端</div>
-          <div class="workflow-copy">每评完一个员工，点击“保存并提交云端”。如果网络或云端地址异常，再点击“导出提交包”发回给 Amy。</div>
+          <div class="workflow-copy">Amy 复制带云端地址的专用链接给总经理。每评完一个员工，他只需要点击“保存并提交云端”。</div>
         </div>
         <div class="workflow-item">
           <div class="workflow-tag optional">Amy 查看</div>
           <div class="workflow-title">同步云端记录</div>
-          <div class="workflow-copy">配置好云端提交地址后，点击“同步云端记录”即可把总经理提交的数据拉到本机记录库中查看和比较。</div>
+          <div class="workflow-copy">你在任意电脑打开同一个专用链接，点击“同步云端记录”，即可把总经理提交的数据拉到本机记录库中查看和比较。</div>
         </div>
       </div>
     </section>
@@ -950,8 +950,17 @@ createApp({
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
-    const cloudEndpoint = ref(localStorage.getItem(CLOUD_ENDPOINT_KEY) || DEFAULT_CLOUD_ENDPOINT);
+    const urlCloudEndpoint = (new URLSearchParams(window.location.search).get('cloud') || '').trim();
+    const cloudEndpoint = ref(urlCloudEndpoint || localStorage.getItem(CLOUD_ENDPOINT_KEY) || DEFAULT_CLOUD_ENDPOINT);
+    if(urlCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, urlCloudEndpoint);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
+    const managerShareUrl = computed(()=>{
+      const endpoint = cloudEndpoint.value.trim();
+      if(!endpoint) return publicUrl;
+      const url = new URL(publicUrl);
+      url.searchParams.set('cloud', endpoint);
+      return url.toString();
+    });
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -1131,7 +1140,7 @@ createApp({
       cloudEndpoint.value = cloudEndpoint.value.trim();
       localStorage.setItem(CLOUD_ENDPOINT_KEY, cloudEndpoint.value);
       cloudStatus.value = cloudEndpoint.value ? '云端地址已保存' : '云端地址未配置';
-      showToast(cloudEndpoint.value ? '云端地址已保存' : '云端地址已清空');
+      showToast(cloudEndpoint.value ? '云端地址已保存，专用链接已生成' : '云端地址已清空');
     }
 
     async function submitCurrentToCloud() {
@@ -1201,11 +1210,12 @@ createApp({
     }
 
     async function copyPublicLink() {
+      const link = managerShareUrl.value;
       try {
-        await navigator.clipboard.writeText(publicUrl);
+        await navigator.clipboard.writeText(link);
         showToast('链接已复制');
       } catch {
-        window.prompt('复制这个链接发给总经理', publicUrl);
+        window.prompt('复制这个链接发给总经理', link);
       }
     }
 
@@ -1512,7 +1522,7 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
-      publicUrl, cloudEndpoint, cloudStatus,
+      publicUrl, managerShareUrl, cloudEndpoint, cloudStatus,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible,
