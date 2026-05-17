@@ -50,6 +50,7 @@ body {
 .admin-toolbar-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 .admin-cloud-row { width:100%; margin-bottom:0 !important; }
 .btn { border:none; border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
+.btn:disabled { opacity:0.45; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
 .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
 .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(102,126,234,0.4); }
 .btn-outline { background:white; color:var(--text); border:1px solid #E2E8F0; }
@@ -337,6 +338,7 @@ body {
         <label>季度 <input v-model="meta.period" placeholder="2026-Q2"></label>
       </div>
       <div class="header-actions">
+        <button class="btn btn-outline" :disabled="!canUndo" @click="undoLastAction">撤销</button>
         <button class="btn btn-outline" @click="adminToolsOpen=!adminToolsOpen">{{adminToolsOpen ? '收起Amy管理' : 'Amy管理'}}</button>
         <input type="file" ref="fileInput" class="hidden-input" accept=".json" @change="importJSON">
       </div>
@@ -749,7 +751,7 @@ body {
           <label>{{kpi.id}}</label>
           <input v-model="kpi.name" style="flex:1" placeholder="KR名称">
           <label>满分</label><input type="number" v-model.number="kpi.weight" style="width:60px">
-          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" @click="dim.kpis.splice(ki,1)">删</button>
+          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" @click="removeKpi(dim,ki)">删</button>
         </div>
         <div class="editor-row"><label>证据口径</label><input v-model="kpi.target" style="flex:1"></div>
         <div class="tier-editor" v-for="t in kpi.tiers" :key="t.grade">
@@ -1104,6 +1106,7 @@ createApp({
     const saveTime = ref('');
     const toastMsg = ref('');
     const toastVisible = ref(false);
+    const undoStack = ref([]);
     const fileInput = ref(null);
     const templateInput = ref(null);
     const recordInput = ref(null);
@@ -1205,6 +1208,7 @@ createApp({
       if(!card) return null;
       return { ...card, savedRecordCount: records.value.filter(item=>item.employeeName === name).length };
     }).filter(Boolean));
+    const canUndo = computed(()=>undoStack.value.length > 0);
     const showMonthlyBonusTable = computed(()=> !['no_monthly_bonus','quarterly_commission'].includes(compensationMode.value));
     const compensationTitle = computed(()=>{
       if(compensationMode.value === 'no_monthly_bonus') return '薪酬口径';
@@ -1220,6 +1224,7 @@ createApp({
     });
 
     function syncBonusMonths() {
+      pushUndoSnapshot('同步季度月份');
       const existing = new Map(monthlyBonuses.value.map(row=>[row.month, row]));
       monthlyBonuses.value = getQuarterMonths(meta.value.period).map(month => {
         const old = existing.get(month);
@@ -1229,17 +1234,62 @@ createApp({
     }
 
     function applyBaseToMonths() {
+      pushUndoSnapshot('应用月奖金基准');
       monthlyBonuses.value.forEach(row=>{ row.base = bonusBase.value; });
       showToast('月奖金基准已应用');
     }
 
     function fillPaidFromDue() {
+      pushUndoSnapshot('应发填入实发');
       monthlyBonuses.value.forEach(row=>{ row.paid = monthlyDue(row); });
       showToast('已按应发填入实发');
     }
 
     function persistRecords() {
       localStorage.setItem(RECORDS_KEY, JSON.stringify(records.value));
+    }
+
+    function pushUndoSnapshot(label) {
+      undoStack.value.unshift({
+        label,
+        data: deepClone(getData()),
+        records: deepClone(records.value),
+        comparePeriod: comparePeriod.value,
+        selectedEmployee: selectedEmployee.value,
+        quickEmployeeSelect: quickEmployeeSelect.value,
+        okrExpanded: okrExpanded.value
+      });
+      if(undoStack.value.length > 20) undoStack.value.pop();
+    }
+
+    function restoreData(data) {
+      if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase || bonusBase.value);
+      meta.value = data.meta || meta.value;
+      bonusBase.value = data.bonusBase ?? bonusBase.value;
+      bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
+      compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
+      compensationNote.value = data.compensationNote || DEFAULT_TEMPLATE.compensationNote;
+      monthlyBonuses.value = data.monthlyBonuses;
+      gradeScale.value = data.gradeScale || gradeScale.value;
+      dimensions.value = data.dimensions || dimensions.value;
+    }
+
+    function undoLastAction() {
+      const snapshot = undoStack.value.shift();
+      if(!snapshot) {
+        showToast('暂无可撤销操作');
+        return;
+      }
+      restoreData(deepClone(snapshot.data));
+      records.value = deepClone(snapshot.records || []);
+      comparePeriod.value = snapshot.comparePeriod;
+      selectedEmployee.value = snapshot.selectedEmployee;
+      quickEmployeeSelect.value = snapshot.quickEmployeeSelect;
+      okrExpanded.value = snapshot.okrExpanded;
+      persistRecords();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
+      saveTime.value = new Date().toLocaleTimeString('zh-CN');
+      showToast(`已撤销：${snapshot.label}`);
     }
 
     function mergeRecordList(incoming) {
@@ -1257,6 +1307,7 @@ createApp({
         showToast('请先填写被考核人姓名');
         return false;
       }
+      pushUndoSnapshot('保存员工记录');
       const data = deepClone(getData());
       const record = buildRecordFromData(data);
       const idx = records.value.findIndex(item=>item.employeeName === record.employeeName && item.period === record.period);
@@ -1274,6 +1325,7 @@ createApp({
     }
 
     function loadRecord(record) {
+      pushUndoSnapshot(`载入 ${record.employeeName}`);
       const data = deepClone(record.data);
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase || bonusBase.value);
       meta.value = data.meta || meta.value;
@@ -1351,6 +1403,7 @@ createApp({
     }
 
     function applyProfile(profile) {
+      pushUndoSnapshot(`载入 ${profile.name} 模版`);
       const data = buildProfileData(profile);
       meta.value = data.meta;
       bonusBase.value = data.bonusBase;
@@ -1386,6 +1439,7 @@ createApp({
 
     function startNewEmployee() {
       if((meta.value.employeeName || '').trim() && !confirm('开始填写新员工？当前未提交内容请先保存。')) return;
+      pushUndoSnapshot('新增员工');
       meta.value = { ...meta.value, employeeName:'' };
       compensationMode.value = DEFAULT_TEMPLATE.compensationMode;
       compensationNote.value = DEFAULT_TEMPLATE.compensationNote;
@@ -1407,6 +1461,7 @@ createApp({
 
     function deleteRecord(id) {
       if(!confirm('确定删除这条员工记录？')) return;
+      pushUndoSnapshot('删除员工记录');
       records.value = records.value.filter(record=>record.id !== id);
       persistRecords();
       showToast('记录已删除');
@@ -1419,6 +1474,7 @@ createApp({
         return;
       }
       if(!confirm(`确定删除 ${name} 的 ${count} 条已保存记录？此操作只删除记录，不删除系统预设模板。`)) return;
+      pushUndoSnapshot(`删除 ${name} 记录`);
       records.value = records.value.filter(record=>record.employeeName !== name);
       if(selectedEmployee.value === name || meta.value.employeeName === name) {
         selectedEmployee.value = '';
@@ -1503,6 +1559,7 @@ createApp({
         const payload = await fetchCloudJsonp(endpoint);
         const incoming = Array.isArray(payload) ? payload : payload.records;
         if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
+        if(!silent) pushUndoSnapshot('同步云端记录');
         mergeRecordList(incoming);
         cloudStatus.value = `已同步 ${incoming.length} 条记录`;
         if(!silent) showToast('云端记录已同步');
@@ -1549,6 +1606,7 @@ createApp({
             showToast('记录库格式不正确');
             return;
           }
+          pushUndoSnapshot('导入记录库');
           mergeRecordList(incoming);
           showToast('记录库导入成功');
         } catch {
@@ -1565,6 +1623,7 @@ createApp({
     }
 
     function selectTier(kpi, grade) {
+      pushUndoSnapshot(`评分 ${kpi.id}`);
       if(kpi.selectedTier === grade) {
         kpi.selectedTier = null;
         kpi.score = 0;
@@ -1627,6 +1686,7 @@ createApp({
         try {
           const data = JSON.parse(ev.target.result);
           if(data.dimensions) {
+            pushUndoSnapshot('导入JSON');
             meta.value = data.meta || meta.value;
             bonusBase.value = data.bonusBase || 300;
             bonusCurrency.value = data.bonusCurrency || 'USD';
@@ -1746,7 +1806,8 @@ createApp({
     function printPage() { window.print(); }
 
     function resetAll() {
-      if(!confirm('确定要重置所有评分？此操作不可撤销。')) return;
+      if(!confirm('确定要重置所有评分？重置后可立即点击“撤销”恢复。')) return;
+      pushUndoSnapshot('重置');
       const fresh = deepClone(DEFAULT_TEMPLATE);
       meta.value = fresh.meta;
       bonusBase.value = fresh.bonusBase;
@@ -1762,6 +1823,7 @@ createApp({
 
     // Template editor functions
     function addKpi(dim) {
+      pushUndoSnapshot('添加KR');
       const idx = dim.kpis.length + 1;
       dim.kpis.push({
         id: 'KR' + idx,
@@ -1780,6 +1842,7 @@ createApp({
       });
     }
     function addDimension() {
+      pushUndoSnapshot('添加目标');
       const ids = dimensions.value.map(d=>d.id);
       const next = 'O' + (dimensions.value.length + 1);
       dimensions.value.push({
@@ -1789,7 +1852,16 @@ createApp({
       });
     }
     function removeDim(i) {
-      if(confirm('确定删除该目标？')) dimensions.value.splice(i,1);
+      if(confirm('确定删除该目标？')) {
+        pushUndoSnapshot('删除目标');
+        dimensions.value.splice(i,1);
+      }
+    }
+    function removeKpi(dim, i) {
+      if(confirm('确定删除该KR？')) {
+        pushUndoSnapshot('删除KR');
+        dim.kpis.splice(i,1);
+      }
     }
 
     function exportTemplate() {
@@ -1814,6 +1886,7 @@ createApp({
         try {
           const data = JSON.parse(ev.target.result);
           if(data.dimensions) {
+            pushUndoSnapshot('导入模版');
             data.dimensions.forEach(d=>d.kpis.forEach(k=>{ k.selectedTier=k.selectedTier||null; k.score=k.score||0; k.comment=k.comment||''; }));
             meta.value = { ...meta.value, templateName:data.meta?.templateName||meta.value.templateName, templateVersion:data.meta?.templateVersion||'1.0' };
             bonusBase.value = data.bonusBase || bonusBase.value;
@@ -1839,7 +1912,7 @@ createApp({
       publicUrl, managerShareUrl, cloudEndpoint, cloudStatus, adminToolsOpen,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, comparisonRecords, timelineRecords, quickEmployeeCards,
-      collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible,
+      collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
       totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
@@ -1850,11 +1923,12 @@ createApp({
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
       copyPublicLink, exportSubmissionPackage, formatDateTime,
+      undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
       exportJSON, triggerImport, importJSON,
       exportExcel, printPage, resetAll,
-      addKpi, addDimension, removeDim,
+      addKpi, addDimension, removeDim, removeKpi,
       exportTemplate, triggerTemplateImport, importTemplate
     };
   }
