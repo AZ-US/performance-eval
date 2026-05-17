@@ -227,6 +227,7 @@ body {
 .bonus-amount { font-weight:800; white-space:nowrap; }
 .bonus-grade { min-width:96px; }
 .bonus-note { min-width:220px; }
+.compensation-note { background:rgba(239,246,255,0.72); border:1px solid #BFDBFE; color:#1E3A8A; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.65; margin-bottom:14px; }
 
 /* Workflow and records */
 .quick-nav-card, .workflow-card, .records-card, .okr-panel-card {
@@ -489,10 +490,10 @@ body {
     <section class="bonus-card">
       <div class="section-title-row">
         <div>
-          <div class="section-title">月度绩效奖金发放</div>
-          <div class="section-subtitle">选择等级，确认实发金额，填写必要备注。</div>
+          <div class="section-title">{{compensationTitle}}</div>
+          <div class="section-subtitle">{{compensationSubtitle}}</div>
         </div>
-        <div class="bonus-controls">
+        <div class="bonus-controls" v-if="showMonthlyBonusTable">
           <span>月奖金基准</span>
           <input type="number" v-model.number="bonusBase" style="width:96px">
           <input v-model="bonusCurrency" style="width:64px">
@@ -501,7 +502,8 @@ body {
           <button class="btn btn-outline" @click="syncBonusMonths">同步季度月份</button>
         </div>
       </div>
-      <div class="bonus-stats">
+      <div class="compensation-note">{{compensationNote}}</div>
+      <div class="bonus-stats" v-if="showMonthlyBonusTable">
         <div class="bonus-stat">
           <div class="bonus-stat-label">本季度应发合计</div>
           <div class="bonus-stat-value">{{bonusCurrency}} {{monthlyDueTotal}}</div>
@@ -515,7 +517,7 @@ body {
           <div class="bonus-stat-value">{{ratedMonthCount}} / {{monthlyBonuses.length}}</div>
         </div>
       </div>
-      <div class="bonus-table-wrap">
+      <div class="bonus-table-wrap" v-if="showMonthlyBonusTable">
         <table class="bonus-table">
           <thead>
             <tr>
@@ -772,6 +774,8 @@ const DEFAULT_TEMPLATE = {
   },
   bonusBase: 300,
   bonusCurrency: "USD",
+  compensationMode: "monthly_bonus",
+  compensationNote: "月度奖金按等级系数计算；季度OKR用于复盘和下季度目标校准。",
   monthlyBonuses: buildMonthlyBonuses(currentQuarterLabel(), 300),
   gradeScale: [
     { grade:"S", label:"高度达成 Stretch Achieved", minScore:90, maxScore:100, coefficient:1.2 },
@@ -899,6 +903,104 @@ const DEFAULT_TEMPLATE = {
   ]
 };
 
+const PERSON_PROFILES = {
+  Freesia: {
+    name: "Freesia",
+    templateName: "Freesia 运营经理 Q2 OKR",
+    compensationMode: "no_monthly_bonus",
+    bonusBase: 0,
+    bonusCurrency: "USD",
+    compensationNote: "Freesia Q2按运营经理岗位考核，无月度绩效奖金；薪酬以Base salary与年终奖金为主，年终奖金建议与公司预算完成度、运营结果、成本管控和异常费用控制挂钩。",
+    dimensions: [
+      { id:"O1", name:"操作体系与培训体系搭建", kpis:[
+        profileKpi("KR1","输出模块化操作SOP / 操作手册",12,"覆盖单证、操作、订舱核心流程，形成可复用、可培训、可检查的标准材料。","SOP完整且可执行，已推动团队使用","主要模块完成并可培训","有初稿但不完整或未落地","缺少可用输出"),
+        profileKpi("KR2","建立新人训练营与岗位路径图",12,"新人先学习美国市场1-2周，再按岗位分流；明确基础、进阶、轮岗路径。","训练营和路径图落地并可复制","框架完成并开始执行","有方向但执行不稳定","未形成机制"),
+        profileKpi("KR3","打通单证 / 操作 / 订舱三个track",11,"建立全链路认知，减少岗位割裂，让团队知道做什么、怎么做、为什么做。","三条线流程打通且边界清楚","主要衔接点明确","仍依赖个人经验协调","链路割裂明显")
+      ]},
+      { id:"O2", name:"团队管理与人才梯队", kpis:[
+        profileKpi("KR1","完成人员分层与岗位分工",9,"明确核心骨干、可用执行、优化对象，形成谁做什么的清晰安排。","分层清楚并开始稳定运行","分工基本明确","分层存在但动作不连续","职责不清"),
+        profileKpi("KR2","培养操作骨干和中间层承接",8,"重点培养Jeremy操作方向、小胡中间层承接，并形成带教记录。","骨干能独立承接关键任务","培养动作持续推进","有带教但效果不稳定","缺少明确培养"),
+        profileKpi("KR3","推动不适配人员优化",8,"对主动性、学习力、抗压不匹配人员做出判断和调整建议。","识别准确且推动有效调整","提出明确建议并跟进","判断存在但推进弱","问题长期悬置")
+      ]},
+      { id:"O3", name:"订舱与操作协同重构", kpis:[
+        profileKpi("KR1","建立责任链条和第一责任人机制",9,"订舱设置第一责任人，减少直接找主管，明确流程责任链。","责任链条清楚且执行稳定","主要责任边界明确","仍有较多跨级或模糊沟通","责任不清"),
+        profileKpi("KR2","推动一条龙能力建设",8,"提升从订舱、单证、操作到CS的整体衔接能力。","形成可复制的一条龙协同方式","关键环节协同改善","局部改善但不稳定","协同摩擦明显"),
+        profileKpi("KR3","获得核心人员支持并统一管理认知",8,"推动团队接受新流程、新分工和运营口统一管理认知。","核心人员支持且执行一致","主要成员基本配合","仍需反复推动","阻力明显影响落地")
+      ]},
+      { id:"O4", name:"运营视角与成本意识导入", kpis:[
+        profileKpi("KR1","参与预算结构和成本构成理解",5,"逐步了解预算结构、成本构成、SOA和异常费用。","能结合数据提出判断","能理解并跟进主要项目","了解零散不成体系","缺少成本意识"),
+        profileKpi("KR2","推动异常费用和运营风险管理",5,"将异常费用、流程风险、人员风险纳入运营管理动作。","能提前识别并推动改善","能跟进主要异常","发现问题但闭环不足","被动处理"),
+        profileKpi("KR3","形成运营决策视角",5,"从做事转向搭体系、带团队、控运营。","能独立提出运营判断和方案","具备初步管理视角","仍偏执行视角","缺少统筹意识")
+      ]}
+    ]
+  },
+  Gary: {
+    name: "Gary",
+    templateName: "Gary Q2 业务控盘 OKR",
+    compensationMode: "quarterly_commission",
+    bonusBase: 0,
+    bonusCurrency: "USD",
+    compensationNote: "Gary不设月度奖金，按季度业务提成口径结算；本表用业务控盘、节奏推进和资源调动结果作为季度提成核算依据。具体提成公式待业务指标口径确认后可继续加入。",
+    dimensions: [
+      { id:"O1", name:"业务控盘能力", kpis:[
+        profileKpi("KR1","建立整体业务滚动预测机制",12,"周度 / 月度更新业务预测，偏差控制在±15%以内。","预测稳定且偏差可控","按周/月更新且基本准确","有预测但偏差或频率不稳","缺少预测机制"),
+        profileKpi("KR2","偏离目标后一周内提出调整动作",12,"当周或当月业务偏离目标时，提出客户推进、资源协调等明确动作。","提前识别并快速调整","一周内提出有效动作","有动作但滞后或不清晰","无明确干预"),
+        profileKpi("KR3","Top客户出货稳定率≥90%",11,"Top客户无连续两周明显异常，异常时能及时干预。","稳定率达成且预警及时","基本稳定，有少量波动","波动较多但能补救","连续异常且缺少动作")
+      ]},
+      { id:"O2", name:"业务节奏与问题推进机制", kpis:[
+        profileKpi("KR1","建立客户出货看板并周更新",10,"客户出货看板100%覆盖，并保持周度更新。","覆盖完整且持续更新","主要客户覆盖并更新","覆盖不全或更新不稳","缺少看板"),
+        profileKpi("KR2","每周输出异常清单，关闭率≥80%",10,"异常清单不仅记录问题，还要推动关闭。","关闭率达成且复盘清楚","主要异常能关闭","有清单但关闭不足","问题长期停留"),
+        profileKpi("KR3","重点异常平均推进周期≤3天",10,"卡舱、延误、掉量等重点异常快速推进。","平均≤3天且结果清楚","多数异常按期推进","推进慢或依赖上级","严重滞后")
+      ]},
+      { id:"O3", name:"业务掌控与资源调动", kpis:[
+        profileKpi("KR1","推动≥3个公司客户出货改善",12,"以数据体现客户出货明显改善。","≥3个客户改善且证据充分","2-3个客户有改善","有推进但改善有限","缺少改善结果"),
+        profileKpi("KR2","形成≥2个航线或资源改善结果",12,"例如新增舱位、替代方案、关键资源协调落地。","≥2个改善结果落地","至少1个明确结果","有推进但未落地","无结果"),
+        profileKpi("KR3","总经理直接介入业务事项减少≥30%",11,"通过前置控盘和资源调动，减少总经理直接介入。","介入明显下降且机制稳定","介入有所下降","下降不明显","仍高度依赖总经理")
+      ]}
+    ]
+  },
+  Tim: {
+    name: "Tim",
+    templateName: "Tim 2026 Q2 订舱与航线突破 OKR",
+    compensationMode: "monthly_accelerator",
+    bonusBase: 1000,
+    bonusCurrency: "USD",
+    compensationNote: "Tim原月度固定1000；Q2建议试行“1000月度基准 x 等级系数”的加成模式。S=1.2，A=1.0，B=0.7，C=0；特殊突破可在备注中说明加成依据。",
+    dimensions: [
+      { id:"O1", name:"订舱结构与稳定性", kpis:[
+        profileKpi("KR1","Q2订舱量达到Q1的≥140%",12,"从有量转向结构健康、可持续，按Q1基准比较。","≥150%且稳定","达到≥140%","接近目标但不稳定","明显低于目标"),
+        profileKpi("KR2","船司结构优化",12,"单一船司占比≤50%，并建立≥3家稳定可用主力船司。","结构健康且3家以上稳定","达到≤50%和3家主力","部分改善但仍依赖单一船司","结构风险明显"),
+        profileKpi("KR3","泰国 / 菲律宾新增稳定方案",11,"除ZIM外，新增≥1家价格和仓位具备竞争力的稳定出货方案。","新增方案稳定可复制","新增方案可用","方案试用但不稳定","无有效替代")
+      ]},
+      { id:"O2", name:"核心船司瓶颈突破", kpis:[
+        profileKpi("KR1","COSCO专项清理并恢复合作",14,"完成新抬头可行性、折扣/解决方案落地，并恢复稳定订舱能力。","清理完成且持续出货","方案落地并可订舱","推进中但未稳定","未突破"),
+        profileKpi("KR2","恢复WANHAI / YML关键资源",11,"WANHAI重建≥1个有效渠道并试单；YML完成SS4 Form并可实际使用。","两项均落地","至少一项稳定落地","有推进但未实际使用","无实质进展"),
+        profileKpi("KR3","新增船司合作能力",10,"除CMA外，新增≥1家新抬头或合约落地。","新增合作落地并可出货","完成落地","接近落地但未使用","无新增")
+      ]},
+      { id:"O3", name:"航线突破与新增业务", kpis:[
+        profileKpi("KR1","完成印度线方案搭建",10,"完成≥4家船司价格、仓位、时效对比，并明确1套可执行方案。","方案完整且可执行","完成对比和方案","对比不全或方案弱","无可执行方案"),
+        profileKpi("KR2","印度线实现业务落地",12,"实现≥5票实际出运或形成稳定出货节奏。","≥5票且节奏稳定","达到≥5票或稳定节奏","有试单但未稳定","未落地"),
+        profileKpi("KR3","形成策略打法能力",8,"至少1个策略性投入案例，如低毛利换仓位，并输出复盘。","案例有效且复盘可复制","有案例和复盘","有动作但复盘不足","无打法沉淀")
+      ]}
+    ]
+  }
+};
+
+function profileKpi(id, name, weight, target, sDesc, aDesc, bDesc, cDesc) {
+  return {
+    id, name, weight, target,
+    tiers: [
+      { grade:"S", points:weight, description:sDesc },
+      { grade:"A", points:Math.round(weight * 0.8), description:aDesc },
+      { grade:"B", points:Math.round(weight * 0.55), description:bDesc },
+      { grade:"C", points:Math.max(0, Math.round(weight * 0.2)), description:cDesc }
+    ],
+    selectedTier:null,
+    score:0,
+    comment:""
+  };
+}
+
 function currentQuarterLabel() {
   const now = new Date();
   const quarter = Math.floor(now.getMonth() / 3) + 1;
@@ -942,6 +1044,8 @@ createApp({
     const meta = ref(initial.meta);
     const bonusBase = ref(initial.bonusBase);
     const bonusCurrency = ref(initial.bonusCurrency);
+    const compensationMode = ref(initial.compensationMode || DEFAULT_TEMPLATE.compensationMode);
+    const compensationNote = ref(initial.compensationNote || DEFAULT_TEMPLATE.compensationNote);
     const monthlyBonuses = ref(initial.monthlyBonuses);
     const gradeScale = ref(initial.gradeScale);
     const dimensions = ref(initial.dimensions);
@@ -1036,7 +1140,8 @@ createApp({
     const monthlyDueTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+monthlyDue(row), 0));
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
-    const employeeNames = computed(()=> [...new Set(records.value.map(record=>record.employeeName).filter(Boolean))].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
+    const profileNames = computed(()=> Object.values(PERSON_PROFILES).map(profile=>profile.name));
+    const employeeNames = computed(()=> [...new Set([...profileNames.value, ...records.value.map(record=>record.employeeName).filter(Boolean)])].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
     const comparisonRecords = computed(()=> records.value
       .filter(record=>record.period === comparePeriod.value)
       .sort((a,b)=> b.monthlyPaidTotal - a.monthlyPaidTotal || b.quarterScore - a.quarterScore || a.employeeName.localeCompare(b.employeeName, 'zh-CN'))
@@ -1045,7 +1150,20 @@ createApp({
       ? records.value.filter(record=>record.employeeName === selectedEmployee.value).sort((a,b)=>a.period.localeCompare(b.period))
       : []
     );
-    const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>latestRecordForEmployee(name)).filter(Boolean));
+    const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>latestRecordForEmployee(name) || profileCardForEmployee(name)).filter(Boolean));
+    const showMonthlyBonusTable = computed(()=> !['no_monthly_bonus','quarterly_commission'].includes(compensationMode.value));
+    const compensationTitle = computed(()=>{
+      if(compensationMode.value === 'no_monthly_bonus') return '薪酬口径';
+      if(compensationMode.value === 'quarterly_commission') return '季度业务提成';
+      if(compensationMode.value === 'monthly_accelerator') return '月度奖金加成试行';
+      return '月度绩效奖金发放';
+    });
+    const compensationSubtitle = computed(()=>{
+      if(compensationMode.value === 'no_monthly_bonus') return '该岗位本季度不填写月度奖金，重点填写季度OKR。';
+      if(compensationMode.value === 'quarterly_commission') return '该岗位不按月发奖金，季度提成根据业务指标完成情况核算。';
+      if(compensationMode.value === 'monthly_accelerator') return '选择月度等级，按基准金额和系数计算加成。';
+      return '选择等级，确认实发金额，填写必要备注。';
+    });
 
     function syncBonusMonths() {
       const existing = new Map(monthlyBonuses.value.map(row=>[row.month, row]));
@@ -1107,6 +1225,8 @@ createApp({
       meta.value = data.meta || meta.value;
       bonusBase.value = data.bonusBase || bonusBase.value;
       bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
+      compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
+      compensationNote.value = data.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       monthlyBonuses.value = data.monthlyBonuses;
       gradeScale.value = data.gradeScale || gradeScale.value;
       dimensions.value = data.dimensions || dimensions.value;
@@ -1122,12 +1242,76 @@ createApp({
         .sort((a,b)=>b.period.localeCompare(a.period) || new Date(b.savedAt) - new Date(a.savedAt))[0] || null;
     }
 
+    function profileForEmployee(name) {
+      const normalized = String(name || '').trim().toLowerCase();
+      return Object.values(PERSON_PROFILES).find(profile=>profile.name.toLowerCase() === normalized) || null;
+    }
+
+    function profileCardForEmployee(name) {
+      const profile = profileForEmployee(name);
+      if(!profile) return null;
+      return {
+        id: `profile-${profile.name}`,
+        employeeName: profile.name,
+        period: meta.value.period || currentQuarterLabel(),
+        currency: profile.bonusCurrency,
+        monthlyPaidTotal: 0,
+        ratedMonthCount: 0,
+        monthCount: 3,
+        okrFilledCount: 0,
+        isProfile: true
+      };
+    }
+
+    function buildProfileData(profile) {
+      const period = meta.value.period || currentQuarterLabel();
+      return {
+        meta: {
+          ...deepClone(DEFAULT_TEMPLATE.meta),
+          templateName: profile.templateName,
+          templateVersion: "Q2-role",
+          employeeName: profile.name,
+          evaluatorName: meta.value.evaluatorName || '',
+          period
+        },
+        bonusBase: profile.bonusBase,
+        bonusCurrency: profile.bonusCurrency,
+        compensationMode: profile.compensationMode,
+        compensationNote: profile.compensationNote,
+        monthlyBonuses: buildMonthlyBonuses(period, profile.bonusBase),
+        gradeScale: deepClone(DEFAULT_TEMPLATE.gradeScale),
+        dimensions: deepClone(profile.dimensions)
+      };
+    }
+
+    function applyProfile(profile) {
+      const data = buildProfileData(profile);
+      meta.value = data.meta;
+      bonusBase.value = data.bonusBase;
+      bonusCurrency.value = data.bonusCurrency;
+      compensationMode.value = data.compensationMode;
+      compensationNote.value = data.compensationNote;
+      monthlyBonuses.value = data.monthlyBonuses;
+      gradeScale.value = data.gradeScale;
+      dimensions.value = data.dimensions;
+      selectedEmployee.value = profile.name;
+      quickEmployeeSelect.value = profile.name;
+      okrExpanded.value = true;
+      showToast(`已载入 ${profile.name} 的OKR模版`);
+    }
+
     function quickOpenEmployee(name) {
       if(!name) return;
       const record = latestRecordForEmployee(name);
-      if(!record) return;
       quickEmployeeSelect.value = name;
-      loadRecord(record);
+      const profile = profileForEmployee(name);
+      const recordMatchesProfile = profile && record?.data?.meta?.templateName === profile.templateName;
+      if(record && (!profile || recordMatchesProfile)) {
+        loadRecord(record);
+      } else {
+        if(!profile) return;
+        applyProfile(profile);
+      }
       setTimeout(()=>{
         document.querySelector('.bonus-card')?.scrollIntoView({ behavior:'smooth', block:'start' });
       }, 60);
@@ -1136,6 +1320,10 @@ createApp({
     function startNewEmployee() {
       if((meta.value.employeeName || '').trim() && !confirm('开始填写新员工？当前未提交内容请先保存。')) return;
       meta.value = { ...meta.value, employeeName:'' };
+      compensationMode.value = DEFAULT_TEMPLATE.compensationMode;
+      compensationNote.value = DEFAULT_TEMPLATE.compensationNote;
+      bonusBase.value = DEFAULT_TEMPLATE.bonusBase;
+      bonusCurrency.value = DEFAULT_TEMPLATE.bonusCurrency;
       monthlyBonuses.value = buildMonthlyBonuses(meta.value.period, bonusBase.value);
       dimensions.value = dimensions.value.map(dim=>({
         ...dim,
@@ -1317,7 +1505,7 @@ createApp({
     // Auto-save
     let saveTimer = null;
     function getData() {
-      return { meta:meta.value, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, monthlyBonuses:monthlyBonuses.value, gradeScale:gradeScale.value, dimensions:dimensions.value };
+      return { meta:meta.value, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:gradeScale.value, dimensions:dimensions.value };
     }
     function autoSave() {
       clearTimeout(saveTimer);
@@ -1326,7 +1514,7 @@ createApp({
         saveTime.value = new Date().toLocaleTimeString('zh-CN');
       }, 2000);
     }
-    watch([meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions], autoSave, {deep:true});
+    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions], autoSave, {deep:true});
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
     });
@@ -1359,6 +1547,8 @@ createApp({
             meta.value = data.meta || meta.value;
             bonusBase.value = data.bonusBase || 300;
             bonusCurrency.value = data.bonusCurrency || 'USD';
+            compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
+            compensationNote.value = data.compensationNote || DEFAULT_TEMPLATE.compensationNote;
             monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || meta.value.period, data.bonusBase || bonusBase.value);
             gradeScale.value = data.gradeScale || gradeScale.value;
             dimensions.value = data.dimensions;
@@ -1478,6 +1668,8 @@ createApp({
       meta.value = fresh.meta;
       bonusBase.value = fresh.bonusBase;
       bonusCurrency.value = fresh.bonusCurrency;
+      compensationMode.value = fresh.compensationMode;
+      compensationNote.value = fresh.compensationNote;
       monthlyBonuses.value = fresh.monthlyBonuses;
       gradeScale.value = fresh.gradeScale;
       dimensions.value = fresh.dimensions;
@@ -1543,6 +1735,8 @@ createApp({
             meta.value = { ...meta.value, templateName:data.meta?.templateName||meta.value.templateName, templateVersion:data.meta?.templateVersion||'1.0' };
             bonusBase.value = data.bonusBase || bonusBase.value;
             bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
+            compensationMode.value = data.compensationMode || compensationMode.value;
+            compensationNote.value = data.compensationNote || compensationNote.value;
             monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(meta.value.period, bonusBase.value);
             gradeScale.value = data.gradeScale || gradeScale.value;
             dimensions.value = data.dimensions;
@@ -1566,6 +1760,7 @@ createApp({
       fileInput, templateInput, recordInput,
       totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
+      compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee, startNewEmployee,
@@ -1617,6 +1812,8 @@ function buildRecordFromData(data) {
     period,
     savedAt: new Date().toISOString(),
     data,
+    compensationMode: data.compensationMode || DEFAULT_TEMPLATE.compensationMode,
+    compensationNote: data.compensationNote || '',
     ...summary
   };
 }
