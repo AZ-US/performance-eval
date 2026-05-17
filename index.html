@@ -924,7 +924,7 @@ createApp({
     const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
     const RECORDS_KEY = 'employee_eval_records_v1';
     const CLOUD_ENDPOINT_KEY = 'employee_eval_cloud_endpoint_v1';
-    const DEFAULT_CLOUD_ENDPOINT = '';
+    const DEFAULT_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyiWj6bwh46kOm_OGdRep8uYOqbURJP_bK0wVl19cZBcpn5o1gJpW3Ks5Thgc9bkjaiOg/exec';
     const initial = loadInitialData(STORAGE_KEY);
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
@@ -951,8 +951,11 @@ createApp({
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
     const urlCloudEndpoint = (new URLSearchParams(window.location.search).get('cloud') || '').trim();
-    const cloudEndpoint = ref(urlCloudEndpoint || localStorage.getItem(CLOUD_ENDPOINT_KEY) || DEFAULT_CLOUD_ENDPOINT);
-    if(urlCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, urlCloudEndpoint);
+    const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
+    const ignoredSavedCloudEndpoint = savedCloudEndpoint.includes('TEST_DEPLOYMENT');
+    const initialCloudEndpoint = urlCloudEndpoint || (ignoredSavedCloudEndpoint ? '' : savedCloudEndpoint) || DEFAULT_CLOUD_ENDPOINT;
+    const cloudEndpoint = ref(initialCloudEndpoint);
+    if(urlCloudEndpoint || ignoredSavedCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, initialCloudEndpoint);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
     const managerShareUrl = computed(()=>{
       const endpoint = cloudEndpoint.value.trim();
