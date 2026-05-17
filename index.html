@@ -279,11 +279,14 @@ body {
   cursor:pointer;
   font-family:inherit;
   transition:all 0.2s;
+  position:relative;
 }
 .quick-employee-btn:hover { border-color:var(--primary); transform:translateY(-1px); box-shadow:0 4px 14px rgba(59,130,246,0.16); }
 .quick-employee-btn.active { border-color:var(--primary); background:#EFF6FF; }
 .quick-employee-name { font-size:14px; font-weight:800; margin-bottom:4px; color:var(--text); }
 .quick-employee-meta { font-size:12px; color:var(--text-light); line-height:1.45; }
+.quick-employee-delete { position:absolute; top:6px; right:6px; width:22px; height:22px; border:none; border-radius:999px; background:#FEE2E2; color:#DC2626; font-size:15px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.quick-employee-delete:hover { background:#FECACA; }
 
 /* Animations */
 @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
@@ -408,8 +411,12 @@ body {
                 :key="card.employeeName"
                 :class="{active:selectedEmployee===card.employeeName}"
                 @click="quickOpenEmployee(card.employeeName)">
+          <span class="quick-employee-delete"
+                v-if="card.savedRecordCount"
+                title="删除该员工记录"
+                @click.stop="deleteEmployeeRecords(card.employeeName)">×</span>
           <div class="quick-employee-name">{{card.employeeName}}</div>
-          <div class="quick-employee-meta">{{card.period}}</div>
+          <div class="quick-employee-meta">{{card.period}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
         </button>
       </div>
       <div class="empty-state" v-else>保存员工后，姓名会显示在这里。</div>
@@ -1192,7 +1199,12 @@ createApp({
       ? records.value.filter(record=>record.employeeName === selectedEmployee.value).sort((a,b)=>a.period.localeCompare(b.period))
       : []
     );
-    const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>latestRecordForEmployee(name) || profileCardForEmployee(name)).filter(Boolean));
+    const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>{
+      const record = latestRecordForEmployee(name);
+      const card = record || profileCardForEmployee(name);
+      if(!card) return null;
+      return { ...card, savedRecordCount: records.value.filter(item=>item.employeeName === name).length };
+    }).filter(Boolean));
     const showMonthlyBonusTable = computed(()=> !['no_monthly_bonus','quarterly_commission'].includes(compensationMode.value));
     const compensationTitle = computed(()=>{
       if(compensationMode.value === 'no_monthly_bonus') return '薪酬口径';
@@ -1398,6 +1410,22 @@ createApp({
       records.value = records.value.filter(record=>record.id !== id);
       persistRecords();
       showToast('记录已删除');
+    }
+
+    function deleteEmployeeRecords(name) {
+      const count = records.value.filter(record=>record.employeeName === name).length;
+      if(!count) {
+        showToast('该员工没有已保存记录');
+        return;
+      }
+      if(!confirm(`确定删除 ${name} 的 ${count} 条已保存记录？此操作只删除记录，不删除系统预设模板。`)) return;
+      records.value = records.value.filter(record=>record.employeeName !== name);
+      if(selectedEmployee.value === name || meta.value.employeeName === name) {
+        selectedEmployee.value = '';
+        quickEmployeeSelect.value = '';
+      }
+      persistRecords();
+      showToast(`已删除 ${name} 的记录`);
     }
 
     function exportRecordLibrary() {
@@ -1818,7 +1846,7 @@ createApp({
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
-      quickOpenEmployee, startNewEmployee,
+      quickOpenEmployee, startNewEmployee, deleteEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
       copyPublicLink, exportSubmissionPackage, formatDateTime,
