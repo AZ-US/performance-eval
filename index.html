@@ -231,7 +231,7 @@ body {
 .compensation-note { background:rgba(239,246,255,0.72); border:1px solid #BFDBFE; color:#1E3A8A; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.65; margin-bottom:14px; }
 
 /* Workflow and records */
-.quick-nav-card, .workflow-card, .records-card, .okr-panel-card {
+.quick-nav-card, .workflow-card, .records-card, .okr-panel-card, .mode-card {
   background: var(--card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -265,6 +265,18 @@ body {
 .empty-state { padding:18px; text-align:center; color:var(--text-light); font-size:13px; }
 .okr-panel-card { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .okr-panel-note { font-size:13px; color:var(--text-light); line-height:1.6; max-width:720px; }
+.mode-card { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.mode-main { flex:1; min-width:240px; }
+.mode-title-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+.mode-pill { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:800; background:#DBEAFE; color:#1D4ED8; }
+.mode-pill.no-monthly { background:#F1F5F9; color:#475569; }
+.mode-pill.commission { background:#FEF3C7; color:#92400E; }
+.mode-pill.accelerator { background:#D1FAE5; color:#047857; }
+.mode-copy { font-size:13px; color:var(--text-light); line-height:1.6; max-width:760px; }
+.mode-metrics { display:flex; gap:10px; flex-wrap:wrap; }
+.mode-metric { background:rgba(255,255,255,0.62); border:1px solid rgba(226,232,240,0.9); border-radius:12px; padding:10px 12px; min-width:120px; }
+.mode-metric-label { font-size:11px; color:var(--text-light); margin-bottom:3px; }
+.mode-metric-value { font-size:15px; font-weight:800; }
 .quick-nav-card { position:sticky; top:86px; z-index:60; }
 .quick-nav-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
 .quick-nav-select { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-light); }
@@ -424,6 +436,27 @@ body {
       <div class="empty-state" v-else>保存员工后，姓名会显示在这里。</div>
     </section>
 
+    <!-- Assessment mode -->
+    <section class="mode-card">
+      <div class="mode-main">
+        <div class="mode-title-row">
+          <div class="section-title" style="margin-bottom:0">当前考核模式</div>
+          <span class="mode-pill" :class="compensationModeClass">{{compensationModeLabel}}</span>
+        </div>
+        <div class="mode-copy">{{assessmentModeCopy}}</div>
+      </div>
+      <div class="mode-metrics">
+        <div class="mode-metric">
+          <div class="mode-metric-label">月度</div>
+          <div class="mode-metric-value">{{monthlyModeLabel}}</div>
+        </div>
+        <div class="mode-metric">
+          <div class="mode-metric-label">季度</div>
+          <div class="mode-metric-value">{{quarterModeLabel}}</div>
+        </div>
+      </div>
+    </section>
+
     <!-- Workflow rule -->
     <section class="workflow-card" v-if="adminToolsOpen">
       <div class="section-title-row">
@@ -449,10 +482,10 @@ body {
     <!-- Quarterly OKR switch -->
     <section class="okr-panel-card">
       <div>
-        <div class="section-title">季度OKR复盘区</div>
-        <div class="okr-panel-note">当前状态：{{okrExpanded ? '已展开，可填写季度复盘' : '暂不需要填写。月度考核先完成下方奖金发放表即可。'}}</div>
+        <div class="section-title">季度OKR复盘</div>
+        <div class="okr-panel-note">{{okrExpanded ? '当前正在填写季度OKR复盘。' : '月度发放时可以先不填写；季度末复盘时再打开。'}}</div>
       </div>
-      <button class="btn btn-primary" @click="okrExpanded=!okrExpanded">{{okrExpanded ? '收起季度OKR' : '展开季度OKR'}}</button>
+      <button class="btn btn-primary" @click="okrExpanded=!okrExpanded">{{okrExpanded ? '暂不填写季度OKR' : '填写季度OKR复盘'}}</button>
     </section>
 
     <!-- Weight Warning -->
@@ -1222,6 +1255,35 @@ createApp({
       if(compensationMode.value === 'monthly_accelerator') return '选择月度等级，按基准金额和系数计算加成。';
       return '选择等级，确认实发金额，填写必要备注。';
     });
+    const compensationModeLabel = computed(()=>{
+      if(compensationMode.value === 'no_monthly_bonus') return '无月度奖金';
+      if(compensationMode.value === 'quarterly_commission') return '季度提成';
+      if(compensationMode.value === 'monthly_accelerator') return '月度加成';
+      return '月度奖金';
+    });
+    const compensationModeClass = computed(()=>{
+      if(compensationMode.value === 'no_monthly_bonus') return 'no-monthly';
+      if(compensationMode.value === 'quarterly_commission') return 'commission';
+      if(compensationMode.value === 'monthly_accelerator') return 'accelerator';
+      return '';
+    });
+    const monthlyModeLabel = computed(()=>{
+      if(compensationMode.value === 'no_monthly_bonus') return '不发放';
+      if(compensationMode.value === 'quarterly_commission') return '仅追踪';
+      if(compensationMode.value === 'monthly_accelerator') return `${bonusCurrency.value} ${bonusBase.value}基准`;
+      return '按等级发放';
+    });
+    const quarterModeLabel = computed(()=>{
+      if(compensationMode.value === 'quarterly_commission') return '提成结算';
+      if(compensationMode.value === 'no_monthly_bonus') return '复盘/年终';
+      return 'OKR复盘';
+    });
+    const assessmentModeCopy = computed(()=>{
+      if(compensationMode.value === 'no_monthly_bonus') return '本岗位不做月度奖金发放；月度可记录进展，季度末用OKR复盘支持岗位发展、年终奖金或组织调整判断。';
+      if(compensationMode.value === 'quarterly_commission') return '本岗位不按月发奖金；月度用于追踪业务进度，季度根据业务指标完成度和提成规则结算。';
+      if(compensationMode.value === 'monthly_accelerator') return '本岗位按月度等级发放加成奖金；季度OKR用于判断结构性突破、资源能力和下季度目标，不追溯扣回已发月度奖金。';
+      return '月度奖金按当月结果发放；季度OKR用于复盘和下季度目标校准，不追溯扣回已发月度奖金。';
+    });
 
     function syncBonusMonths() {
       pushUndoSnapshot('同步季度月份');
@@ -1327,12 +1389,16 @@ createApp({
     function loadRecord(record) {
       pushUndoSnapshot(`载入 ${record.employeeName}`);
       const data = deepClone(record.data);
-      if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase || bonusBase.value);
+      const profile = profileForEmployee(record.employeeName);
+      const profileTemplate = profile ? profileQuarterTemplate(profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel()) : null;
+      const isProfileTemplate = profileTemplate && data.meta?.templateName === profileTemplate.templateName;
+      const fallbackBase = isProfileTemplate ? profileTemplate.bonusBase : bonusBase.value;
+      if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase ?? fallbackBase);
       meta.value = data.meta || meta.value;
-      bonusBase.value = data.bonusBase || bonusBase.value;
-      bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
-      compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
-      compensationNote.value = data.compensationNote || DEFAULT_TEMPLATE.compensationNote;
+      bonusBase.value = data.bonusBase ?? fallbackBase;
+      bonusCurrency.value = data.bonusCurrency || profileTemplate?.bonusCurrency || bonusCurrency.value;
+      compensationMode.value = data.compensationMode || profileTemplate?.compensationMode || DEFAULT_TEMPLATE.compensationMode;
+      compensationNote.value = data.compensationNote || profileTemplate?.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       monthlyBonuses.value = data.monthlyBonuses;
       gradeScale.value = data.gradeScale || gradeScale.value;
       dimensions.value = data.dimensions || dimensions.value;
@@ -1917,6 +1983,7 @@ createApp({
       totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
+      compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords,
