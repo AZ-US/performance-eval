@@ -45,6 +45,10 @@ body {
 .header-inputs input, .header-inputs select { border:1px solid #E2E8F0; border-radius:8px; padding:6px 12px; font-size:14px; background:white; outline:none; transition:border 0.2s; font-family:inherit; }
 .header-inputs input:focus { border-color:var(--primary); }
 .header-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.admin-toolbar { margin-top:14px; padding-top:14px; border-top:1px solid rgba(226,232,240,0.9); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.admin-toolbar-title { font-size:13px; font-weight:800; color:var(--text-light); }
+.admin-toolbar-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.admin-cloud-row { width:100%; margin-bottom:0 !important; }
 .btn { border:none; border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
 .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
 .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(102,126,234,0.4); }
@@ -329,13 +333,27 @@ body {
         <label>季度 <input v-model="meta.period" placeholder="2026-Q2"></label>
       </div>
       <div class="header-actions">
+        <button class="btn btn-outline" @click="adminToolsOpen=!adminToolsOpen">{{adminToolsOpen ? '收起Amy管理' : 'Amy管理'}}</button>
+        <input type="file" ref="fileInput" class="hidden-input" accept=".json" @change="importJSON">
+      </div>
+    </div>
+    <div class="admin-toolbar" v-if="adminToolsOpen">
+      <div class="admin-toolbar-title">Amy 管理工具</div>
+      <div class="admin-toolbar-actions">
+        <button class="btn btn-outline" @click="copyPublicLink">复制链接</button>
+        <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
         <button class="btn btn-outline" @click="exportJSON">JSON</button>
         <button class="btn btn-outline" @click="exportExcel">Excel</button>
         <button class="btn btn-outline" @click="printPage">打印</button>
         <button class="btn btn-outline" @click="triggerImport">导入</button>
         <button class="btn btn-primary" @click="drawerOpen=true">编辑模版</button>
         <button class="btn btn-danger" @click="resetAll">重置</button>
-        <input type="file" ref="fileInput" class="hidden-input" accept=".json" @change="importJSON">
+      </div>
+      <div class="records-filters admin-cloud-row">
+        <span>云端提交地址</span>
+        <input v-model="cloudEndpoint" placeholder="Google Apps Script Web App URL" style="min-width:360px">
+        <button class="btn btn-outline" @click="saveCloudEndpoint">保存地址</button>
+        <span>{{cloudStatus}}</span>
       </div>
     </div>
   </header>
@@ -345,24 +363,16 @@ body {
     <section class="workflow-card">
       <div class="section-title-row">
         <div>
-          <div class="section-title">总经理测评提交区</div>
-          <div class="section-subtitle">粘贴一次云端地址后，下面会自动生成总经理专用链接。他打开后无需配置，填写完点击“保存并提交云端”，你再同步即可看到。</div>
+          <div class="section-title">提交测评</div>
+          <div class="section-subtitle">填写员工信息和月度奖金后，点击提交云端。</div>
         </div>
         <div class="records-actions">
-          <input :value="managerShareUrl" readonly @focus="$event.target.select()" style="min-width:260px;border:1px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;background:white;">
-          <button class="btn btn-outline" @click="copyPublicLink">复制链接</button>
           <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
-          <button class="btn btn-primary" @click="exportSubmissionPackage">导出提交包</button>
+          <button class="btn btn-outline" v-if="adminToolsOpen" @click="saveCurrentRecord">保存到本机</button>
+          <button class="btn btn-primary" v-if="adminToolsOpen" @click="exportSubmissionPackage">导出提交包</button>
         </div>
       </div>
-      <div class="records-filters">
-        <span>云端提交地址</span>
-        <input v-model="cloudEndpoint" placeholder="粘贴 Google Apps Script Web App URL" style="min-width:360px">
-        <button class="btn btn-outline" @click="saveCloudEndpoint">保存地址</button>
-        <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
-        <span>{{cloudStatus}}</span>
-      </div>
-      <div class="workflow-grid">
+      <div class="workflow-grid" v-if="adminToolsOpen">
         <div class="workflow-item">
           <div class="workflow-tag required">总经理操作</div>
           <div class="workflow-title">打开链接并提交云端</div>
@@ -377,7 +387,7 @@ body {
     </section>
 
     <!-- Employee quick nav -->
-    <section class="quick-nav-card">
+    <section class="quick-nav-card" v-if="adminToolsOpen">
       <div class="quick-nav-header">
         <div>
           <div class="section-title">员工快速入口</div>
@@ -406,7 +416,7 @@ body {
     </section>
 
     <!-- Workflow rule -->
-    <section class="workflow-card">
+    <section class="workflow-card" v-if="adminToolsOpen">
       <div class="section-title-row">
         <div>
           <div class="section-title">月度与季度填写规则</div>
@@ -481,7 +491,7 @@ body {
       <div class="section-title-row">
         <div>
           <div class="section-title">月度绩效奖金发放</div>
-          <div class="section-subtitle">按当月可观察行为和证据发放：异常闭环、节点同步、团队动作、证据留档。季度OKR保留为复盘，不参与月度奖金追回。</div>
+          <div class="section-subtitle">选择等级，确认实发金额，填写必要备注。</div>
         </div>
         <div class="bonus-controls">
           <span>月奖金基准</span>
@@ -540,7 +550,7 @@ body {
     </section>
 
     <!-- Employee Records -->
-    <section class="records-card" id="employee-results">
+    <section class="records-card" id="employee-results" v-if="adminToolsOpen">
       <div class="records-toolbar">
         <div>
           <div class="section-title">员工记录库与横向比较</div>
@@ -950,7 +960,9 @@ createApp({
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
-    const urlCloudEndpoint = (new URLSearchParams(window.location.search).get('cloud') || '').trim();
+    const urlParams = new URLSearchParams(window.location.search);
+    const adminToolsOpen = ref(urlParams.get('admin') === '1');
+    const urlCloudEndpoint = (urlParams.get('cloud') || '').trim();
     const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
     const ignoredSavedCloudEndpoint = savedCloudEndpoint.includes('TEST_DEPLOYMENT');
     const initialCloudEndpoint = urlCloudEndpoint || (ignoredSavedCloudEndpoint ? '' : savedCloudEndpoint) || DEFAULT_CLOUD_ENDPOINT;
@@ -1525,7 +1537,7 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
-      publicUrl, managerShareUrl, cloudEndpoint, cloudStatus,
+      publicUrl, managerShareUrl, cloudEndpoint, cloudStatus, adminToolsOpen,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible,
