@@ -1001,6 +1001,48 @@ function profileKpi(id, name, weight, target, sDesc, aDesc, bDesc, cDesc) {
   };
 }
 
+function prepareQuarterProfileTemplates() {
+  Object.values(PERSON_PROFILES).forEach(profile => {
+    const q2 = {
+      templateName: profile.templateName,
+      compensationMode: profile.compensationMode,
+      bonusBase: profile.bonusBase,
+      bonusCurrency: profile.bonusCurrency,
+      compensationNote: profile.compensationNote,
+      dimensions: profile.dimensions,
+      isPlaceholder: false
+    };
+    profile.quarters = {
+      Q2: q2,
+      Q3: buildPlaceholderQuarterProfile(profile, "Q3"),
+      Q4: buildPlaceholderQuarterProfile(profile, "Q4")
+    };
+  });
+}
+
+function buildPlaceholderQuarterProfile(profile, quarter) {
+  return {
+    templateName: `${profile.name} ${quarter} OKR 预留模板`,
+    compensationMode: profile.compensationMode,
+    bonusBase: profile.bonusBase,
+    bonusCurrency: profile.bonusCurrency,
+    compensationNote: `${profile.name} ${quarter} OKR与薪酬口径已预留；当前暂沿用岗位方向，待上传${quarter}正式文件后更新为正式模板。${profile.compensationNote}`,
+    isPlaceholder: true,
+    dimensions: [
+      { id:"O1", name:`${quarter}岗位核心目标（预留）`, kpis:[
+        profileKpi("KR1","承接上一季度核心职责并明确新季度目标",20,`待上传${quarter}正式OKR文件后替换为具体指标。当前可先填写阶段性目标、关键动作和证据。`,"目标清晰且动作落地","目标明确并持续推进","方向存在但动作不清","未形成目标"),
+        profileKpi("KR2","沉淀关键数据和业务证据",15,`保留${quarter}业务结果、项目推进、异常闭环或管理动作证据，便于后续正式评分。`,"证据完整且可复盘","主要证据齐备","证据零散","缺少证据")
+      ]},
+      { id:"O2", name:`${quarter}改进与发展追踪（预留）`, kpis:[
+        profileKpi("KR1","完成岗位专项改进动作",20,`根据${profile.name}岗位职责记录本季度专项改进、资源突破、流程建设或团队管理动作。`,"改进效果明显","改进动作有效","有动作但效果有限","无明确改进"),
+        profileKpi("KR2","输出季度复盘和下季度建议",15,`季度末形成复盘，说明完成情况、风险、经验和下季度建议。`,"复盘深入且可执行","复盘完整","复盘较浅","缺少复盘")
+      ]}
+    ]
+  };
+}
+
+prepareQuarterProfileTemplates();
+
 function currentQuarterLabel() {
   const now = new Date();
   const quarter = Math.floor(now.getMonth() / 3) + 1;
@@ -1263,24 +1305,36 @@ createApp({
       };
     }
 
+    function quarterKeyFromPeriod(period) {
+      const match = String(period || '').match(/Q([1-4])/i);
+      return match ? `Q${match[1]}` : 'Q2';
+    }
+
+    function profileQuarterTemplate(profile, period) {
+      const quarterKey = quarterKeyFromPeriod(period);
+      return profile.quarters?.[quarterKey] || profile.quarters?.Q2 || profile;
+    }
+
     function buildProfileData(profile) {
       const period = meta.value.period || currentQuarterLabel();
+      const quarterKey = quarterKeyFromPeriod(period);
+      const template = profileQuarterTemplate(profile, period);
       return {
         meta: {
           ...deepClone(DEFAULT_TEMPLATE.meta),
-          templateName: profile.templateName,
-          templateVersion: "Q2-role",
+          templateName: template.templateName,
+          templateVersion: `${quarterKey}-role${template.isPlaceholder ? '-placeholder' : ''}`,
           employeeName: profile.name,
           evaluatorName: meta.value.evaluatorName || '',
           period
         },
-        bonusBase: profile.bonusBase,
-        bonusCurrency: profile.bonusCurrency,
-        compensationMode: profile.compensationMode,
-        compensationNote: profile.compensationNote,
-        monthlyBonuses: buildMonthlyBonuses(period, profile.bonusBase),
+        bonusBase: template.bonusBase,
+        bonusCurrency: template.bonusCurrency,
+        compensationMode: template.compensationMode,
+        compensationNote: template.compensationNote,
+        monthlyBonuses: buildMonthlyBonuses(period, template.bonusBase),
         gradeScale: deepClone(DEFAULT_TEMPLATE.gradeScale),
-        dimensions: deepClone(profile.dimensions)
+        dimensions: deepClone(template.dimensions)
       };
     }
 
@@ -1305,7 +1359,8 @@ createApp({
       const record = latestRecordForEmployee(name);
       quickEmployeeSelect.value = name;
       const profile = profileForEmployee(name);
-      const recordMatchesProfile = profile && record?.data?.meta?.templateName === profile.templateName;
+      const expectedTemplate = profile ? profileQuarterTemplate(profile, meta.value.period || record?.period || currentQuarterLabel()) : null;
+      const recordMatchesProfile = profile && record?.data?.meta?.templateName === expectedTemplate?.templateName;
       if(record && (!profile || recordMatchesProfile)) {
         loadRecord(record);
       } else {
