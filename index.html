@@ -298,8 +298,11 @@ body {
 .quick-employee-btn.active { border-color:var(--primary); background:#EFF6FF; }
 .quick-employee-name { font-size:14px; font-weight:800; margin-bottom:4px; color:var(--text); }
 .quick-employee-meta { font-size:12px; color:var(--text-light); line-height:1.45; }
-.quick-employee-delete { position:absolute; top:6px; right:6px; width:22px; height:22px; border:none; border-radius:999px; background:#FEE2E2; color:#DC2626; font-size:15px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-.quick-employee-delete:hover { background:#FECACA; }
+.quick-employee-actions { display:flex; gap:6px; margin-top:8px; }
+.quick-employee-mini { border:1px solid #E2E8F0; border-radius:8px; background:white; color:var(--text); font-size:12px; font-weight:700; padding:4px 8px; cursor:pointer; font-family:inherit; }
+.quick-employee-mini:hover { border-color:var(--primary); color:var(--primary); }
+.quick-employee-delete { background:#FEE2E2; border-color:#FECACA; color:#DC2626; }
+.quick-employee-delete:hover { background:#FECACA; color:#B91C1C; border-color:#FCA5A5; }
 
 /* Animations */
 @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
@@ -420,18 +423,24 @@ body {
         </div>
       </div>
       <div class="quick-employee-list" v-if="quickEmployeeCards.length">
-        <button class="quick-employee-btn"
-                v-for="card in quickEmployeeCards"
-                :key="card.employeeName"
-                :class="{active:selectedEmployee===card.employeeName}"
-                @click="quickOpenEmployee(card.employeeName)">
-          <span class="quick-employee-delete"
-                v-if="card.savedRecordCount"
-                title="删除该员工记录"
-                @click.stop="deleteEmployeeRecords(card.employeeName)">×</span>
+        <div class="quick-employee-btn"
+             v-for="card in quickEmployeeCards"
+             :key="card.employeeName"
+             :class="{active:selectedEmployee===card.employeeName}"
+             role="button"
+             tabindex="0"
+             @click="quickOpenEmployee(card.employeeName)"
+             @keyup.enter="quickOpenEmployee(card.employeeName)"
+             @keyup.space.prevent="quickOpenEmployee(card.employeeName)">
           <div class="quick-employee-name">{{card.employeeName}}</div>
           <div class="quick-employee-meta">{{card.period}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
-        </button>
+          <div class="quick-employee-actions">
+            <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName)">PDF</button>
+            <button class="quick-employee-mini quick-employee-delete"
+                    v-if="card.savedRecordCount"
+                    @click.stop="deleteEmployeeRecords(card.employeeName)">删除</button>
+          </div>
+        </div>
       </div>
       <div class="empty-state" v-else>保存员工后，姓名会显示在这里。</div>
     </section>
@@ -656,8 +665,9 @@ body {
               <td>{{record.quarterScore}} / {{record.quarterWeight}} · {{record.quarterGrade}}</td>
               <td>{{record.okrFilledCount ? '已填写' : '暂未填写'}}</td>
               <td>{{formatDateTime(record.savedAt)}}</td>
-              <td class="record-actions-cell">
+          <td class="record-actions-cell">
                 <button class="btn btn-outline" @click="loadRecord(record)">载入</button>
+                <button class="btn btn-outline" @click="exportEmployeePdf(record.employeeName)">PDF</button>
                 <button class="btn btn-danger" @click="deleteRecord(record.id)">删除</button>
               </td>
             </tr>
@@ -1111,8 +1121,21 @@ function buildMonthlyBonuses(period, base) {
 }
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 const { createApp, ref, computed, watch, onMounted } = Vue;
+const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
+
+function isHiddenEmployeeName(name) {
+  return HIDDEN_EMPLOYEE_NAMES.includes(String(name || '').trim());
+}
 
 createApp({
   setup() {
@@ -1226,13 +1249,13 @@ createApp({
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
     const profileNames = computed(()=> Object.values(PERSON_PROFILES).map(profile=>profile.name));
-    const employeeNames = computed(()=> [...new Set([...profileNames.value, ...records.value.map(record=>record.employeeName).filter(Boolean)])].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
+    const employeeNames = computed(()=> [...new Set([...profileNames.value, ...records.value.map(record=>record.employeeName).filter(name=>name && !isHiddenEmployeeName(name))])].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
     const comparisonRecords = computed(()=> records.value
-      .filter(record=>record.period === comparePeriod.value)
+      .filter(record=>record.period === comparePeriod.value && !isHiddenEmployeeName(record.employeeName))
       .sort((a,b)=> b.monthlyPaidTotal - a.monthlyPaidTotal || b.quarterScore - a.quarterScore || a.employeeName.localeCompare(b.employeeName, 'zh-CN'))
     );
     const timelineRecords = computed(()=> selectedEmployee.value
-      ? records.value.filter(record=>record.employeeName === selectedEmployee.value).sort((a,b)=>a.period.localeCompare(b.period))
+      ? records.value.filter(record=>record.employeeName === selectedEmployee.value && !isHiddenEmployeeName(record.employeeName)).sort((a,b)=>a.period.localeCompare(b.period))
       : []
     );
     const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>{
@@ -1357,9 +1380,9 @@ createApp({
     function mergeRecordList(incoming) {
       const merged = new Map(records.value.map(record=>[record.id, record]));
       incoming.forEach(record=>{
-        if(record && record.id && record.data) merged.set(record.id, record);
+        if(record && record.id && record.data && !isHiddenEmployeeName(record.employeeName)) merged.set(record.id, record);
       });
-      records.value = [...merged.values()].sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
+      records.value = [...merged.values()].filter(record=>!isHiddenEmployeeName(record.employeeName)).sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
       persistRecords();
     }
 
@@ -1869,6 +1892,139 @@ createApp({
       showToast('Excel 已导出');
     }
 
+    function exportEmployeePdf(name) {
+      const record = latestRecordForEmployee(name);
+      const profile = profileForEmployee(name);
+      let data;
+      let savedAt = '';
+      if(record) {
+        data = deepClone(record.data);
+        savedAt = record.savedAt;
+      } else if(profile) {
+        data = buildProfileData(profile);
+      } else {
+        showToast('未找到该员工记录');
+        return;
+      }
+      data = normalizeReportData(data, name);
+      const reportWindow = window.open('', '_blank');
+      if(!reportWindow) {
+        showToast('浏览器阻止了PDF窗口，请允许弹窗');
+        return;
+      }
+      reportWindow.document.open();
+      reportWindow.document.write(buildEmployeePdfHtml(data, savedAt));
+      reportWindow.document.close();
+      setTimeout(()=>{
+        reportWindow.focus();
+        reportWindow.print();
+      }, 350);
+      showToast('已打开PDF导出窗口');
+    }
+
+    function normalizeReportData(data, employeeName) {
+      const profile = profileForEmployee(employeeName || data.meta?.employeeName);
+      const profileTemplate = profile ? profileQuarterTemplate(profile, data.meta?.period || currentQuarterLabel()) : null;
+      const isProfileTemplate = profileTemplate && data.meta?.templateName === profileTemplate.templateName;
+      const fallbackBase = isProfileTemplate ? profileTemplate.bonusBase : DEFAULT_TEMPLATE.bonusBase;
+      data.bonusBase = data.bonusBase ?? fallbackBase;
+      data.bonusCurrency = data.bonusCurrency || profileTemplate?.bonusCurrency || DEFAULT_TEMPLATE.bonusCurrency;
+      data.compensationMode = data.compensationMode || profileTemplate?.compensationMode || DEFAULT_TEMPLATE.compensationMode;
+      data.compensationNote = data.compensationNote || profileTemplate?.compensationNote || DEFAULT_TEMPLATE.compensationNote;
+      data.gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
+      data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
+      data.dimensions = data.dimensions || DEFAULT_TEMPLATE.dimensions;
+      return data;
+    }
+
+    function reportMonthlyDue(row, data) {
+      const grade = (data.gradeScale || DEFAULT_TEMPLATE.gradeScale).find(item=>item.grade === row.grade);
+      const base = Number(row.base ?? data.bonusBase) || 0;
+      return Math.round(base * (grade?.coefficient || 0));
+    }
+
+    function buildEmployeePdfHtml(data, savedAt) {
+      const summary = summarizeEvaluationData(data);
+      const showMonthly = !['no_monthly_bonus','quarterly_commission'].includes(data.compensationMode);
+      const title = `${data.meta?.employeeName || '员工'}_${data.meta?.period || ''}_绩效考核`;
+      const monthlyHtml = showMonthly ? `
+        <h2>月度奖金</h2>
+        <table>
+          <thead><tr><th>月份</th><th>等级</th><th>基准</th><th>应发</th><th>实发</th><th>备注</th></tr></thead>
+          <tbody>
+            ${(data.monthlyBonuses || []).map(row=>`
+              <tr>
+                <td>${escapeHtml(row.month)}</td>
+                <td>${escapeHtml(row.grade || '未评')}</td>
+                <td>${escapeHtml(data.bonusCurrency)} ${escapeHtml(row.base ?? data.bonusBase)}</td>
+                <td>${escapeHtml(data.bonusCurrency)} ${reportMonthlyDue(row, data)}</td>
+                <td>${escapeHtml(data.bonusCurrency)} ${Number(row.paid) || 0}</td>
+                <td>${escapeHtml(row.comment || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : '';
+      const okrHtml = (data.dimensions || []).map(dim=>`
+        <h3>${escapeHtml(dim.id)} ${escapeHtml(dim.name)}</h3>
+        <table>
+          <thead><tr><th>KR</th><th>关键结果</th><th>权重</th><th>证据口径</th><th>档位</th><th>得分</th><th>说明</th></tr></thead>
+          <tbody>
+            ${(dim.kpis || []).map(kpi=>`
+              <tr>
+                <td>${escapeHtml(kpi.id)}</td>
+                <td>${escapeHtml(kpi.name)}</td>
+                <td>${escapeHtml(kpi.weight)}</td>
+                <td>${escapeHtml(kpi.target || '')}</td>
+                <td>${escapeHtml(kpi.selectedTier || '未评')}</td>
+                <td>${escapeHtml(kpi.score || 0)}</td>
+                <td>${escapeHtml(kpi.comment || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`).join('');
+      return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(title)}</title>
+<style>
+  body { font-family: "PingFang SC","Microsoft YaHei",Arial,sans-serif; color:#111827; padding:28px; line-height:1.5; }
+  h1 { font-size:22px; margin:0 0 12px; }
+  h2 { font-size:17px; margin:24px 0 10px; border-bottom:1px solid #CBD5E1; padding-bottom:6px; }
+  h3 { font-size:14px; margin:18px 0 8px; }
+  .meta { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 14px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px; font-size:12px; }
+  .note { margin-top:12px; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:10px; font-size:12px; color:#1E3A8A; }
+  .summary { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .summary div { border:1px solid #E2E8F0; border-radius:8px; padding:8px 10px; font-size:12px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:10px; font-size:11px; }
+  th, td { border:1px solid #CBD5E1; padding:6px; text-align:left; vertical-align:top; }
+  th { background:#F1F5F9; }
+  @media print { body { padding:0; } }
+</style>
+</head>
+<body>
+  <h1>${escapeHtml(data.meta?.templateName || '绩效考核报告')}</h1>
+  <div class="meta">
+    <div><strong>员工：</strong>${escapeHtml(data.meta?.employeeName || '')}</div>
+    <div><strong>考核人：</strong>${escapeHtml(data.meta?.evaluatorName || '')}</div>
+    <div><strong>期间：</strong>${escapeHtml(data.meta?.period || '')}</div>
+    <div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>
+    <div><strong>季度得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
+    <div><strong>季度等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
+    <div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>
+    <div><strong>月度实发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyPaidTotal}</div>
+    <div><strong>保存时间：</strong>${escapeHtml(savedAt ? formatDateTime(savedAt) : new Date().toLocaleString('zh-CN'))}</div>
+  </div>
+  <div class="note">${escapeHtml(data.compensationNote || '')}</div>
+  <div class="summary">
+    <div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>
+    <div>OKR状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
+  </div>
+  ${monthlyHtml}
+  <h2>季度OKR</h2>
+  ${okrHtml}
+</body>
+</html>`;
+    }
+
     function printPage() { window.print(); }
 
     function resetAll() {
@@ -1989,7 +2145,7 @@ createApp({
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
-      copyPublicLink, exportSubmissionPackage, formatDateTime,
+      copyPublicLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
@@ -2018,7 +2174,7 @@ function loadRecords(storageKey) {
   if(!saved) return [];
   try {
     const records = JSON.parse(saved);
-    return Array.isArray(records) ? records : [];
+    return Array.isArray(records) ? records.filter(record=>!isHiddenEmployeeName(record.employeeName)) : [];
   } catch {
     localStorage.removeItem(storageKey);
     return [];
