@@ -355,14 +355,15 @@ body {
       </div>
       <div class="header-actions">
         <button class="btn btn-outline" :disabled="!canUndo" @click="undoLastAction">撤销</button>
-        <button class="btn btn-outline" @click="adminToolsOpen=!adminToolsOpen">{{adminToolsOpen ? '收起Amy管理' : 'Amy管理'}}</button>
+        <button class="btn btn-outline" v-if="isAdminMode" @click="adminToolsOpen=!adminToolsOpen">{{adminToolsOpen ? '收起Amy管理' : 'Amy管理'}}</button>
         <input type="file" ref="fileInput" class="hidden-input" accept=".json" @change="importJSON">
       </div>
     </div>
-    <div class="admin-toolbar" v-if="adminToolsOpen">
+    <div class="admin-toolbar" v-if="isAdminMode && adminToolsOpen">
       <div class="admin-toolbar-title">Amy 管理工具</div>
       <div class="admin-toolbar-actions">
-        <button class="btn btn-outline" @click="copyPublicLink">复制链接</button>
+        <button class="btn btn-outline" @click="copyPublicLink">复制总经理链接</button>
+        <button class="btn btn-outline" @click="copyAmyAdminLink">复制Amy链接</button>
         <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
         <button class="btn btn-outline" @click="exportJSON">JSON</button>
         <button class="btn btn-outline" @click="exportExcel">Excel</button>
@@ -390,11 +391,11 @@ body {
         </div>
         <div class="records-actions">
           <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
-          <button class="btn btn-outline" v-if="adminToolsOpen" @click="saveCurrentRecord">保存到本机</button>
-          <button class="btn btn-primary" v-if="adminToolsOpen" @click="exportSubmissionPackage">导出提交包</button>
+          <button class="btn btn-outline" v-if="isAdminMode && adminToolsOpen" @click="saveCurrentRecord">保存到本机</button>
+          <button class="btn btn-primary" v-if="isAdminMode && adminToolsOpen" @click="exportSubmissionPackage">导出提交包</button>
         </div>
       </div>
-      <div class="workflow-grid" v-if="adminToolsOpen">
+      <div class="workflow-grid" v-if="isAdminMode && adminToolsOpen">
         <div class="workflow-item">
           <div class="workflow-tag required">总经理操作</div>
           <div class="workflow-title">打开链接并提交云端</div>
@@ -409,7 +410,7 @@ body {
     </section>
 
     <!-- Employee quick nav -->
-    <section class="quick-nav-card" v-if="quickEmployeeCards.length || adminToolsOpen">
+    <section class="quick-nav-card" v-if="quickEmployeeCards.length || (isAdminMode && adminToolsOpen)">
       <div class="quick-nav-header">
         <div>
           <div class="section-title">人员切换</div>
@@ -464,7 +465,7 @@ body {
     </section>
 
     <!-- Workflow rule -->
-    <section class="workflow-card" v-if="adminToolsOpen">
+    <section class="workflow-card" v-if="isAdminMode && adminToolsOpen">
       <div class="section-title-row">
         <div>
           <div class="section-title">月度与季度填写规则</div>
@@ -603,7 +604,7 @@ body {
     </section>
 
     <!-- Employee Records -->
-    <section class="records-card" id="employee-results" v-if="adminToolsOpen">
+    <section class="records-card" id="employee-results" v-if="isAdminMode && adminToolsOpen">
       <div class="records-toolbar">
         <div>
           <div class="section-title">员工记录库与横向比较</div>
@@ -1173,7 +1174,8 @@ createApp({
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
     const urlParams = new URLSearchParams(window.location.search);
-    const adminToolsOpen = ref(urlParams.get('admin') === '1');
+    const isAdminMode = ref(urlParams.get('admin') === '1');
+    const adminToolsOpen = ref(isAdminMode.value);
     const urlCloudEndpoint = (urlParams.get('cloud') || '').trim();
     const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
     const ignoredSavedCloudEndpoint = savedCloudEndpoint.includes('TEST_DEPLOYMENT');
@@ -1181,13 +1183,15 @@ createApp({
     const cloudEndpoint = ref(initialCloudEndpoint);
     if(urlCloudEndpoint || ignoredSavedCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, initialCloudEndpoint);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
-    const managerShareUrl = computed(()=>{
+    function buildSharedUrl(includeAdmin = false) {
       const endpoint = cloudEndpoint.value.trim();
-      if(!endpoint) return publicUrl;
       const url = new URL(publicUrl);
-      url.searchParams.set('cloud', endpoint);
+      if(endpoint) url.searchParams.set('cloud', endpoint);
+      if(includeAdmin) url.searchParams.set('admin', '1');
       return url.toString();
-    });
+    }
+    const managerShareUrl = computed(()=>buildSharedUrl(false));
+    const amyAdminUrl = computed(()=>buildSharedUrl(true));
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -1665,9 +1669,19 @@ createApp({
       const link = managerShareUrl.value;
       try {
         await navigator.clipboard.writeText(link);
-        showToast('链接已复制');
+        showToast('总经理链接已复制');
       } catch {
         window.prompt('复制这个链接发给总经理', link);
+      }
+    }
+
+    async function copyAmyAdminLink() {
+      const link = amyAdminUrl.value;
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Amy管理链接已复制');
+      } catch {
+        window.prompt('复制这个链接自己保存', link);
       }
     }
 
@@ -2132,7 +2146,7 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
-      publicUrl, managerShareUrl, cloudEndpoint, cloudStatus, adminToolsOpen,
+      publicUrl, managerShareUrl, amyAdminUrl, cloudEndpoint, cloudStatus, isAdminMode, adminToolsOpen,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible, canUndo,
@@ -2146,7 +2160,7 @@ createApp({
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
-      copyPublicLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
+      copyPublicLink, copyAmyAdminLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient,
       selectTier, toggleDim, showToast,
