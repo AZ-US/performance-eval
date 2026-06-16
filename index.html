@@ -554,11 +554,11 @@ body {
       <div class="compensation-note">{{compensationNote}}</div>
       <div class="bonus-stats" v-if="showMonthlyBonusTable">
         <div class="bonus-stat">
-          <div class="bonus-stat-label">本季度应发合计</div>
+          <div class="bonus-stat-label">奖金应发合计</div>
           <div class="bonus-stat-value">{{bonusCurrency}} {{monthlyDueTotal}}</div>
         </div>
         <div class="bonus-stat">
-          <div class="bonus-stat-label">本季度实发合计</div>
+          <div class="bonus-stat-label">奖金实发合计</div>
           <div class="bonus-stat-value">{{bonusCurrency}} {{monthlyPaidTotal}}</div>
         </div>
         <div class="bonus-stat">
@@ -1112,6 +1112,25 @@ function getQuarterMonths(period) {
   return [0, 1, 2].map(offset => `${year}-${String(startMonth + offset).padStart(2, '0')}`);
 }
 
+const TIM_Q1_FIXED_BONUS_COMMENT = "Q1历史发放：按照月固定1000发放。";
+
+function periodYear(period) {
+  const match = String(period || currentQuarterLabel()).trim().match(/^(\d{4})-Q[1-4]$/i);
+  return match ? Number(match[1]) : Number(currentQuarterLabel().slice(0, 4));
+}
+
+function buildTimQ1FixedBonusRows(period) {
+  const year = periodYear(period);
+  return ["01", "02", "03"].map(month => ({
+    month: `${year}-${month}`,
+    grade: "A",
+    base: 1000,
+    paid: 1000,
+    comment: TIM_Q1_FIXED_BONUS_COMMENT,
+    isHistoricalFixed: true
+  }));
+}
+
 function buildMonthlyBonuses(period, base) {
   return getQuarterMonths(period).map(month => ({
     month,
@@ -1316,22 +1335,41 @@ createApp({
     function syncBonusMonths() {
       pushUndoSnapshot('同步季度月份');
       const existing = new Map(monthlyBonuses.value.map(row=>[row.month, row]));
-      monthlyBonuses.value = getQuarterMonths(meta.value.period).map(month => {
+      const quarterRows = getQuarterMonths(meta.value.period).map(month => {
         const old = existing.get(month);
         return old || { month, grade:'', base:bonusBase.value, paid:0, comment:'' };
       });
+      monthlyBonuses.value = withTimQ1FixedBonuses(quarterRows, profileForEmployee(meta.value.employeeName), meta.value.period);
       showToast('季度月份已同步');
     }
 
     function applyBaseToMonths() {
       pushUndoSnapshot('应用月奖金基准');
-      monthlyBonuses.value.forEach(row=>{ row.base = bonusBase.value; });
+      monthlyBonuses.value.forEach(row=>{
+        if(row.isHistoricalFixed) {
+          row.grade = 'A';
+          row.base = 1000;
+          row.paid = 1000;
+          row.comment = ensureTimFixedComment(row.comment);
+          return;
+        }
+        row.base = bonusBase.value;
+      });
       showToast('月奖金基准已应用');
     }
 
     function fillPaidFromDue() {
       pushUndoSnapshot('应发填入实发');
-      monthlyBonuses.value.forEach(row=>{ row.paid = monthlyDue(row); });
+      monthlyBonuses.value.forEach(row=>{
+        if(row.isHistoricalFixed) {
+          row.grade = 'A';
+          row.base = 1000;
+          row.paid = 1000;
+          row.comment = ensureTimFixedComment(row.comment);
+          return;
+        }
+        row.paid = monthlyDue(row);
+      });
       showToast('已按应发填入实发');
     }
 
@@ -1354,6 +1392,7 @@ createApp({
 
     function restoreData(data) {
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase || bonusBase.value);
+      normalizeProfileMonthlyBonuses(data, profileForEmployee(data.meta?.employeeName), data.meta?.period);
       meta.value = data.meta || meta.value;
       bonusBase.value = data.bonusBase ?? bonusBase.value;
       bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
@@ -1385,7 +1424,10 @@ createApp({
     function mergeRecordList(incoming) {
       const merged = new Map(records.value.map(record=>[record.id, record]));
       incoming.forEach(record=>{
-        if(record && record.id && record.data && !isHiddenEmployeeName(record.employeeName)) merged.set(record.id, record);
+        if(record && record.id && record.data && !isHiddenEmployeeName(record.employeeName)) {
+          const normalizedRecord = normalizeRecordForLibrary(record);
+          merged.set(normalizedRecord.id, normalizedRecord);
+        }
       });
       records.value = [...merged.values()].filter(record=>!isHiddenEmployeeName(record.employeeName)).sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
       persistRecords();
@@ -1399,6 +1441,7 @@ createApp({
       }
       pushUndoSnapshot('保存员工记录');
       const data = deepClone(getData());
+      normalizeProfileMonthlyBonuses(data, profileForEmployee(employeeName), data.meta?.period);
       const record = buildRecordFromData(data);
       const idx = records.value.findIndex(item=>item.employeeName === record.employeeName && item.period === record.period);
       if(idx >= 0) {
@@ -1422,6 +1465,7 @@ createApp({
       const isProfileTemplate = profileTemplate && data.meta?.templateName === profileTemplate.templateName;
       const fallbackBase = isProfileTemplate ? profileTemplate.bonusBase : bonusBase.value;
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase ?? fallbackBase);
+      normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel());
       meta.value = data.meta || meta.value;
       bonusBase.value = data.bonusBase ?? fallbackBase;
       bonusCurrency.value = data.bonusCurrency || profileTemplate?.bonusCurrency || bonusCurrency.value;
@@ -1473,6 +1517,67 @@ createApp({
       return profile.quarters?.[quarterKey] || profile.quarters?.Q2 || profile;
     }
 
+    function shouldUseTimQ1FixedBonuses(profile, period) {
+      return profile?.name === 'Tim' && quarterKeyFromPeriod(period) === 'Q2';
+    }
+
+    function ensureTimFixedComment(comment) {
+      const text = String(comment || '').trim();
+      if(!text) return TIM_Q1_FIXED_BONUS_COMMENT;
+      return text.includes('固定1000') ? text : `${TIM_Q1_FIXED_BONUS_COMMENT} ${text}`;
+    }
+
+    function withTimQ1FixedBonuses(rows, profile, period) {
+      const baseRows = Array.isArray(rows) ? rows : [];
+      if(!shouldUseTimQ1FixedBonuses(profile, period)) return baseRows;
+      const q1Months = new Set(buildTimQ1FixedBonusRows(period).map(row=>row.month));
+      const q1Rows = buildTimQ1FixedBonusRows(period).map(row => {
+        const old = baseRows.find(item=>item.month === row.month) || {};
+        return {
+          ...old,
+          ...row,
+          comment: ensureTimFixedComment(old.comment || row.comment)
+        };
+      });
+      return [
+        ...q1Rows,
+        ...baseRows.filter(row=>!q1Months.has(row.month))
+      ];
+    }
+
+    function normalizeProfileMonthlyBonuses(data, profile, period) {
+      const effectivePeriod = period || data.meta?.period || currentQuarterLabel();
+      if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(effectivePeriod, data.bonusBase ?? bonusBase.value);
+      data.monthlyBonuses = withTimQ1FixedBonuses(data.monthlyBonuses, profile, effectivePeriod);
+      return data.monthlyBonuses;
+    }
+
+    function normalizeCurrentMonthlyBonuses() {
+      const profile = profileForEmployee(meta.value.employeeName);
+      if(!profile) return;
+      const data = {
+        meta: meta.value,
+        bonusBase: bonusBase.value,
+        monthlyBonuses: monthlyBonuses.value
+      };
+      monthlyBonuses.value = normalizeProfileMonthlyBonuses(data, profile, meta.value.period);
+    }
+
+    function normalizeRecordForLibrary(record) {
+      const data = deepClone(record.data);
+      const employeeName = record.employeeName || data.meta?.employeeName;
+      data.meta = data.meta || {};
+      if(employeeName && !data.meta.employeeName) data.meta.employeeName = employeeName;
+      if(record.period && !data.meta.period) data.meta.period = record.period;
+      const profile = profileForEmployee(employeeName);
+      normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || currentQuarterLabel());
+      return {
+        ...buildRecordFromData(data),
+        id: record.id || `${employeeName}__${data.meta?.period || record.period || currentQuarterLabel()}`,
+        savedAt: record.savedAt || new Date().toISOString()
+      };
+    }
+
     function buildProfileData(profile) {
       const period = meta.value.period || currentQuarterLabel();
       const quarterKey = quarterKeyFromPeriod(period);
@@ -1490,7 +1595,7 @@ createApp({
         bonusCurrency: template.bonusCurrency,
         compensationMode: template.compensationMode,
         compensationNote: template.compensationNote,
-        monthlyBonuses: buildMonthlyBonuses(period, template.bonusBase),
+        monthlyBonuses: withTimQ1FixedBonuses(buildMonthlyBonuses(period, template.bonusBase), profile, period),
         gradeScale: deepClone(DEFAULT_TEMPLATE.gradeScale),
         dimensions: deepClone(template.dimensions)
       };
@@ -1765,11 +1870,15 @@ createApp({
       if(period) comparePeriod.value = period;
     });
     onMounted(()=>{
+      normalizeCurrentMonthlyBonuses();
+      records.value = records.value.map(record=> record?.data ? normalizeRecordForLibrary(record) : record);
+      persistRecords();
       if(cloudEndpoint.value.trim()) syncCloudRecords(true);
     });
 
     // Export JSON
     function exportJSON() {
+      normalizeCurrentMonthlyBonuses();
       const data = getData();
       const name = `月度奖金_OKR_${meta.value.templateName}_${meta.value.period}_${meta.value.employeeName||'未填'}.json`;
       const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
@@ -1791,6 +1900,7 @@ createApp({
           const data = JSON.parse(ev.target.result);
           if(data.dimensions) {
             pushUndoSnapshot('导入JSON');
+            normalizeProfileMonthlyBonuses(data, profileForEmployee(data.meta?.employeeName), data.meta?.period || meta.value.period);
             meta.value = data.meta || meta.value;
             bonusBase.value = data.bonusBase || 300;
             bonusCurrency.value = data.bonusCurrency || 'USD';
@@ -1811,13 +1921,14 @@ createApp({
 
     // Export Excel
     function exportExcel() {
+      normalizeCurrentMonthlyBonuses();
       const wb = XLSX.utils.book_new();
 
       // Sheet 1: Monthly bonus
       const monthlyRows = [
         [`${meta.value.templateName} 月度绩效奖金发放表`],
         [`被考核人: ${meta.value.employeeName}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`],
-        [`月奖金基准: ${bonusCurrency.value} ${bonusBase.value}`, `本季度应发合计: ${bonusCurrency.value} ${monthlyDueTotal.value}`, `本季度实发合计: ${bonusCurrency.value} ${monthlyPaidTotal.value}`],
+        [`月奖金基准: ${bonusCurrency.value} ${bonusBase.value}`, `奖金应发合计: ${bonusCurrency.value} ${monthlyDueTotal.value}`, `奖金实发合计: ${bonusCurrency.value} ${monthlyPaidTotal.value}`],
         [],
         ['月份','月度等级','系数','月奖金基准','应发奖金','实发奖金','证据/备注']
       ];
@@ -1948,6 +2059,7 @@ createApp({
       data.compensationNote = data.compensationNote || profileTemplate?.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       data.gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
       data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
+      normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || currentQuarterLabel());
       data.dimensions = data.dimensions || DEFAULT_TEMPLATE.dimensions;
       return data;
     }
@@ -2103,8 +2215,9 @@ createApp({
 
     function exportTemplate() {
       const tpl = deepClone(getData());
+      const profile = profileForEmployee(tpl.meta?.employeeName);
       tpl.dimensions.forEach(d=>d.kpis.forEach(k=>{ k.selectedTier=null; k.score=0; k.comment=''; }));
-      tpl.monthlyBonuses = buildMonthlyBonuses(tpl.meta.period, tpl.bonusBase);
+      tpl.monthlyBonuses = withTimQ1FixedBonuses(buildMonthlyBonuses(tpl.meta.period, tpl.bonusBase), profile, tpl.meta.period);
       tpl.meta.employeeName = '';
       tpl.meta.evaluatorName = '';
       const blob = new Blob([JSON.stringify(tpl,null,2)], {type:'application/json'});
