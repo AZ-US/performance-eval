@@ -1033,6 +1033,71 @@ const PERSON_PROFILES = {
       ]}
     ]
   },
+  Mia: {
+    name: "Mia",
+    templateName: "Mia 进口副主管 Q2 OKR",
+    compensationMode: "monthly_bonus",
+    bonusBase: 300,
+    bonusCurrency: "USD",
+    compensationNote: "Mia自2026年4月起调整为进口副主管；月度绩效约USD300并按进口业务完成情况、预算达成和岗位牵引结果浮动。季度OKR重点看从个人执行转向团队协同、异常统筹和管理机制建设的进展。",
+    dimensions: [
+      { id:"O1", name:"进口业务协同与团队牵引", kpis:[
+        profileKpi("KR1","建立进口团队分工与周度对齐机制",10,"围绕业务、异常、分工建立周度团队对齐，减少逐个盯人和个人全流程处理。","机制稳定运行且团队能按分工承接","周度对齐基本持续","有尝试但节奏不稳定","仍主要依赖个人推进"),
+        profileKpi("KR2","推动分工执行 + 统一协调的工作方式",10,"把客服、操作、协调、异常处理拆分清楚，由Mia做统一协调和优先级管理。","分工清晰且交付效率提升","主要职责边界明确","边界仍有反复","职责混乱影响交付"),
+        profileKpi("KR3","提升团队整体执行效率与承接能力",10,"通过带教、任务分配和节点检查，让团队能承接在途柜、派送、清关和客户协调。","团队可独立承接多数日常事项","团队承接能力有改善","仍需大量人工盯办","承接能力无明显变化")
+      ]},
+      { id:"O2", name:"异常/退运复杂案件统筹", kpis:[
+        profileKpi("KR1","建立异常与退运案件跟踪清单",9,"对退运、IMG/海恩派送、清关、车队、仓库多方沟通建立统一清单和状态。","清单完整且实时更新","主要案件有记录","记录不完整或滞后","缺少统一清单"),
+        profileKpi("KR2","复杂异常推进闭环率",9,"对多票异常并行推进，明确责任人、下一步、风险和关闭时间。","关键异常均能闭环且复盘","多数异常按期推进","推进依赖提醒","异常长期悬置"),
+        profileKpi("KR3","降低总经理直接跟进频率",7,"通过主动反馈和结构化推进，让总经理能从临时追问转向看机制和结果。","直接介入明显下降","介入有所下降","下降不明显","仍需频繁直接介入")
+      ]},
+      { id:"O3", name:"主动反馈与业务信息结构化", kpis:[
+        profileKpi("KR1","建立在途柜/派送/清关关键节点看板",9,"沉淀在途柜、ETA、清关、派送、异常状态，形成可检查的信息看板。","看板稳定可用且信息准确","主要节点覆盖","覆盖不完整","无结构化看板"),
+        profileKpi("KR2","关键节点主动反馈及时性",8,"ETA、清关、派送、异常升级等节点主动同步，而不是被动等待追问。","主动预警及时且判断清楚","主要节点能主动同步","偶有遗漏或滞后","主要依赖追问"),
+        profileKpi("KR3","优先级判断与资源协调",8,"在日常操作和异常并行时，能判断优先级并协调清关、车队、仓库、客服资源。","优先级清晰且资源调动有效","多数事项判断准确","判断不稳定","优先级混乱")
+      ]},
+      { id:"O4", name:"进口业务视角与管理成长", kpis:[
+        profileKpi("KR1","从个人客户转向整体进口业务视角",7,"关注业务量、客户结构、异常情况和团队承接，而不是只处理个人客户。","能输出整体业务判断","具备初步整体视角","仍偏个人执行","缺少整体视角"),
+        profileKpi("KR2","支持进口业务规模增长和预算达成",7,"以业务完成情况、预算达成、客户交付和异常成本控制作为管理判断依据。","能用数据说明业务贡献","能跟进主要指标","数据意识不足","无法支持业务判断"),
+        profileKpi("KR3","形成进口主管发展路径的阶段复盘",6,"定期复盘团队管理推进、重点异常、业务结构和下阶段管理动作。","复盘深入且动作可执行","复盘完整","复盘较浅","缺少复盘")
+      ]}
+    ]
+  },
+  ChrisXu: {
+    name: "Chris Xu",
+    templateName: "Chris Xu Senior Customer Service Q2 OKR",
+    compensationMode: "monthly_bonus",
+    bonusBase: 300,
+    bonusCurrency: "USD",
+    compensationNote: "Chris Xu按Senior Customer Service岗位考核；月度可记录服务交付和异常闭环，季度OKR重点看重点客户服务、复杂异常处理、客户经营、美墨/跨区域协同和知识沉淀。",
+    dimensions: [
+      { id:"O1", name:"重点客户服务管理", kpis:[
+        profileKpi("KR1","重点直客全流程服务窗口稳定性",10,"承担重点直客邮件、电话、群组维护，跟进订单进度和客户服务体验。","服务窗口稳定且客户反馈积极","主要客户服务稳定","偶有遗漏或响应慢","服务窗口不稳定"),
+        profileKpi("KR2","订单进度与ETA异常预警",10,"对订单进度、ETA变化、派送风险进行提前识别和主动同步。","预警及时且能提出方案","主要风险能同步","同步不够主动","风险暴露滞后"),
+        profileKpi("KR3","投诉协调与满意度修复",10,"作为高阶接口处理客户服务摩擦、投诉协调和满意度修复。","能有效修复并沉淀经验","主要投诉处理到位","处理结果不稳定","升级后仍难闭环")
+      ]},
+      { id:"O2", name:"异常管理与危机攻坚", kpis:[
+        profileKpi("KR1","复杂异常Root Cause Analysis",9,"对Customs Hold、Demurrage、Detention、费用争议、Claim等进行根因分析。","根因分析清晰且能预防复发","分析基本到位","分析较浅","缺少根因判断"),
+        profileKpi("KR2","替代应急方案与责任划分",8,"在复杂异常中给出清关/派送替代方案，并厘清额外成本责任。","2小时内给出可执行方案","能提出可行方案","方案不够及时或不完整","缺少方案"),
+        profileKpi("KR3","异常闭环与复盘报告",8,"完成闭环、客户安抚、内部责任确认，并输出复盘。","闭环完整且复盘可复用","主要异常有闭环","闭环记录不足","异常悬置")
+      ]},
+      { id:"O3", name:"客户经营与商机挖掘", kpis:[
+        profileKpi("KR1","重点客户回访与痛点梳理",8,"完成重点客户阶段性/深度回访，沉淀需求、痛点和服务优化建议。","回访深入且形成分析报告","完成主要回访和纪要","回访质量一般","缺少有效回访"),
+        profileKpi("KR2","客户经营地图更新",6,"更新客户规模、年货量、核心航线、潜在仓储/美国出口/墨西哥跨境需求。","地图完整且可用于经营决策","主要信息完整","信息零散","缺少经营地图"),
+        profileKpi("KR3","Lead线索转交与份额提升推动",6,"捕捉商机线索并对接销售/产品团队，推动客户在TAL体系内份额提升。","线索有效且推动转化","有线索转交","线索质量或跟进不足","无有效线索")
+      ]},
+      { id:"O4", name:"美墨业务与跨区域协同", kpis:[
+        profileKpi("KR1","美国本土进口SOP掌握与应用",6,"熟悉Import / Customs / Delivery全流程，能指导和协同处理实际问题。","能独立判断并指导处理","主要流程掌握","部分环节仍需支持","流程掌握不足"),
+        profileKpi("KR2","墨西哥跨境业务基础协同",5,"学习Pedimento、RFC、SAT、NOM等基础合规概念，并准确传递跨境物流指令。","能准确协同跨境事项","能完成基础协同","理解不完整","协同风险高"),
+        profileKpi("KR3","跨区域信息传递准确性及时效",4,"在客户、美国团队、墨西哥本地操作之间进行准确高效的信息中转。","信息准确高效","主要信息传递到位","偶有遗漏","信息传递失真")
+      ]},
+      { id:"O5", name:"组织贡献与知识沉淀", kpis:[
+        profileKpi("KR1","多口岸异常SOP沉淀",4,"将多口岸进口常见异常沉淀为SOP或规避指南。","形成可培训SOP","完成基础文档","文档不完整","未沉淀"),
+        profileKpi("KR2","Trouble Case复盘和培训分享",3,"将典型trouble case转化为复盘报告，并用于团队内部分享。","复盘深入且完成分享","有复盘材料","复盘较浅","无复盘"),
+        profileKpi("KR3","团队知识库贡献",3,"参与北美操作/客服知识库共享机制，提升团队整体作战能力。","贡献可复用且被团队采用","有稳定贡献","贡献零散","无明显贡献")
+      ]}
+    ]
+  },
   Tim: {
     name: "Tim",
     templateName: "Tim 2026 Q2 订舱与航线突破 OKR",
@@ -1177,7 +1242,10 @@ const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
 const EMPLOYEE_HIDE_KEY = 'employee_eval_hidden_names_v1';
 const CLOUD_RULE_PREFIX = '__employee_rule__';
 const DEFAULT_EMPLOYEE_RENAMES = {
-  timlau: 'Tim'
+  timlau: 'Tim',
+  chrisxu: 'Chris Xu',
+  'sr.customerservice': 'Chris Xu',
+  seniorcustomerservice: 'Chris Xu'
 };
 const DEPARTMENT_LABELS = {
   import: '进口部',
@@ -1192,7 +1260,8 @@ const EMPLOYEE_DEPARTMENT_OVERRIDES = {
   'Tim Lau': '出口部',
   Gary: '出口部',
   'Chris Xu': '进口部',
-  ChrisXu: '进口部'
+  ChrisXu: '进口部',
+  Mia: '进口部'
 };
 
 function isHiddenEmployeeName(name) {
@@ -1598,7 +1667,7 @@ createApp({
       }
       pushUndoSnapshot('保存员工记录');
       const data = deepClone(getData());
-      normalizeProfileMonthlyBonuses(data, profileForEmployee(employeeName), data.meta?.period);
+      upgradeDataForProfileTemplate(data, profileForEmployee(employeeName), data.meta?.period);
       const record = buildRecordFromData(data);
       const idx = records.value.findIndex(item=>item.employeeName === record.employeeName && item.period === record.period);
       if(idx >= 0) {
@@ -1618,9 +1687,10 @@ createApp({
       pushUndoSnapshot(`载入 ${record.employeeName}`);
       const data = deepClone(record.data);
       const profile = profileForEmployee(record.employeeName);
-      const profileTemplate = profile ? profileQuarterTemplate(profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel()) : null;
-      const isProfileTemplate = profileTemplate && data.meta?.templateName === profileTemplate.templateName;
-      const fallbackBase = isProfileTemplate ? profileTemplate.bonusBase : bonusBase.value;
+      const period = data.meta?.period || record.period || meta.value.period || currentQuarterLabel();
+      const profileTemplate = profile ? profileQuarterTemplate(profile, period) : null;
+      upgradeDataForProfileTemplate(data, profile, period);
+      const fallbackBase = profileTemplate?.bonusBase ?? bonusBase.value;
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase ?? fallbackBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel());
       meta.value = data.meta || meta.value;
@@ -1710,6 +1780,41 @@ createApp({
       return data.monthlyBonuses;
     }
 
+    function hasQuarterProgress(data) {
+      return (data.dimensions || [])
+        .flatMap(dim=>dim.kpis || [])
+        .some(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim());
+    }
+
+    function upgradeDataForProfileTemplate(data, profile, period) {
+      if(!profile) return data;
+      const effectivePeriod = period || data.meta?.period || currentQuarterLabel();
+      const template = profileQuarterTemplate(profile, effectivePeriod);
+      if(!template) return data;
+      const matchesProfileTemplate = data.meta?.templateName === template.templateName;
+      const canReplaceQuarterTemplate = !matchesProfileTemplate && !hasQuarterProgress(data);
+      data.meta = {
+        ...(data.meta || {}),
+        employeeName: profile.name,
+        period: effectivePeriod,
+        department: departmentForEmployee(profile.name)
+      };
+      data.department = departmentForEmployee(profile.name);
+      if(matchesProfileTemplate || canReplaceQuarterTemplate) {
+        data.meta.templateName = template.templateName;
+        data.meta.templateVersion = `${quarterKeyFromPeriod(effectivePeriod)}-role${template.isPlaceholder ? '-placeholder' : ''}`;
+        data.bonusBase = template.bonusBase;
+        data.bonusCurrency = template.bonusCurrency;
+        data.compensationMode = template.compensationMode;
+        data.compensationNote = template.compensationNote;
+      }
+      if(canReplaceQuarterTemplate) {
+        data.dimensions = deepClone(template.dimensions);
+      }
+      normalizeProfileMonthlyBonuses(data, profile, effectivePeriod);
+      return data;
+    }
+
     function normalizeCurrentMonthlyBonuses() {
       const profile = profileForEmployee(meta.value.employeeName);
       if(!profile) return;
@@ -1719,6 +1824,21 @@ createApp({
         monthlyBonuses: monthlyBonuses.value
       };
       monthlyBonuses.value = normalizeProfileMonthlyBonuses(data, profile, meta.value.period);
+    }
+
+    function normalizeCurrentProfileTemplate() {
+      const profile = profileForEmployee(meta.value.employeeName);
+      if(!profile) return;
+      const data = deepClone(getData());
+      upgradeDataForProfileTemplate(data, profile, meta.value.period);
+      meta.value = data.meta || meta.value;
+      bonusBase.value = data.bonusBase ?? bonusBase.value;
+      bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
+      compensationMode.value = data.compensationMode || compensationMode.value;
+      compensationNote.value = data.compensationNote || compensationNote.value;
+      monthlyBonuses.value = data.monthlyBonuses || monthlyBonuses.value;
+      gradeScale.value = data.gradeScale || gradeScale.value;
+      dimensions.value = data.dimensions || dimensions.value;
     }
 
     function currentDepartment() {
@@ -1742,7 +1862,7 @@ createApp({
       if(employeeName) data.meta.employeeName = employeeName;
       if(record.period && !data.meta.period) data.meta.period = record.period;
       const profile = profileForEmployee(employeeName);
-      normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || currentQuarterLabel());
+      upgradeDataForProfileTemplate(data, profile, data.meta?.period || record.period || currentQuarterLabel());
       const rebuilt = buildRecordFromData(data);
       return {
         ...rebuilt,
@@ -1880,9 +2000,7 @@ createApp({
       const record = latestRecordForEmployee(name);
       quickEmployeeSelect.value = name;
       const profile = profileForEmployee(name);
-      const expectedTemplate = profile ? profileQuarterTemplate(profile, meta.value.period || record?.period || currentQuarterLabel()) : null;
-      const recordMatchesProfile = profile && record?.data?.meta?.templateName === expectedTemplate?.templateName;
-      if(record && (!profile || recordMatchesProfile)) {
+      if(record) {
         loadRecord(record);
       } else {
         if(!profile) return;
@@ -2171,6 +2289,7 @@ createApp({
       if(period) comparePeriod.value = period;
     });
     onMounted(()=>{
+      normalizeCurrentProfileTemplate();
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentDepartment();
       records.value = normalizeRecordList(records.value);
@@ -2355,6 +2474,7 @@ createApp({
     function normalizeReportData(data, employeeName) {
       const profile = profileForEmployee(employeeName || data.meta?.employeeName);
       const profileTemplate = profile ? profileQuarterTemplate(profile, data.meta?.period || currentQuarterLabel()) : null;
+      upgradeDataForProfileTemplate(data, profile, data.meta?.period || currentQuarterLabel());
       const isProfileTemplate = profileTemplate && data.meta?.templateName === profileTemplate.templateName;
       const fallbackBase = isProfileTemplate ? profileTemplate.bonusBase : DEFAULT_TEMPLATE.bonusBase;
       data.bonusBase = data.bonusBase ?? fallbackBase;
