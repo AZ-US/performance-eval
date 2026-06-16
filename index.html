@@ -434,8 +434,11 @@ body {
           <div class="quick-employee-meta">{{card.period}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
           <div class="quick-employee-actions">
             <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName)">PDF</button>
+            <button class="quick-employee-mini"
+                    v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
+                    @click.stop="renameEmployeeRecords(card.employeeName)">改名</button>
             <button class="quick-employee-mini quick-employee-delete"
-                    v-if="card.savedRecordCount"
+                    v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
                     @click.stop="deleteEmployeeRecords(card.employeeName)">删除</button>
           </div>
         </div>
@@ -1153,9 +1156,36 @@ function escapeHtml(value) {
 
 const { createApp, ref, computed, watch, onMounted } = Vue;
 const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
+const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
 
 function isHiddenEmployeeName(name) {
   return HIDDEN_EMPLOYEE_NAMES.includes(String(name || '').trim());
+}
+
+function loadEmployeeRenameMap() {
+  const saved = localStorage.getItem(EMPLOYEE_RENAME_KEY);
+  if(!saved) return {};
+  try {
+    const data = JSON.parse(saved);
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  } catch {
+    localStorage.removeItem(EMPLOYEE_RENAME_KEY);
+    return {};
+  }
+}
+
+function saveEmployeeRenameMap(map) {
+  localStorage.setItem(EMPLOYEE_RENAME_KEY, JSON.stringify(map || {}));
+}
+
+function canonicalEmployeeName(name, renameMap = {}) {
+  let current = String(name || '').trim();
+  const seen = new Set();
+  while(current && renameMap[current] && !seen.has(current)) {
+    seen.add(current);
+    current = String(renameMap[current] || '').trim();
+  }
+  return current;
 }
 
 createApp({
@@ -1188,6 +1218,7 @@ createApp({
     const templateInput = ref(null);
     const recordInput = ref(null);
     const records = ref(loadRecords(RECORDS_KEY));
+    const employeeRenameMap = ref(loadEmployeeRenameMap());
     const comparePeriod = ref(meta.value.period || currentQuarterLabel());
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
@@ -1377,11 +1408,20 @@ createApp({
       localStorage.setItem(RECORDS_KEY, JSON.stringify(records.value));
     }
 
+    function persistEmployeeRenameMap() {
+      saveEmployeeRenameMap(employeeRenameMap.value);
+    }
+
+    function canonicalName(name) {
+      return canonicalEmployeeName(name, employeeRenameMap.value);
+    }
+
     function pushUndoSnapshot(label) {
       undoStack.value.unshift({
         label,
         data: deepClone(getData()),
         records: deepClone(records.value),
+        employeeRenameMap: deepClone(employeeRenameMap.value),
         comparePeriod: comparePeriod.value,
         selectedEmployee: selectedEmployee.value,
         quickEmployeeSelect: quickEmployeeSelect.value,
@@ -1411,33 +1451,31 @@ createApp({
       }
       restoreData(deepClone(snapshot.data));
       records.value = deepClone(snapshot.records || []);
+      employeeRenameMap.value = deepClone(snapshot.employeeRenameMap || {});
       comparePeriod.value = snapshot.comparePeriod;
       selectedEmployee.value = snapshot.selectedEmployee;
       quickEmployeeSelect.value = snapshot.quickEmployeeSelect;
       okrExpanded.value = snapshot.okrExpanded;
       persistRecords();
+      persistEmployeeRenameMap();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
       saveTime.value = new Date().toLocaleTimeString('zh-CN');
       showToast(`已撤销：${snapshot.label}`);
     }
 
     function mergeRecordList(incoming) {
-      const merged = new Map(records.value.map(record=>[record.id, record]));
-      incoming.forEach(record=>{
-        if(record && record.id && record.data && !isHiddenEmployeeName(record.employeeName)) {
-          const normalizedRecord = normalizeRecordForLibrary(record);
-          merged.set(normalizedRecord.id, normalizedRecord);
-        }
-      });
-      records.value = [...merged.values()].filter(record=>!isHiddenEmployeeName(record.employeeName)).sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
+      records.value = normalizeRecordList([...(records.value || []), ...(incoming || [])]);
       persistRecords();
     }
 
     function saveCurrentRecord() {
-      const employeeName = (meta.value.employeeName || '').trim();
+      const employeeName = canonicalName(meta.value.employeeName);
       if(!employeeName) {
         showToast('请先填写被考核人姓名');
         return false;
+      }
+      if(employeeName !== (meta.value.employeeName || '').trim()) {
+        meta.value = { ...meta.value, employeeName };
       }
       pushUndoSnapshot('保存员工记录');
       const data = deepClone(getData());
@@ -1565,17 +1603,37 @@ createApp({
 
     function normalizeRecordForLibrary(record) {
       const data = deepClone(record.data);
-      const employeeName = record.employeeName || data.meta?.employeeName;
+      const employeeName = canonicalName(record.employeeName || data.meta?.employeeName);
       data.meta = data.meta || {};
-      if(employeeName && !data.meta.employeeName) data.meta.employeeName = employeeName;
+      if(employeeName) data.meta.employeeName = employeeName;
       if(record.period && !data.meta.period) data.meta.period = record.period;
       const profile = profileForEmployee(employeeName);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || currentQuarterLabel());
+      const rebuilt = buildRecordFromData(data);
       return {
-        ...buildRecordFromData(data),
-        id: record.id || `${employeeName}__${data.meta?.period || record.period || currentQuarterLabel()}`,
+        ...rebuilt,
         savedAt: record.savedAt || new Date().toISOString()
       };
+    }
+
+    function sortRecords(list) {
+      return [...list]
+        .filter(record=>record && record.data && !isHiddenEmployeeName(record.employeeName))
+        .sort((a,b)=>b.period.localeCompare(a.period) || a.employeeName.localeCompare(b.employeeName, 'zh-CN'));
+    }
+
+    function normalizeRecordList(list) {
+      const merged = new Map();
+      list.forEach(record=>{
+        if(record && record.data && !isHiddenEmployeeName(record.employeeName)) {
+          const normalized = normalizeRecordForLibrary(record);
+          const existing = merged.get(normalized.id);
+          const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
+          const incomingTime = normalized.savedAt ? Date.parse(normalized.savedAt) : 0;
+          if(!existing || incomingTime >= existingTime) merged.set(normalized.id, normalized);
+        }
+      });
+      return sortRecords([...merged.values()]);
     }
 
     function buildProfileData(profile) {
@@ -1681,6 +1739,43 @@ createApp({
       }
       persistRecords();
       showToast(`已删除 ${name} 的记录`);
+    }
+
+    function renameEmployeeRecords(name) {
+      const oldName = String(name || '').trim();
+      if(!oldName) return;
+      const newName = String(window.prompt(`把 ${oldName} 改名为：`, oldName) || '').trim();
+      if(!newName) return;
+      if(newName === oldName) {
+        showToast('姓名没有变化');
+        return;
+      }
+      if(isHiddenEmployeeName(newName)) {
+        showToast('不能改成隐藏员工姓名');
+        return;
+      }
+      const targetCount = records.value.filter(record=>record.employeeName === newName).length;
+      if(targetCount && !confirm(`已有 ${newName} 的 ${targetCount} 条记录，改名后同期间记录会合并，继续吗？`)) return;
+      const currentEmployee = (meta.value.employeeName || '').trim();
+      const currentWasOldName = currentEmployee === oldName;
+      pushUndoSnapshot(`员工改名 ${oldName} -> ${newName}`);
+      const nextMap = deepClone(employeeRenameMap.value);
+      Object.keys(nextMap).forEach(key=>{
+        if(nextMap[key] === oldName) nextMap[key] = newName;
+      });
+      nextMap[oldName] = newName;
+      if(nextMap[newName] === newName) delete nextMap[newName];
+      employeeRenameMap.value = nextMap;
+      persistEmployeeRenameMap();
+      records.value = normalizeRecordList(records.value);
+      if(currentWasOldName) {
+        meta.value = { ...meta.value, employeeName:newName };
+      }
+      selectedEmployee.value = newName;
+      quickEmployeeSelect.value = newName;
+      persistRecords();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
+      showToast(`已将 ${oldName} 改为 ${newName}`);
     }
 
     function exportRecordLibrary() {
@@ -1871,7 +1966,7 @@ createApp({
     });
     onMounted(()=>{
       normalizeCurrentMonthlyBonuses();
-      records.value = records.value.map(record=> record?.data ? normalizeRecordForLibrary(record) : record);
+      records.value = normalizeRecordList(records.value);
       persistRecords();
       if(cloudEndpoint.value.trim()) syncCloudRecords(true);
     });
@@ -2270,7 +2365,7 @@ createApp({
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
-      quickOpenEmployee, startNewEmployee, deleteEmployeeRecords,
+      quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
       copyPublicLink, copyAmyAdminLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
