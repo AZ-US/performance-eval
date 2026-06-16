@@ -445,7 +445,7 @@ body {
             <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName)">PDF</button>
             <button class="quick-employee-mini"
                     v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
-                    @click.stop="renameEmployeeRecords(card.employeeName)">改名</button>
+                    @click.stop="renameEmployeeRecords(card.employeeName)">编辑</button>
             <button class="quick-employee-mini quick-employee-delete"
                     v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
                     @click.stop="deleteEmployeeRecords(card.employeeName)">删除</button>
@@ -1174,22 +1174,34 @@ function escapeHtml(value) {
 const { createApp, ref, computed, watch, onMounted } = Vue;
 const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
 const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
+const EMPLOYEE_HIDE_KEY = 'employee_eval_hidden_names_v1';
+const CLOUD_RULE_PREFIX = '__employee_rule__';
+const DEFAULT_EMPLOYEE_RENAMES = {
+  timlau: 'Tim'
+};
 const DEPARTMENT_LABELS = {
   import: '进口部',
   export: '出口部'
 };
 const EMPLOYEE_DEPARTMENT_OVERRIDES = {
-  Freesia: '进口部',
+  Freesia: '出口部',
   Mia: '进口部',
-  Melania: '进口部',
+  Melania: '出口部',
   'Sr. Customer Service': '进口部',
   Tim: '出口部',
+  'Tim Lau': '出口部',
   Gary: '出口部',
-  'Chris Xu': '出口部'
+  'Chris Xu': '进口部',
+  ChrisXu: '进口部'
 };
 
 function isHiddenEmployeeName(name) {
-  return HIDDEN_EMPLOYEE_NAMES.includes(String(name || '').trim());
+  const text = String(name || '').trim();
+  return HIDDEN_EMPLOYEE_NAMES.includes(text) || loadEmployeeHiddenNames().includes(text);
+}
+
+function employeeNameKey(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
 function loadEmployeeRenameMap() {
@@ -1208,14 +1220,36 @@ function saveEmployeeRenameMap(map) {
   localStorage.setItem(EMPLOYEE_RENAME_KEY, JSON.stringify(map || {}));
 }
 
+function loadEmployeeHiddenNames() {
+  const saved = localStorage.getItem(EMPLOYEE_HIDE_KEY);
+  if(!saved) return [];
+  try {
+    const data = JSON.parse(saved);
+    return Array.isArray(data) ? [...new Set(data.map(name=>String(name || '').trim()).filter(Boolean))] : [];
+  } catch {
+    localStorage.removeItem(EMPLOYEE_HIDE_KEY);
+    return [];
+  }
+}
+
+function saveEmployeeHiddenNames(names) {
+  localStorage.setItem(EMPLOYEE_HIDE_KEY, JSON.stringify([...new Set((names || []).map(name=>String(name || '').trim()).filter(Boolean))]));
+}
+
 function canonicalEmployeeName(name, renameMap = {}) {
   let current = String(name || '').trim();
   const seen = new Set();
-  while(current && renameMap[current] && !seen.has(current)) {
+  while(current && !seen.has(current)) {
     seen.add(current);
-    current = String(renameMap[current] || '').trim();
+    const mapped = renameMap[current] || renameMap[employeeNameKey(current)] || DEFAULT_EMPLOYEE_RENAMES[employeeNameKey(current)];
+    if(!mapped) break;
+    current = String(mapped || '').trim();
   }
   return current;
+}
+
+function isEmployeeRuleRecord(record) {
+  return Boolean(record && (record.recordType === 'employee_rule' || String(record.id || '').startsWith(CLOUD_RULE_PREFIX)));
 }
 
 function departmentKey(department) {
@@ -1234,10 +1268,10 @@ function departmentClass(department) {
 }
 
 function departmentForEmployee(name, data = {}) {
+  const employeeName = canonicalEmployeeName(name || data.meta?.employeeName || '');
+  if(EMPLOYEE_DEPARTMENT_OVERRIDES[employeeName]) return EMPLOYEE_DEPARTMENT_OVERRIDES[employeeName];
   const explicit = data.department || data.meta?.department;
   if(explicit) return departmentLabel(explicit);
-  const employeeName = String(name || data.meta?.employeeName || '').trim();
-  if(EMPLOYEE_DEPARTMENT_OVERRIDES[employeeName]) return EMPLOYEE_DEPARTMENT_OVERRIDES[employeeName];
   const profile = Object.values(PERSON_PROFILES).find(item=>item.name === employeeName);
   const text = [
     employeeName,
@@ -1283,6 +1317,7 @@ createApp({
     const recordInput = ref(null);
     const records = ref(loadRecords(RECORDS_KEY));
     const employeeRenameMap = ref(loadEmployeeRenameMap());
+    const employeeHiddenNames = ref(loadEmployeeHiddenNames());
     const comparePeriod = ref(meta.value.period || currentQuarterLabel());
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
@@ -1368,7 +1403,10 @@ createApp({
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
     const profileNames = computed(()=> Object.values(PERSON_PROFILES).map(profile=>profile.name));
-    const employeeNames = computed(()=> [...new Set([...profileNames.value, ...records.value.map(record=>record.employeeName).filter(name=>name && !isHiddenEmployeeName(name))])].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
+    const employeeNames = computed(()=> [...new Set([
+      ...profileNames.value.filter(name=>!isHiddenEmployeeName(name)),
+      ...records.value.map(record=>record.employeeName).filter(name=>name && !isHiddenEmployeeName(name))
+    ])].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
     const departmentCount = computed(()=> new Set(records.value.map(record=>record.department || departmentForEmployee(record.employeeName, record.data)).filter(Boolean)).size);
     const comparisonRecords = computed(()=> records.value
       .filter(record=>record.period === comparePeriod.value && !isHiddenEmployeeName(record.employeeName))
@@ -1483,6 +1521,10 @@ createApp({
       saveEmployeeRenameMap(employeeRenameMap.value);
     }
 
+    function persistEmployeeHiddenNames() {
+      saveEmployeeHiddenNames(employeeHiddenNames.value);
+    }
+
     function canonicalName(name) {
       return canonicalEmployeeName(name, employeeRenameMap.value);
     }
@@ -1493,6 +1535,7 @@ createApp({
         data: deepClone(getData()),
         records: deepClone(records.value),
         employeeRenameMap: deepClone(employeeRenameMap.value),
+        employeeHiddenNames: deepClone(employeeHiddenNames.value),
         comparePeriod: comparePeriod.value,
         selectedEmployee: selectedEmployee.value,
         quickEmployeeSelect: quickEmployeeSelect.value,
@@ -1523,19 +1566,24 @@ createApp({
       restoreData(deepClone(snapshot.data));
       records.value = deepClone(snapshot.records || []);
       employeeRenameMap.value = deepClone(snapshot.employeeRenameMap || {});
+      employeeHiddenNames.value = deepClone(snapshot.employeeHiddenNames || []);
       comparePeriod.value = snapshot.comparePeriod;
       selectedEmployee.value = snapshot.selectedEmployee;
       quickEmployeeSelect.value = snapshot.quickEmployeeSelect;
       okrExpanded.value = snapshot.okrExpanded;
       persistRecords();
       persistEmployeeRenameMap();
+      persistEmployeeHiddenNames();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
       saveTime.value = new Date().toLocaleTimeString('zh-CN');
       showToast(`已撤销：${snapshot.label}`);
     }
 
     function mergeRecordList(incoming) {
-      records.value = normalizeRecordList([...(records.value || []), ...(incoming || [])]);
+      const list = Array.isArray(incoming) ? incoming : [];
+      const rules = list.filter(isEmployeeRuleRecord);
+      if(rules.length) applyEmployeeRules(rules);
+      records.value = normalizeRecordList([...(records.value || []), ...list.filter(record=>!isEmployeeRuleRecord(record))]);
       persistRecords();
     }
 
@@ -1722,6 +1770,69 @@ createApp({
       return sortRecords([...merged.values()]);
     }
 
+    function buildEmployeeRuleRecord(ruleType, fromName, toName = '') {
+      const cleanFrom = String(fromName || '').trim();
+      const cleanTo = String(toName || '').trim();
+      const suffix = employeeNameKey(`${ruleType}-${cleanFrom}-${cleanTo || 'hidden'}`);
+      return {
+        id: `${CLOUD_RULE_PREFIX}${suffix}`,
+        recordType: 'employee_rule',
+        ruleType,
+        employeeName: cleanFrom,
+        fromName: cleanFrom,
+        toName: cleanTo,
+        period: 'system',
+        savedAt: new Date().toISOString()
+      };
+    }
+
+    function applyEmployeeRules(rules) {
+      let changed = false;
+      const nextMap = deepClone(employeeRenameMap.value || {});
+      const hidden = new Set(employeeHiddenNames.value || []);
+      rules
+        .filter(isEmployeeRuleRecord)
+        .sort((a,b)=>String(a.savedAt || '').localeCompare(String(b.savedAt || '')))
+        .forEach(rule=>{
+          const fromName = String(rule.fromName || rule.employeeName || '').trim();
+          const toName = String(rule.toName || '').trim();
+          if(!fromName) return;
+          if(rule.ruleType === 'rename' && toName) {
+            nextMap[fromName] = toName;
+            Object.keys(nextMap).forEach(key=>{
+              if(nextMap[key] === fromName) nextMap[key] = toName;
+            });
+            hidden.delete(toName);
+            changed = true;
+          }
+          if(rule.ruleType === 'hide') {
+            hidden.add(fromName);
+            changed = true;
+          }
+        });
+      if(changed) {
+        employeeRenameMap.value = nextMap;
+        employeeHiddenNames.value = [...hidden];
+        persistEmployeeRenameMap();
+        persistEmployeeHiddenNames();
+      }
+    }
+
+    async function submitEmployeeRuleToCloud(rule) {
+      const endpoint = cloudEndpoint.value.trim();
+      if(!endpoint) return;
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({version:1, submittedAt:new Date().toISOString(), record:rule})
+        });
+      } catch {
+        // Local rule still applies; Amy can retry by syncing/submitting later.
+      }
+    }
+
     function buildProfileData(profile) {
       const period = meta.value.period || currentQuarterLabel();
       const quarterKey = quarterKeyFromPeriod(period);
@@ -1818,21 +1929,24 @@ createApp({
         showToast('该员工没有已保存记录');
         return;
       }
-      if(!confirm(`确定删除 ${name} 的 ${count} 条已保存记录？此操作只删除记录，不删除系统预设模板。`)) return;
+      if(!confirm(`确定删除 ${name} 的 ${count} 条已保存记录？删除后会同步隐藏规则，其他电脑同步后也不再显示该姓名。`)) return;
       pushUndoSnapshot(`删除 ${name} 记录`);
+      employeeHiddenNames.value = [...new Set([...(employeeHiddenNames.value || []), name])];
+      persistEmployeeHiddenNames();
       records.value = records.value.filter(record=>record.employeeName !== name);
       if(selectedEmployee.value === name || meta.value.employeeName === name) {
         selectedEmployee.value = '';
         quickEmployeeSelect.value = '';
       }
       persistRecords();
+      submitEmployeeRuleToCloud(buildEmployeeRuleRecord('hide', name));
       showToast(`已删除 ${name} 的记录`);
     }
 
     function renameEmployeeRecords(name) {
       const oldName = String(name || '').trim();
       if(!oldName) return;
-      const newName = String(window.prompt(`把 ${oldName} 改名为：`, oldName) || '').trim();
+      const newName = String(window.prompt(`编辑 ${oldName} 的姓名：`, oldName) || '').trim();
       if(!newName) return;
       if(newName === oldName) {
         showToast('姓名没有变化');
@@ -1854,7 +1968,9 @@ createApp({
       nextMap[oldName] = newName;
       if(nextMap[newName] === newName) delete nextMap[newName];
       employeeRenameMap.value = nextMap;
+      employeeHiddenNames.value = (employeeHiddenNames.value || []).filter(item=>item !== newName);
       persistEmployeeRenameMap();
+      persistEmployeeHiddenNames();
       records.value = normalizeRecordList(records.value);
       if(currentWasOldName) {
         meta.value = { ...meta.value, employeeName:newName };
@@ -1863,6 +1979,7 @@ createApp({
       quickEmployeeSelect.value = newName;
       persistRecords();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
+      submitEmployeeRuleToCloud(buildEmployeeRuleRecord('rename', oldName, newName));
       showToast(`已将 ${oldName} 改为 ${newName}`);
     }
 
@@ -2492,7 +2609,7 @@ function loadRecords(storageKey) {
   if(!saved) return [];
   try {
     const records = JSON.parse(saved);
-    return Array.isArray(records) ? records.filter(record=>!isHiddenEmployeeName(record.employeeName)) : [];
+    return Array.isArray(records) ? records.filter(record=>record && record.data && !isEmployeeRuleRecord(record) && !isHiddenEmployeeName(record.employeeName)) : [];
   } catch {
     localStorage.removeItem(storageKey);
     return [];
