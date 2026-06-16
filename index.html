@@ -279,8 +279,7 @@ body {
 .mode-metric-value { font-size:15px; font-weight:800; }
 .quick-nav-card { position:sticky; top:86px; z-index:60; }
 .quick-nav-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
-.quick-nav-select { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-light); }
-.quick-nav-select select { border:1px solid #E2E8F0; border-radius:8px; padding:7px 10px; font-size:13px; background:white; outline:none; font-family:inherit; min-width:150px; }
+.quick-nav-actions { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-light); }
 .quick-employee-list { display:flex; gap:10px; flex-wrap:wrap; }
 .quick-employee-btn {
   border:1px solid #E2E8F0;
@@ -303,6 +302,8 @@ body {
 .quick-employee-mini:hover { border-color:var(--primary); color:var(--primary); }
 .quick-employee-delete { background:#FEE2E2; border-color:#FECACA; color:#DC2626; }
 .quick-employee-delete:hover { background:#FECACA; color:#B91C1C; border-color:#FCA5A5; }
+.bonus-submit-row { display:flex; justify-content:flex-end; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
+.bonus-submit-hint { font-size:12px; color:var(--text-light); }
 
 /* Animations */
 @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
@@ -412,14 +413,10 @@ body {
       <div class="quick-nav-header">
         <div>
           <div class="section-title">人员切换</div>
-          <div class="section-subtitle">从下拉框或姓名按钮切换员工。</div>
+          <div class="section-subtitle">点击下方员工姓名即可切换；新增员工用于开始填写新人员。</div>
         </div>
-        <div class="quick-nav-select">
+        <div class="quick-nav-actions">
           <button class="btn btn-outline" @click="startNewEmployee">新增员工</button>
-          <select v-model="quickEmployeeSelect" @change="quickOpenEmployee(quickEmployeeSelect)">
-            <option value="">选择员工</option>
-            <option v-for="card in quickEmployeeCards" :key="'select-'+card.employeeName" :value="card.employeeName">{{card.employeeName}}</option>
-          </select>
         </div>
       </div>
       <div class="quick-employee-list" v-if="quickEmployeeCards.length">
@@ -598,6 +595,10 @@ body {
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="bonus-submit-row">
+        <span class="bonus-submit-hint">填写证据/备注后可直接提交</span>
+        <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
       </div>
     </section>
 
