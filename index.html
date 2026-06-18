@@ -529,12 +529,12 @@ body {
     </section>
 
     <!-- Weight Warning -->
-    <div class="weight-warning" v-if="okrExpanded && totalWeight !== 100">
+    <div class="weight-warning" v-if="okrExpanded && totalWeight > 0 && totalWeight !== 100">
       &#9888; 当前总权重为 {{totalWeight}} 分，建议调整为 100 分
     </div>
 
     <!-- Summary -->
-    <div class="summary-card" v-show="okrExpanded">
+    <div class="summary-card" v-show="okrExpanded && dimensions.length">
       <div class="score-ring">
         <svg viewBox="0 0 140 140">
           <circle class="bg" cx="70" cy="70" r="58"></circle>
@@ -752,6 +752,15 @@ body {
             <tr><td colspan="8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <section class="records-card" v-if="okrExpanded && !dimensions.length">
+      <div class="section-title-row">
+        <div>
+          <div class="section-title">OKR空白</div>
+          <div class="section-subtitle">该员工暂未配置岗位OKR标准；上传正式OKR文件后再补充，不自动套用其他部门模板。</div>
+        </div>
       </div>
     </section>
 
@@ -1146,6 +1155,15 @@ const PERSON_PROFILES = {
       ]}
     ]
   },
+  Melania: {
+    name: "Melania",
+    templateName: "Melania OKR空白模板",
+    compensationMode: "monthly_bonus",
+    bonusBase: 300,
+    bonusCurrency: "USD",
+    compensationNote: "Melania暂未配置岗位OKR标准；在上传正式OKR文件前，本模板不自动套用进口部、出口部或其他岗位OKR。",
+    dimensions: []
+  },
   Mia: {
     name: "Mia",
     templateName: "Mia 进口副主管 Q2 OKR",
@@ -1338,24 +1356,15 @@ function prepareQuarterProfileTemplates() {
 
 function buildPlaceholderQuarterProfile(profile, quarter) {
   return {
-    templateName: `${profile.name} ${quarter} OKR 预留模板`,
+    templateName: `${profile.name} ${quarter} OKR空白模板`,
     compensationMode: profile.compensationMode,
     bonusBase: profile.bonusBase,
     bonusCurrency: profile.bonusCurrency,
-    compensationNote: `${profile.name} ${quarter} OKR与薪酬口径已预留；当前暂沿用岗位方向，待上传${quarter}正式文件后更新为正式模板。${profile.compensationNote}`,
+    compensationNote: `${profile.name} ${quarter}暂未配置岗位OKR标准；待上传${quarter}正式文件后再补充，不自动套用其他部门或岗位OKR。${profile.compensationNote}`,
     bonusItems: deepClone(profile.bonusItems || []),
     quarterlyOkrs: [],
     isPlaceholder: true,
-    dimensions: [
-      { id:"O1", name:`${quarter}岗位核心目标（预留）`, kpis:[
-        profileKpi("KR1","承接上一季度核心职责并明确新季度目标",20,`待上传${quarter}正式OKR文件后替换为具体指标。当前可先填写阶段性目标、关键动作和证据。`,"目标清晰且动作落地","目标明确并持续推进","方向存在但动作不清","未形成目标"),
-        profileKpi("KR2","沉淀关键数据和业务证据",15,`保留${quarter}业务结果、项目推进、异常闭环或管理动作证据，便于后续正式评分。`,"证据完整且可复盘","主要证据齐备","证据零散","缺少证据")
-      ]},
-      { id:"O2", name:`${quarter}改进与发展追踪（预留）`, kpis:[
-        profileKpi("KR1","完成岗位专项改进动作",20,`根据${profile.name}岗位职责记录本季度专项改进、资源突破、流程建设或团队管理动作。`,"改进效果明显","改进动作有效","有动作但效果有限","无明确改进"),
-        profileKpi("KR2","输出季度复盘和下季度建议",15,`季度末形成复盘，说明完成情况、风险、经验和下季度建议。`,"复盘深入且可执行","复盘完整","复盘较浅","缺少复盘")
-      ]}
-    ]
+    dimensions: []
   };
 }
 
@@ -1823,12 +1832,18 @@ createApp({
     }).filter(Boolean));
     const canUndo = computed(()=>undoStack.value.length > 0);
     const isMonthlyKpiTemplate = computed(()=>/月度\s*KPI|KPI考核/i.test(meta.value.templateName || ''));
-    const performancePanelTitle = computed(()=> isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘');
+    const hasConfiguredPerformanceTemplate = computed(()=>dimensions.value.length > 0);
+    const performancePanelTitle = computed(()=>{
+      if(!hasConfiguredPerformanceTemplate.value) return 'OKR标准未配置';
+      return isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘';
+    });
     const performancePanelNote = computed(()=>{
+      if(!hasConfiguredPerformanceTemplate.value) return '该员工暂未配置岗位OKR标准；不会自动套用其他部门模板。';
       if(isMonthlyKpiTemplate.value) return okrExpanded.value ? '当前正在填写月度KPI评分。' : '月度发放前建议展开填写月度KPI。';
       return okrExpanded.value ? '当前正在填写季度OKR复盘。' : '月度发放时可以先不填写；季度末复盘时再打开。';
     });
     const performanceToggleLabel = computed(()=>{
+      if(!hasConfiguredPerformanceTemplate.value) return okrExpanded.value ? '收起空白OKR区' : '查看空白OKR区';
       if(isMonthlyKpiTemplate.value) return okrExpanded.value ? '收起月度KPI' : '填写月度KPI评分';
       return okrExpanded.value ? '暂不填写季度OKR' : '填写季度OKR复盘';
     });
@@ -2438,18 +2453,20 @@ createApp({
     function startNewEmployee() {
       if((meta.value.employeeName || '').trim() && !confirm('开始填写新员工？当前未提交内容请先保存。')) return;
       pushUndoSnapshot('新增员工');
-      meta.value = { ...meta.value, employeeName:'' };
+      meta.value = {
+        ...meta.value,
+        templateName:'新员工OKR空白模板',
+        templateVersion:'blank',
+        employeeName:''
+      };
       compensationMode.value = DEFAULT_TEMPLATE.compensationMode;
-      compensationNote.value = DEFAULT_TEMPLATE.compensationNote;
+      compensationNote.value = '新员工暂未配置岗位OKR标准；待上传正式文件后再补充，不自动套用其他部门或岗位OKR。';
       bonusBase.value = DEFAULT_TEMPLATE.bonusBase;
       bonusCurrency.value = DEFAULT_TEMPLATE.bonusCurrency;
       monthlyBonuses.value = buildMonthlyBonuses(meta.value.period, bonusBase.value);
       bonusItems.value = [];
       quarterlyOkrs.value = [];
-      dimensions.value = dimensions.value.map(dim=>({
-        ...dim,
-        kpis: dim.kpis.map(kpi=>({ ...kpi, selectedTier:null, score:0, comment:'' }))
-      }));
+      dimensions.value = [];
       selectedEmployee.value = '';
       quickEmployeeSelect.value = '';
       okrExpanded.value = false;
@@ -2967,7 +2984,7 @@ createApp({
       data.gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
       data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || currentQuarterLabel());
-      data.dimensions = data.dimensions || DEFAULT_TEMPLATE.dimensions;
+      data.dimensions = Array.isArray(data.dimensions) ? data.dimensions : [];
       data.bonusItems = normalizeBonusItems(data.bonusItems);
       data.quarterlyOkrs = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       return data;
