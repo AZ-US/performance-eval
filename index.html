@@ -473,7 +473,7 @@ body {
           <div class="mode-metric-value">{{monthlyModeLabel}}</div>
         </div>
         <div class="mode-metric">
-          <div class="mode-metric-label">季度</div>
+          <div class="mode-metric-label">{{isMonthlyKpiTemplate ? 'KPI' : '季度'}}</div>
           <div class="mode-metric-value">{{quarterModeLabel}}</div>
         </div>
       </div>
@@ -484,7 +484,7 @@ body {
       <div class="section-title-row">
         <div>
           <div class="section-title">月度与季度填写规则</div>
-          <div class="section-subtitle">给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。</div>
+          <div class="section-subtitle">{{workflowRuleSubtitle}}</div>
         </div>
       </div>
       <div class="workflow-grid">
@@ -494,9 +494,9 @@ body {
           <div class="workflow-copy">用于当月正式发放奖金。只需要选择当月等级、确认应发/实发金额，并留下异常闭环、节点同步、团队动作、证据留档等说明。</div>
         </div>
         <div class="workflow-item">
-          <div class="workflow-tag optional">季度末填写</div>
-          <div class="workflow-title">季度OKR复盘</div>
-          <div class="workflow-copy">用于季度总结、横向校准、个人发展追踪和下季度目标设定。平时可以不填，不作为月度奖金扣回依据。</div>
+          <div class="workflow-tag optional">{{workflowReviewTag}}</div>
+          <div class="workflow-title">{{workflowReviewTitle}}</div>
+          <div class="workflow-copy">{{workflowReviewCopy}}</div>
         </div>
       </div>
     </section>
@@ -504,10 +504,10 @@ body {
     <!-- Quarterly OKR switch -->
     <section class="okr-panel-card">
       <div>
-        <div class="section-title">季度OKR复盘</div>
-        <div class="okr-panel-note">{{okrExpanded ? '当前正在填写季度OKR复盘。' : '月度发放时可以先不填写；季度末复盘时再打开。'}}</div>
+        <div class="section-title">{{performancePanelTitle}}</div>
+        <div class="okr-panel-note">{{performancePanelNote}}</div>
       </div>
-      <button class="btn btn-primary" @click="okrExpanded=!okrExpanded">{{okrExpanded ? '暂不填写季度OKR' : '填写季度OKR复盘'}}</button>
+      <button class="btn btn-primary" @click="okrExpanded=!okrExpanded">{{performanceToggleLabel}}</button>
     </section>
 
     <!-- Weight Warning -->
@@ -536,7 +536,7 @@ body {
           {{finalGrade.grade}} - {{finalGrade.label}}
         </div>
         <div class="bonus-line">
-          月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。
+          {{performanceScoreUsage}}
         </div>
         <div class="dim-bars">
           <div class="dim-bar-row" v-for="dim in dimensions" :key="dim.id">
@@ -1103,38 +1103,38 @@ const PERSON_PROFILES = {
   },
   Kori: {
     name: "Kori",
-    templateName: "Kori Finance AP+AR成长 OKR",
+    templateName: "Kori Finance 月度KPI考核表",
     compensationMode: "monthly_bonus",
     bonusBase: 500,
     bonusCurrency: "USD",
-    compensationNote: "Kori基础月度绩效奖金USD500。根据V2方案，当前从AP专员逐步升级为AP+AR双能，月度复盘、季度汇总；重点考核付款合规与安全、AP日常闭环、AR应收催收、报表和资金预算分析。AR阶段目标以4月止183条超账期为基准，7月≤100条、8月≤50条、9月≤20条；2025年历史款项催回效果明显者可在备注中记录额外加分。",
+    compensationNote: "Kori基础月度绩效奖金USD500。本模板改为月度KPI口径，按AP、AR、出纳、其他和综合评价每月评分；季度仅用于汇总趋势和晋升/成长复盘。AR阶段目标以4月止183条超账期为基准，7月≤100条、8月≤50条、9月≤20条；2025年历史款项催回效果明显者可在备注中记录额外加分。",
     detailedQuarters: ["Q3"],
     quarterTemplateNames: {
-      Q3: "Kori Finance AP+AR双能 Q3 OKR"
+      Q3: "Kori Finance 月度KPI Q3考核表"
     },
     dimensions: [
-      { id:"O1", name:"制度执行与付款审批", kpis:[
+      { id:"AP", name:"AP对账", kpis:[
+        profileKpi("KR1","车队及报关行对账",10,"收到车队或报关行账单后15天内完成对账；未按时完成的结算单位，每未完成一家扣1分。若因业务前端原因未能及时确认费用，可在备注中说明并免扣。","全部按期完成且差异跟进清楚","主要账单按期完成","个别单位延期或证据不完整","多家未按时完成")
+      ]},
+      { id:"AR", name:"AR催收与报表", kpis:[
+        profileKpi("KR1","应收款催收",10,"每周定期发送应收款汇总表并跟进催收；按阶段目标追踪超账期条数：4月止183条7月≤100、8月≤50、9月≤20；5月业务7月≤120、8月≤80、9月≤30；6月业务8月≤100、9月≤50、10月≤20；7月业务9月≤80、10月≤30、11月≤10。","达到或优于阶段目标，并能说明重点客户进展","基本达到阶段目标，跟进记录完整","有跟进但下降不达预期","缺少催收动作或数据失控"),
+        profileKpi("KR2","应收应付报表及明细",10,"每月3日前提交应收应付报表及明细表，要求数据准确、格式统一，并反馈未收款情况；每延迟一天扣1分。","按期提交且数据准确可用","按期提交，少量修正","延迟或准确性一般","严重延迟或数据不可用")
+      ]},
+      { id:"TR", name:"出纳付款与账务安全", kpis:[
+        profileKpi("KR1","执行付款审批流程",10,"按审批流支付各类款项，做好付款事项核查，包括但不限于付款金额、发票、报销单据。发生1次未经审批同意而支付的款项扣5分，2次以上不得分。","审批链完整且能主动识别风险","按流程执行，资料基本齐全","偶有资料缺漏或需返工","未经审批付款或流程失控"),
+        profileKpi("KR2","保证付款准确及安全",10,"付款支付操作规范，保证资金安全。发生1次付款失误扣5分，2次以上不得分。","付款准确且能前置发现异常","付款规范，无重大差错","有轻微差错但及时纠正","出现重大付款风险"),
+        profileKpi("KR3","资金结报单录入",5,"每日系统录入资金结报单余额并完成审核，确保现金银行实际余额、系统录入和日记账余额一致。未及时录入每笔扣1分；BI系统账户差异每个扣1分。","每日及时录入且核对一致","主要记录及时准确","偶有延迟或小差异","多次缺录或差异未处理"),
+        profileKpi("KR4","日记账录入及付款核销",5,"当天发生的收支在次日中午前录入完成，审核科目合理性和余额一致性，并在次日下班前完成付款核销。主观原因晚录入或晚核销每笔扣1分。","录入和核销及时且科目准确","主要事项按期完成","偶有主观延迟","多次延期或核销缺失"),
+        profileKpi("KR5","档案保管与整理",5,"当月10日前归整上月财务支付凭证，包括付款申请单、发票、报销单据；未按时归整扣2分，档案保管不到位或资料缺失当月不得分。","资料完整、归档及时、可追溯","按期完成主要归档","偶有缺漏但能补齐","归档不到位或资料缺失"),
+        profileKpi("KR6","资金预算表及差异分析",10,"每月5日前提交资金预算表，资金预算差异分析次月15日提交；预算与实际差异需有合理、明确解释。预算表或差异分析每延迟一天扣1分，数据无逻辑或无合理解释扣2分。","按期提交且差异解释清楚","主要内容完整，解释基本合理","延迟或分析较浅","数据无逻辑或无法解释差异")
+      ]},
+      { id:"OT", name:"其他流程", kpis:[
+        profileKpi("KR1","提单寄送",5,"负责提单保管和寄送，并做好提单收寄台账登记。收到提单后因保管不善造成遗失，当月不得分；因快递原因发生遗失除外。","收寄台账完整且无遗失","寄送及时，记录基本完整","记录不够完整","保管不善造成风险"),
+        profileKpi("KR2","U8费用报销",5,"及时完成公司费用U8报销流程；如有未走报销流程先付款的，每发现一笔扣1分。","报销流程及时规范","主要费用按流程处理","偶有流程滞后","先付款后补流程较多")
+      ]},
+      { id:"GE", name:"制度与综合评价", kpis:[
         profileKpi("KR1","遵循财务保密制度",5,"严格遵守财务制度，不随意泄露财务数据，做好财务资料、付款信息、客户账款和报表数据的保密工作。","全月无泄露风险，敏感资料管控到位","能遵守保密要求，无明显风险","偶有提醒后改正","发生泄露或严重保密风险"),
-        profileKpi("KR2","执行付款审批流程",10,"按审批流支付各类款项，付款前核查金额、发票、报销单据和付款依据。未经审批支付1次扣5分，2次以上不得分。","审批链完整且能主动识别风险","按流程执行，资料基本齐全","偶有资料缺漏或需返工","未经审批付款或流程失控")
-      ]},
-      { id:"O2", name:"AP付款安全与账务闭环", kpis:[
-        profileKpi("KR1","保证付款准确及资金安全",10,"付款支付操作规范，保证收款账户、付款金额、币种、用途、附件和审批信息准确。付款失误1次扣5分，2次以上不得分。","付款准确且能前置发现异常","付款规范，无重大差错","有轻微差错但及时纠正","出现重大付款风险"),
-        profileKpi("KR2","资金结报单录入",5,"每日系统录入资金结报单余额并完成审核，确保现金银行实际余额、系统余额和日记账余额一致。","每日及时录入且核对一致","主要记录及时准确","偶有延迟或小差异","多次缺录或差异未处理"),
-        profileKpi("KR3","日记账录入及付款核销",5,"当天收支在次日中午前录入，科目合理性和余额一致性审核到位，次日下班前完成核销。","录入和核销及时且科目准确","主要事项按期完成","偶有主观延迟","多次延期或核销缺失")
-      ]},
-      { id:"O3", name:"AP对账、档案与流程执行", kpis:[
-        profileKpi("KR1","车队及报关行对账",10,"收到车队或报关行账单后15天内完成对账；因业务前端未确认费用导致延迟，可在备注中说明并免扣。","对账按期完成且差异跟进清楚","主要账单按期完成","个别单位延期","多家未按时完成"),
-        profileKpi("KR2","档案保管与整理",5,"当月10日前归整上月财务支付凭证，包括付款申请单、发票、报销单据；资料缺失或保管不到位当月不得分。","资料完整、归档及时、可追溯","按期完成主要归档","偶有缺漏但能补齐","归档不到位或资料缺失"),
-        profileKpi("KR3","提单寄送与台账登记",5,"负责提单保管和寄送，做好提单收寄台账；因保管不善造成遗失当月不得分，快递原因除外。","收寄台账完整且无遗失","寄送及时，记录基本完整","记录不够完整","保管不善造成风险"),
-        profileKpi("KR4","U8费用报销流程",5,"及时完成公司费用U8报销流程；如未走报销流程先付款，每发现一笔扣1分。","报销流程及时规范","主要费用按流程处理","偶有流程滞后","先付款后补流程较多")
-      ]},
-      { id:"O4", name:"AR应收催收与账龄管理", kpis:[
-        profileKpi("KR1","应收款催收与超账期下降",10,"每周定期发送应收款汇总表并跟进催收；按阶段目标追踪超账期条数：4月止183条7月≤100、8月≤50、9月≤20；5月业务7月≤120、8月≤80、9月≤30；6月业务8月≤100、9月≤50、10月≤20；7月业务9月≤80、10月≤30、11月≤10。","达到或优于阶段目标，并能说明重点客户进展","基本达到阶段目标，跟进记录完整","有跟进但下降不达预期","缺少催收动作或数据失控")
-      ]},
-      { id:"O5", name:"报表分析与财务成长", kpis:[
-        profileKpi("KR1","应收应付报表及明细",10,"每月3日前提交应收应付报表及明细表，数据准确、格式统一，并反馈未收款情况；每延迟一天扣1分。","按期提交且数据准确可用","按期提交，少量修正","延迟或准确性一般","严重延迟或数据不可用"),
-        profileKpi("KR2","资金预算表及差异分析",10,"每月5日前提交资金预算表，资金预算差异分析次月15日提交；对预算和实际差异给出合理明确解释。","按期提交且差异解释清楚","主要内容完整，解释基本合理","延迟或分析较浅","数据无逻辑或无法解释差异"),
-        profileKpi("KR3","财务工作评价与成长复盘",10,"由财务主管综合评价整体工作情况，并结合AP+AR学习进度、异常提前报备、月度复盘和下一阶段目标确认。","主动成长，可进入下一阶段能力评估","工作稳定，学习进度符合预期","需要主管较多推动","不配合学习或连续低于要求")
+        profileKpi("KR2","财务工作评价",10,"由财务主管对整体工作情况综合评价，结合月度复盘、异常提前报备、AP/AR学习进度和下一阶段目标确认。","主动成长，可进入下一阶段能力评估","工作稳定，学习进度符合预期","需要主管较多推动","不配合学习或连续低于要求")
       ]}
     ]
   },
@@ -1546,6 +1546,30 @@ createApp({
       };
     }).filter(Boolean));
     const canUndo = computed(()=>undoStack.value.length > 0);
+    const isMonthlyKpiTemplate = computed(()=>/月度\s*KPI|KPI考核/i.test(meta.value.templateName || ''));
+    const performancePanelTitle = computed(()=> isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘');
+    const performancePanelNote = computed(()=>{
+      if(isMonthlyKpiTemplate.value) return okrExpanded.value ? '当前正在填写月度KPI评分。' : '月度发放前建议展开填写月度KPI。';
+      return okrExpanded.value ? '当前正在填写季度OKR复盘。' : '月度发放时可以先不填写；季度末复盘时再打开。';
+    });
+    const performanceToggleLabel = computed(()=>{
+      if(isMonthlyKpiTemplate.value) return okrExpanded.value ? '收起月度KPI' : '填写月度KPI评分';
+      return okrExpanded.value ? '暂不填写季度OKR' : '填写季度OKR复盘';
+    });
+    const performanceScoreUsage = computed(()=> isMonthlyKpiTemplate.value
+      ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度仅用于趋势汇总和成长路径判断。'
+      : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。'
+    );
+    const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
+      ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表，季度只汇总趋势、成长路径和是否进入下一阶段。'
+      : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。'
+    );
+    const workflowReviewTag = computed(()=> isMonthlyKpiTemplate.value ? '每月填写' : '季度末填写');
+    const workflowReviewTitle = computed(()=> isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘');
+    const workflowReviewCopy = computed(()=> isMonthlyKpiTemplate.value
+      ? '用于Kori当月正式评分，覆盖AP、AR、出纳、其他和综合评价；季度末只做趋势汇总，不另起一套OKR。'
+      : '用于季度总结、横向校准、个人发展追踪和下季度目标设定。平时可以不填，不作为月度奖金扣回依据。'
+    );
     const showMonthlyBonusTable = computed(()=> !['no_monthly_bonus','quarterly_commission'].includes(compensationMode.value));
     const compensationTitle = computed(()=>{
       if(compensationMode.value === 'no_monthly_bonus') return '薪酬口径';
@@ -1578,11 +1602,13 @@ createApp({
       return '按等级发放';
     });
     const quarterModeLabel = computed(()=>{
+      if(isMonthlyKpiTemplate.value) return '月度KPI';
       if(compensationMode.value === 'quarterly_commission') return '提成结算';
       if(compensationMode.value === 'no_monthly_bonus') return '复盘/年终';
       return 'OKR复盘';
     });
     const assessmentModeCopy = computed(()=>{
+      if(isMonthlyKpiTemplate.value) return '本岗位按月度KPI评分核算月度奖金；季度视图只用于查看趋势、成长阶段和下一步培养安排。';
       if(compensationMode.value === 'no_monthly_bonus') return '本岗位不做月度奖金发放；月度可记录进展，季度末用OKR复盘支持岗位发展、年终奖金或组织调整判断。';
       if(compensationMode.value === 'quarterly_commission') return '本岗位不按月发奖金；月度用于追踪业务进度，季度根据业务指标完成度和提成规则结算。';
       if(compensationMode.value === 'monthly_accelerator') return '本岗位按月度等级发放加成奖金；季度OKR用于判断结构性突破、资源能力和下季度目标，不追溯扣回已发月度奖金。';
@@ -2743,6 +2769,8 @@ createApp({
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
+      isMonthlyKpiTemplate, performancePanelTitle, performancePanelNote, performanceToggleLabel,
+      performanceScoreUsage, workflowRuleSubtitle, workflowReviewTag, workflowReviewTitle, workflowReviewCopy,
       monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
