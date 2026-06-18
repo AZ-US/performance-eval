@@ -297,12 +297,15 @@ body {
 .quick-employee-btn.active { border-color:var(--primary); background:#EFF6FF; }
 .quick-employee-btn.dept-import { border-color:#BFDBFE; background:linear-gradient(180deg,#EFF6FF 0%,#FFFFFF 100%); }
 .quick-employee-btn.dept-export { border-color:#BBF7D0; background:linear-gradient(180deg,#ECFDF5 0%,#FFFFFF 100%); }
+.quick-employee-btn.dept-finance { border-color:#FDE68A; background:linear-gradient(180deg,#FFFBEB 0%,#FFFFFF 100%); }
 .quick-employee-btn.dept-import.active { border-color:#2563EB; background:#DBEAFE; }
 .quick-employee-btn.dept-export.active { border-color:#16A34A; background:#DCFCE7; }
+.quick-employee-btn.dept-finance.active { border-color:#D97706; background:#FEF3C7; }
 .quick-employee-name { font-size:14px; font-weight:800; margin-bottom:4px; color:var(--text); }
 .quick-employee-dept { display:inline-flex; align-items:center; width:max-content; max-width:100%; padding:2px 7px; border-radius:999px; font-size:11px; font-weight:800; margin-bottom:5px; }
 .dept-import .quick-employee-dept, .department-badge.dept-import { background:#DBEAFE; color:#1D4ED8; }
 .dept-export .quick-employee-dept, .department-badge.dept-export { background:#DCFCE7; color:#15803D; }
+.dept-finance .quick-employee-dept, .department-badge.dept-finance { background:#FEF3C7; color:#92400E; }
 .department-badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; font-size:12px; font-weight:800; white-space:nowrap; }
 .quick-employee-meta { font-size:12px; color:var(--text-light); line-height:1.45; }
 .quick-employee-actions { display:flex; gap:6px; margin-top:8px; }
@@ -1098,6 +1101,43 @@ const PERSON_PROFILES = {
       ]}
     ]
   },
+  Kori: {
+    name: "Kori",
+    templateName: "Kori Finance AP+AR成长 OKR",
+    compensationMode: "monthly_bonus",
+    bonusBase: 500,
+    bonusCurrency: "USD",
+    compensationNote: "Kori基础月度绩效奖金USD500。根据V2方案，当前从AP专员逐步升级为AP+AR双能，月度复盘、季度汇总；重点考核付款合规与安全、AP日常闭环、AR应收催收、报表和资金预算分析。AR阶段目标以4月止183条超账期为基准，7月≤100条、8月≤50条、9月≤20条；2025年历史款项催回效果明显者可在备注中记录额外加分。",
+    detailedQuarters: ["Q3"],
+    quarterTemplateNames: {
+      Q3: "Kori Finance AP+AR双能 Q3 OKR"
+    },
+    dimensions: [
+      { id:"O1", name:"制度执行与付款审批", kpis:[
+        profileKpi("KR1","遵循财务保密制度",5,"严格遵守财务制度，不随意泄露财务数据，做好财务资料、付款信息、客户账款和报表数据的保密工作。","全月无泄露风险，敏感资料管控到位","能遵守保密要求，无明显风险","偶有提醒后改正","发生泄露或严重保密风险"),
+        profileKpi("KR2","执行付款审批流程",10,"按审批流支付各类款项，付款前核查金额、发票、报销单据和付款依据。未经审批支付1次扣5分，2次以上不得分。","审批链完整且能主动识别风险","按流程执行，资料基本齐全","偶有资料缺漏或需返工","未经审批付款或流程失控")
+      ]},
+      { id:"O2", name:"AP付款安全与账务闭环", kpis:[
+        profileKpi("KR1","保证付款准确及资金安全",10,"付款支付操作规范，保证收款账户、付款金额、币种、用途、附件和审批信息准确。付款失误1次扣5分，2次以上不得分。","付款准确且能前置发现异常","付款规范，无重大差错","有轻微差错但及时纠正","出现重大付款风险"),
+        profileKpi("KR2","资金结报单录入",5,"每日系统录入资金结报单余额并完成审核，确保现金银行实际余额、系统余额和日记账余额一致。","每日及时录入且核对一致","主要记录及时准确","偶有延迟或小差异","多次缺录或差异未处理"),
+        profileKpi("KR3","日记账录入及付款核销",5,"当天收支在次日中午前录入，科目合理性和余额一致性审核到位，次日下班前完成核销。","录入和核销及时且科目准确","主要事项按期完成","偶有主观延迟","多次延期或核销缺失")
+      ]},
+      { id:"O3", name:"AP对账、档案与流程执行", kpis:[
+        profileKpi("KR1","车队及报关行对账",10,"收到车队或报关行账单后15天内完成对账；因业务前端未确认费用导致延迟，可在备注中说明并免扣。","对账按期完成且差异跟进清楚","主要账单按期完成","个别单位延期","多家未按时完成"),
+        profileKpi("KR2","档案保管与整理",5,"当月10日前归整上月财务支付凭证，包括付款申请单、发票、报销单据；资料缺失或保管不到位当月不得分。","资料完整、归档及时、可追溯","按期完成主要归档","偶有缺漏但能补齐","归档不到位或资料缺失"),
+        profileKpi("KR3","提单寄送与台账登记",5,"负责提单保管和寄送，做好提单收寄台账；因保管不善造成遗失当月不得分，快递原因除外。","收寄台账完整且无遗失","寄送及时，记录基本完整","记录不够完整","保管不善造成风险"),
+        profileKpi("KR4","U8费用报销流程",5,"及时完成公司费用U8报销流程；如未走报销流程先付款，每发现一笔扣1分。","报销流程及时规范","主要费用按流程处理","偶有流程滞后","先付款后补流程较多")
+      ]},
+      { id:"O4", name:"AR应收催收与账龄管理", kpis:[
+        profileKpi("KR1","应收款催收与超账期下降",10,"每周定期发送应收款汇总表并跟进催收；按阶段目标追踪超账期条数：4月止183条7月≤100、8月≤50、9月≤20；5月业务7月≤120、8月≤80、9月≤30；6月业务8月≤100、9月≤50、10月≤20；7月业务9月≤80、10月≤30、11月≤10。","达到或优于阶段目标，并能说明重点客户进展","基本达到阶段目标，跟进记录完整","有跟进但下降不达预期","缺少催收动作或数据失控")
+      ]},
+      { id:"O5", name:"报表分析与财务成长", kpis:[
+        profileKpi("KR1","应收应付报表及明细",10,"每月3日前提交应收应付报表及明细表，数据准确、格式统一，并反馈未收款情况；每延迟一天扣1分。","按期提交且数据准确可用","按期提交，少量修正","延迟或准确性一般","严重延迟或数据不可用"),
+        profileKpi("KR2","资金预算表及差异分析",10,"每月5日前提交资金预算表，资金预算差异分析次月15日提交；对预算和实际差异给出合理明确解释。","按期提交且差异解释清楚","主要内容完整，解释基本合理","延迟或分析较浅","数据无逻辑或无法解释差异"),
+        profileKpi("KR3","财务工作评价与成长复盘",10,"由财务主管综合评价整体工作情况，并结合AP+AR学习进度、异常提前报备、月度复盘和下一阶段目标确认。","主动成长，可进入下一阶段能力评估","工作稳定，学习进度符合预期","需要主管较多推动","不配合学习或连续低于要求")
+      ]}
+    ]
+  },
   Tim: {
     name: "Tim",
     templateName: "Tim 2026 Q2 订舱与航线突破 OKR",
@@ -1151,10 +1191,15 @@ function prepareQuarterProfileTemplates() {
       dimensions: profile.dimensions,
       isPlaceholder: false
     };
+    const detailedQuarters = new Set(profile.detailedQuarters || []);
+    const detailedQuarterProfile = (quarterKey) => ({
+      ...q2,
+      templateName: profile.quarterTemplateNames?.[quarterKey] || `${profile.name} ${quarterKey} OKR`
+    });
     profile.quarters = {
       Q2: q2,
-      Q3: buildPlaceholderQuarterProfile(profile, "Q3"),
-      Q4: buildPlaceholderQuarterProfile(profile, "Q4")
+      Q3: detailedQuarters.has("Q3") ? detailedQuarterProfile("Q3") : buildPlaceholderQuarterProfile(profile, "Q3"),
+      Q4: detailedQuarters.has("Q4") ? detailedQuarterProfile("Q4") : buildPlaceholderQuarterProfile(profile, "Q4")
     };
   });
 }
@@ -1249,7 +1294,8 @@ const DEFAULT_EMPLOYEE_RENAMES = {
 };
 const DEPARTMENT_LABELS = {
   import: '进口部',
-  export: '出口部'
+  export: '出口部',
+  finance: '财务部'
 };
 const EMPLOYEE_DEPARTMENT_OVERRIDES = {
   Freesia: '出口部',
@@ -1261,7 +1307,7 @@ const EMPLOYEE_DEPARTMENT_OVERRIDES = {
   Gary: '出口部',
   'Chris Xu': '进口部',
   ChrisXu: '进口部',
-  Mia: '进口部'
+  Kori: '财务部'
 };
 
 function isHiddenEmployeeName(name) {
@@ -1325,6 +1371,7 @@ function departmentKey(department) {
   const text = String(department || '').trim().toLowerCase();
   if(['export', 'export dept', 'export department', '出口', '出口部'].includes(text)) return 'export';
   if(['import', 'import dept', 'import department', '进口', '进口部'].includes(text)) return 'import';
+  if(['finance', 'finance dept', 'finance department', '财务', '财务部'].includes(text)) return 'finance';
   return 'import';
 }
 
@@ -1352,6 +1399,7 @@ function departmentForEmployee(name, data = {}) {
   ].filter(Boolean).join(' ');
   if(/出口|订舱|航线|船司|业务控盘|export/i.test(text)) return DEPARTMENT_LABELS.export;
   if(/进口|操作|单证|import/i.test(text)) return DEPARTMENT_LABELS.import;
+  if(/财务|付款|应收|应付|报表|预算|finance|\bAP\b|\bAR\b/i.test(text)) return DEPARTMENT_LABELS.finance;
   return DEPARTMENT_LABELS.import;
 }
 
