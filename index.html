@@ -229,6 +229,16 @@ body {
 .bonus-grade { min-width:96px; }
 .bonus-note { min-width:220px; }
 .compensation-note { background:rgba(239,246,255,0.72); border:1px solid #BFDBFE; color:#1E3A8A; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.65; margin-bottom:14px; }
+.bonus-score-summary { display:inline-flex; width:max-content; max-width:100%; margin-bottom:12px; padding:6px 10px; border-radius:999px; background:#FFFBEB; color:#92400E; font-size:13px; font-weight:800; }
+.score-slider-row { display:grid; grid-template-columns:auto minmax(160px,1fr) 80px auto; gap:10px; align-items:center; margin:10px 0 12px; padding:9px 11px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; }
+.score-slider-row label { font-size:12px; font-weight:800; color:var(--text-light); white-space:nowrap; }
+.score-slider-row input[type="range"], .okr-completion-cell input[type="range"] { width:100%; accent-color:var(--primary); }
+.score-slider-row input[type="number"], .okr-completion-cell input[type="number"] { width:100%; border:1px solid #CBD5E1; border-radius:8px; padding:6px 8px; font-family:inherit; }
+.extra-score-card { border-color:#FDE68A; }
+.quarterly-okr-card { border-color:#C7D2FE; }
+.quarterly-okr-objective { margin-top:14px; }
+.quarterly-okr-title { font-weight:800; color:var(--text); margin-bottom:8px; }
+.okr-completion-cell { display:grid; grid-template-columns:minmax(120px,1fr) 64px auto; gap:8px; align-items:center; min-width:220px; }
 
 /* Workflow and records */
 .quick-nav-card, .workflow-card, .records-card, .okr-panel-card, .mode-card {
@@ -340,6 +350,8 @@ body {
   .dim-bar-label { width:70px; font-size:12px; }
   .header-top { flex-direction:column; }
   .kpi-list { padding-left:0; }
+  .score-slider-row { grid-template-columns:1fr; }
+  .okr-completion-cell { grid-template-columns:1fr 64px auto; min-width:180px; }
 }
 
 /* Weight warning */
@@ -523,7 +535,7 @@ body {
           <circle class="fg" cx="70" cy="70" r="58"
             :stroke="gradeColor"
             :stroke-dasharray="364.4"
-            :stroke-dashoffset="364.4 - (364.4 * totalScore / totalWeight)">
+            :stroke-dashoffset="364.4 - (364.4 * scoreRingPercent / 100)">
           </circle>
         </svg>
         <div class="score-text">
@@ -537,6 +549,9 @@ body {
         </div>
         <div class="bonus-line">
           {{performanceScoreUsage}}
+        </div>
+        <div class="bonus-score-summary" v-if="bonusItems.length">
+          基础分 {{baseScore}} / {{totalWeight}}，加分项 +{{bonusScoreTotal}}，总分 {{totalScore}}
         </div>
         <div class="dim-bars">
           <div class="dim-bar-row" v-for="dim in dimensions" :key="dim.id">
@@ -671,8 +686,8 @@ body {
               <th>月度应发</th>
               <th>月度实发</th>
               <th>已评月份</th>
-              <th>季度OKR</th>
-              <th>OKR状态</th>
+              <th>绩效分数</th>
+              <th>考核状态</th>
               <th>保存时间</th>
               <th>操作</th>
             </tr>
@@ -710,8 +725,8 @@ body {
               <th>期间</th>
               <th>月度应发</th>
               <th>月度实发</th>
-              <th>季度OKR</th>
-              <th>季度等级</th>
+              <th>绩效分数</th>
+              <th>绩效等级</th>
               <th>发展备注</th>
             </tr>
           </thead>
@@ -724,7 +739,7 @@ body {
               <td>{{record.currency}} {{record.monthlyPaidTotal}}</td>
               <td>{{record.quarterScore}} / {{record.quarterWeight}}</td>
               <td>{{record.quarterGrade}}</td>
-              <td>{{record.developmentNote || '可在季度OKR备注中沉淀'}}</td>
+              <td>{{record.developmentNote || '可在考核备注中沉淀'}}</td>
             </tr>
           </tbody>
           <tbody v-else>
@@ -767,10 +782,99 @@ body {
               <div class="tier-desc">{{tier.description}}</div>
             </div>
           </div>
+          <div class="score-slider-row">
+            <label>自定义得分</label>
+            <input type="range" min="0" :max="kpi.weight" step="1" v-model.number="kpi.score" @input="setKpiScore(kpi)">
+            <input type="number" min="0" :max="kpi.weight" step="1" v-model.number="kpi.score" @input="setKpiScore(kpi)">
+            <span>/ {{kpi.weight}}</span>
+          </div>
           <textarea class="kpi-comment" v-model="kpi.comment" placeholder="完成说明 / 证据链接 / 取数困难说明..." rows="1"></textarea>
         </div>
       </div>
     </div>
+
+    <!-- Bonus Items -->
+    <section class="bonus-card extra-score-card" v-if="okrExpanded && (bonusItems.length || isMonthlyKpiTemplate)">
+      <div class="section-title-row">
+        <div>
+          <div class="section-title">加分项</div>
+          <div class="section-subtitle">加分项计入总分，不占用100分基础权重。适用于历史欠款催回等额外贡献。</div>
+        </div>
+        <button class="btn btn-outline" @click="addBonusItem">添加加分项</button>
+      </div>
+      <div class="bonus-table-wrap">
+        <table class="bonus-table">
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>数量</th>
+              <th>每项分值</th>
+              <th>加分</th>
+              <th>说明/证据</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody v-if="bonusItems.length">
+            <tr v-for="(item, index) in bonusItems" :key="item.id">
+              <td><input v-model="item.name"></td>
+              <td><input type="number" min="0" v-model.number="item.quantity" @input="syncBonusItemScore(item)"></td>
+              <td><input type="number" min="0" v-model.number="item.pointsPerUnit" @input="syncBonusItemScore(item)"></td>
+              <td><input type="number" min="0" v-model.number="item.score"></td>
+              <td><textarea v-model="item.comment" placeholder="例如：2025年历史欠款催回，每条+1分，附客户/票号/回款记录"></textarea></td>
+              <td><button class="btn btn-danger" @click="removeBonusItem(index)">删除</button></td>
+            </tr>
+          </tbody>
+          <tbody v-else>
+            <tr><td colspan="6" class="empty-state">暂无加分项，可按实际额外贡献添加。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Quarterly OKR -->
+    <section class="records-card quarterly-okr-card" v-if="quarterlyOkrs.length && okrExpanded">
+      <div class="section-title-row">
+        <div>
+          <div class="section-title">季度OKR</div>
+          <div class="section-subtitle">每季初设定成长目标，季末填写实际完成值和复盘说明；该模块不替代月度KPI。</div>
+        </div>
+        <div class="record-stat" style="min-width:130px">
+          <div class="record-stat-label">OKR完成率</div>
+          <div class="record-stat-value">{{quarterlyOkrCompletion}}%</div>
+        </div>
+      </div>
+      <div class="quarterly-okr-objective" v-for="objective in quarterlyOkrs" :key="objective.id">
+        <div class="quarterly-okr-title">{{objective.id}} {{objective.objective}}</div>
+        <div class="bonus-table-wrap">
+          <table class="bonus-table">
+            <thead>
+              <tr>
+                <th>KR</th>
+                <th>目标值</th>
+                <th>实际完成值</th>
+                <th>完成率</th>
+                <th>复盘说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="kr in objective.krs" :key="kr.id">
+                <td><strong>{{kr.id}}</strong> {{kr.name}}</td>
+                <td>{{kr.target}}</td>
+                <td><input v-model="kr.actual" placeholder="填写实际值"></td>
+                <td>
+                  <div class="okr-completion-cell">
+                    <input type="range" min="0" max="100" step="5" v-model.number="kr.completion" @input="setOkrCompletion(kr)">
+                    <input type="number" min="0" max="100" v-model.number="kr.completion" @input="setOkrCompletion(kr)">
+                    <span>%</span>
+                  </div>
+                </td>
+                <td><textarea v-model="kr.comment" placeholder="未完成请说明原因，完成请写证据"></textarea></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
     <!-- Signature area (print only) -->
     <div style="margin-top:40px;display:none;" class="print-sig">
@@ -1107,34 +1211,54 @@ const PERSON_PROFILES = {
     compensationMode: "monthly_bonus",
     bonusBase: 500,
     bonusCurrency: "USD",
-    compensationNote: "Kori基础月度绩效奖金USD500。本模板改为月度KPI口径，按AP、AR、出纳、其他和综合评价每月评分；季度仅用于汇总趋势和晋升/成长复盘。AR阶段目标以4月止183条超账期为基准，7月≤100条、8月≤50条、9月≤20条；2025年历史款项催回效果明显者可在备注中记录额外加分。",
+    compensationNote: "Kori基础月度绩效奖金USD500。本模板按V1.0方案采用双轨制：月度KPI满分100分，用于当月执行质量和奖金核算；季度OKR用于季初设定成长目标、季末复盘完成率。2025年止历史欠款催回效果明显者，每回收一条额外+1分，不受100分上限约束。",
     detailedQuarters: ["Q3"],
     quarterTemplateNames: {
       Q3: "Kori Finance 月度KPI Q3考核表"
     },
+    bonusItems: [
+      { id:"B1", name:"2025年止历史欠款催回", quantity:0, pointsPerUnit:1, score:0, comment:"催款回收效果明显者，每回收一条额外+1分，不受100分上限约束。" }
+    ],
+    quarterlyOkrs: [
+      { id:"O1", objective:"AR应收款超账期条数显著下降，建立独立催收工作节奏", krs:[
+        { id:"KR1", name:"4月止183条超账期：7月止≤100条，8月止≤50条", target:"100条 / 50条", actual:"", completion:0, comment:"未完成请说明原因。" },
+        { id:"KR2", name:"5月业务超账期：7月止≤120条，8月止≤80条", target:"120条 / 80条", actual:"", completion:0, comment:"未完成请说明原因。" },
+        { id:"KR3", name:"每周按时发送应收款汇总表，无漏发", target:"13周全部发送", actual:"", completion:0, comment:"记录漏发次数及原因。" },
+        { id:"KR4", name:"异常账款识别及升级：季度内升级处理≥3个案例", target:"≥3个", actual:"", completion:0, comment:"列举实际升级案例。" }
+      ]},
+      { id:"O2", objective:"AP日常工作零差错，流程执行规范达标", krs:[
+        { id:"KR1", name:"付款零失误：季度内无未经审批付款、无付款错误", target:"0次失误", actual:"", completion:0, comment:"记录发生次数。" },
+        { id:"KR2", name:"报表按时提交：应收应付报表及资金预算表均按时提交", target:"0次延迟", actual:"", completion:0, comment:"记录延迟天数。" },
+        { id:"KR3", name:"车队对账：季度内所有账单15天内完成对账", target:"100%完成", actual:"", completion:0, comment:"记录未完成家数及原因。" }
+      ]},
+      { id:"O3", objective:"主动学习，每月输出可见的成长内容", krs:[
+        { id:"KR1", name:"每月提交1份自学总结或工作改进建议", target:"3份", actual:"", completion:0, comment:"可附文件链接。" },
+        { id:"KR2", name:"季度末能独立处理AR全流程，无需逐步指导", target:"可独立完成", actual:"", completion:0, comment:"由财务主管评定。" }
+      ]}
+    ],
     dimensions: [
-      { id:"AP", name:"AP对账", kpis:[
-        profileKpi("KR1","车队及报关行对账",10,"收到车队或报关行账单后15天内完成对账；未按时完成的结算单位，每未完成一家扣1分。若因业务前端原因未能及时确认费用，可在备注中说明并免扣。","全部按期完成且差异跟进清楚","主要账单按期完成","个别单位延期或证据不完整","多家未按时完成")
-      ]},
-      { id:"AR", name:"AR催收与报表", kpis:[
-        profileKpi("KR1","应收款催收",10,"每周定期发送应收款汇总表并跟进催收；按阶段目标追踪超账期条数：4月止183条7月≤100、8月≤50、9月≤20；5月业务7月≤120、8月≤80、9月≤30；6月业务8月≤100、9月≤50、10月≤20；7月业务9月≤80、10月≤30、11月≤10。","达到或优于阶段目标，并能说明重点客户进展","基本达到阶段目标，跟进记录完整","有跟进但下降不达预期","缺少催收动作或数据失控"),
-        profileKpi("KR2","应收应付报表及明细",10,"每月3日前提交应收应付报表及明细表，要求数据准确、格式统一，并反馈未收款情况；每延迟一天扣1分。","按期提交且数据准确可用","按期提交，少量修正","延迟或准确性一般","严重延迟或数据不可用")
-      ]},
-      { id:"TR", name:"出纳付款与账务安全", kpis:[
-        profileKpi("KR1","执行付款审批流程",10,"按审批流支付各类款项，做好付款事项核查，包括但不限于付款金额、发票、报销单据。发生1次未经审批同意而支付的款项扣5分，2次以上不得分。","审批链完整且能主动识别风险","按流程执行，资料基本齐全","偶有资料缺漏或需返工","未经审批付款或流程失控"),
-        profileKpi("KR2","保证付款准确及安全",10,"付款支付操作规范，保证资金安全。发生1次付款失误扣5分，2次以上不得分。","付款准确且能前置发现异常","付款规范，无重大差错","有轻微差错但及时纠正","出现重大付款风险"),
-        profileKpi("KR3","资金结报单录入",5,"每日系统录入资金结报单余额并完成审核，确保现金银行实际余额、系统录入和日记账余额一致。未及时录入每笔扣1分；BI系统账户差异每个扣1分。","每日及时录入且核对一致","主要记录及时准确","偶有延迟或小差异","多次缺录或差异未处理"),
-        profileKpi("KR4","日记账录入及付款核销",5,"当天发生的收支在次日中午前录入完成，审核科目合理性和余额一致性，并在次日下班前完成付款核销。主观原因晚录入或晚核销每笔扣1分。","录入和核销及时且科目准确","主要事项按期完成","偶有主观延迟","多次延期或核销缺失"),
-        profileKpi("KR5","档案保管与整理",5,"当月10日前归整上月财务支付凭证，包括付款申请单、发票、报销单据；未按时归整扣2分，档案保管不到位或资料缺失当月不得分。","资料完整、归档及时、可追溯","按期完成主要归档","偶有缺漏但能补齐","归档不到位或资料缺失"),
-        profileKpi("KR6","资金预算表及差异分析",10,"每月5日前提交资金预算表，资金预算差异分析次月15日提交；预算与实际差异需有合理、明确解释。预算表或差异分析每延迟一天扣1分，数据无逻辑或无合理解释扣2分。","按期提交且差异解释清楚","主要内容完整，解释基本合理","延迟或分析较浅","数据无逻辑或无法解释差异")
-      ]},
-      { id:"OT", name:"其他流程", kpis:[
-        profileKpi("KR1","提单寄送",5,"负责提单保管和寄送，并做好提单收寄台账登记。收到提单后因保管不善造成遗失，当月不得分；因快递原因发生遗失除外。","收寄台账完整且无遗失","寄送及时，记录基本完整","记录不够完整","保管不善造成风险"),
-        profileKpi("KR2","U8费用报销",5,"及时完成公司费用U8报销流程；如有未走报销流程先付款的，每发现一笔扣1分。","报销流程及时规范","主要费用按流程处理","偶有流程滞后","先付款后补流程较多")
-      ]},
-      { id:"GE", name:"制度与综合评价", kpis:[
+      { id:"FI", name:"制度执行", kpis:[
         profileKpi("KR1","遵循财务保密制度",5,"严格遵守财务制度，不随意泄露财务数据，做好财务资料、付款信息、客户账款和报表数据的保密工作。","全月无泄露风险，敏感资料管控到位","能遵守保密要求，无明显风险","偶有提醒后改正","发生泄露或严重保密风险"),
-        profileKpi("KR2","财务工作评价",10,"由财务主管对整体工作情况综合评价，结合月度复盘、异常提前报备、AP/AR学习进度和下一阶段目标确认。","主动成长，可进入下一阶段能力评估","工作稳定，学习进度符合预期","需要主管较多推动","不配合学习或连续低于要求")
+        profileKpi("KR2","执行付款审批流程",10,"按审批流支付各类款项，做好付款事项核查，包括但不限于付款金额、发票、报销单据。发生1次未经审批同意而支付的款项扣5分，2次以上不得分。","审批链完整且能主动识别风险","按流程执行，资料基本齐全","偶有资料缺漏或需返工","未经审批付款或流程失控")
+      ]},
+      { id:"AP", name:"日常工作(AP/出纳)", kpis:[
+        profileKpi("KR1","保证付款准确及安全",10,"付款支付操作规范，保证资金安全。发生1次付款失误扣5分，2次以上不得分。","付款准确且能前置发现异常","付款规范，无重大差错","有轻微差错但及时纠正","出现重大付款风险"),
+        profileKpi("KR2","资金结报单录入",5,"每日系统录入资金结报单余额并完成审核，确保现金银行实际余额、系统录入和日记账余额一致。未及时录入结报单每笔扣1分；BI系统日记账余额和资金结报单比对每发现一个账户差异扣1分。","每日及时录入且核对一致","主要记录及时准确","偶有延迟或小差异","多次缺录或差异未处理"),
+        profileKpi("KR3","日记账录入及付款核销",5,"当天发生的收支在次日中午前录入完成，审核科目合理性和日记账余额与实际余额一致性，并在次日下班前完成付款核销。主观原因晚录入或晚核销每笔扣1分。","录入和核销及时且科目准确","主要事项按期完成","偶有主观延迟","多次延期或核销缺失"),
+        profileKpi("KR4","车队及报关行对账",10,"收到车队或报关行账单后15天内完成对账；未按时完成的结算单位，每未完成一家扣1分。若因业务前端原因未能及时确认费用，可在备注中说明并免扣。","全部按期完成且差异跟进清楚","主要账单按期完成","个别单位延期或证据不完整","多家未按时完成"),
+        profileKpi("KR5","档案保管与整理",5,"当月10日前归整上月财务支付凭证，包括付款申请单、发票、报销单据；未按时归整扣2分，档案保管不到位或资料缺失当月不得分。","资料完整、归档及时、可追溯","按期完成主要归档","偶有缺漏但能补齐","归档不到位或资料缺失"),
+        profileKpi("KR6","提单寄送",5,"负责提单保管和寄送，并做好提单收寄台账登记。收到提单后因保管不善造成遗失，当月不得分；因快递原因发生遗失除外。","收寄台账完整且无遗失","寄送及时，记录基本完整","记录不够完整","保管不善造成风险"),
+        profileKpi("KR7","U8费用报销",5,"及时完成公司费用U8报销流程；如有未走报销流程先付款的，每发现一笔扣1分。","报销流程及时规范","主要费用按流程处理","偶有流程滞后","先付款后补流程较多")
+      ]},
+      { id:"AR", name:"日常工作(AR)", kpis:[
+        profileKpi("KR1","应收款催收",10,"每周定期发送应收款汇总表并跟进催收；按阶段目标追踪超账期条数：4月止183条7月≤100、8月≤50、9月≤20；5月业务7月≤120、8月≤80、9月≤30；6月业务8月≤100、9月≤50、10月≤20；7月业务9月≤80、10月≤30、11月≤10。","达到或优于阶段目标，并能说明重点客户进展","基本达到阶段目标，跟进记录完整","有跟进但下降不达预期","缺少催收动作或数据失控")
+      ]},
+      { id:"RP", name:"报表与分析", kpis:[
+        profileKpi("KR1","应收应付报表及明细",10,"每月3日前提交应收应付报表及明细表，要求数据准确、格式统一，并反馈未收款情况；每延迟一天扣1分。","按期提交且数据准确可用","按期提交，少量修正","延迟或准确性一般","严重延迟或数据不可用"),
+        profileKpi("KR2","资金预算表及差异分析",10,"每月5日前提交资金预算表，资金预算差异分析次月15日提交；预算与实际差异需有合理、明确解释。预算表或差异分析每延迟一天扣1分，数据无逻辑或无合理解释扣2分。","按期提交且差异解释清楚","主要内容完整，解释基本合理","延迟或分析较浅","数据无逻辑或无法解释差异")
+      ]},
+      { id:"GE", name:"综合评价", kpis:[
+        profileKpi("KR1","财务工作评价",10,"由财务主管对整体工作情况综合评价，结合月度复盘、异常提前报备、AP/AR学习进度和下一阶段目标确认。","主动成长，可进入下一阶段能力评估","工作稳定，学习进度符合预期","需要主管较多推动","不配合学习或连续低于要求")
       ]}
     ]
   },
@@ -1188,6 +1312,8 @@ function prepareQuarterProfileTemplates() {
       bonusBase: profile.bonusBase,
       bonusCurrency: profile.bonusCurrency,
       compensationNote: profile.compensationNote,
+      bonusItems: deepClone(profile.bonusItems || []),
+      quarterlyOkrs: deepClone(profile.quarterlyOkrs || []),
       dimensions: profile.dimensions,
       isPlaceholder: false
     };
@@ -1211,6 +1337,8 @@ function buildPlaceholderQuarterProfile(profile, quarter) {
     bonusBase: profile.bonusBase,
     bonusCurrency: profile.bonusCurrency,
     compensationNote: `${profile.name} ${quarter} OKR与薪酬口径已预留；当前暂沿用岗位方向，待上传${quarter}正式文件后更新为正式模板。${profile.compensationNote}`,
+    bonusItems: deepClone(profile.bonusItems || []),
+    quarterlyOkrs: [],
     isPlaceholder: true,
     dimensions: [
       { id:"O1", name:`${quarter}岗位核心目标（预留）`, kpis:[
@@ -1422,6 +1550,8 @@ createApp({
     const monthlyBonuses = ref(initial.monthlyBonuses);
     const gradeScale = ref(initial.gradeScale);
     const dimensions = ref(initial.dimensions);
+    const bonusItems = ref(normalizeBonusItems(initial.bonusItems));
+    const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
     const collapsedDims = ref({});
     const drawerOpen = ref(false);
     const okrExpanded = ref(false);
@@ -1481,8 +1611,114 @@ createApp({
       return 'var(--c-color)';
     }
 
-    const totalScore = computed(()=> dimensions.value.reduce((s,d)=>s+dimScore(d),0));
+    function normalizeBonusItems(items) {
+      return (Array.isArray(items) ? items : []).map((item, index)=>({
+        id: item.id || `B${index + 1}`,
+        name: item.name || '加分项',
+        quantity: Number(item.quantity) || 0,
+        pointsPerUnit: Number(item.pointsPerUnit ?? 1) || 1,
+        score: Number(item.score ?? ((Number(item.quantity)||0) * (Number(item.pointsPerUnit ?? 1)||1))) || 0,
+        comment: item.comment || ''
+      }));
+    }
+
+    function bonusItemScore(item) {
+      const manualScore = Number(item.score);
+      if(Number.isFinite(manualScore)) return Math.max(0, manualScore);
+      return Math.max(0, (Number(item.quantity)||0) * (Number(item.pointsPerUnit)||0));
+    }
+
+    function syncBonusItemScore(item) {
+      item.score = Math.max(0, (Number(item.quantity)||0) * (Number(item.pointsPerUnit)||0));
+    }
+
+    function addBonusItem() {
+      pushUndoSnapshot('添加加分项');
+      bonusItems.value.push({ id:`B${bonusItems.value.length + 1}`, name:'加分项', quantity:0, pointsPerUnit:1, score:0, comment:'' });
+    }
+
+    function removeBonusItem(index) {
+      pushUndoSnapshot('删除加分项');
+      bonusItems.value.splice(index, 1);
+    }
+
+    function normalizeQuarterlyOkrs(items) {
+      return (Array.isArray(items) ? items : []).map((objective, oi)=>({
+        id: objective.id || `O${oi + 1}`,
+        objective: objective.objective || objective.name || '季度目标',
+        krs: (Array.isArray(objective.krs) ? objective.krs : []).map((kr, ki)=>({
+          id: kr.id || `KR${ki + 1}`,
+          name: kr.name || '关键结果',
+          target: kr.target || '',
+          actual: kr.actual || '',
+          completion: Number(kr.completion)||0,
+          comment: kr.comment || ''
+        }))
+      }));
+    }
+
+    function setKpiScore(kpi) {
+      kpi.score = Math.max(0, Math.min(Number(kpi.weight)||0, Number(kpi.score)||0));
+      const matchingTier = (kpi.tiers || []).find(tier=>Number(tier.points) === Number(kpi.score));
+      kpi.selectedTier = matchingTier?.grade || null;
+    }
+
+    function setOkrCompletion(kr) {
+      kr.completion = Math.max(0, Math.min(100, Number(kr.completion)||0));
+    }
+
+    function mergeTemplateDimensionsPreservingProgress(existingDimensions, templateDimensions) {
+      const existingKpis = (Array.isArray(existingDimensions) ? existingDimensions : []).flatMap(dim=>dim.kpis || []);
+      const byName = new Map(existingKpis.map(kpi=>[kpi.name, kpi]));
+      return deepClone(templateDimensions || []).map(dim=>({
+        ...dim,
+        kpis: (dim.kpis || []).map(kpi=>{
+          const existing = byName.get(kpi.name);
+          if(!existing) return kpi;
+          return {
+            ...kpi,
+            selectedTier: existing.selectedTier || null,
+            score: Number(existing.score)||0,
+            comment: existing.comment || ''
+          };
+        })
+      }));
+    }
+
+    function mergeQuarterlyOkrsPreservingProgress(existingOkrs, templateOkrs) {
+      const existingKrs = (Array.isArray(existingOkrs) ? existingOkrs : []).flatMap(objective=>objective.krs || []);
+      const byName = new Map(existingKrs.map(kr=>[kr.name, kr]));
+      return deepClone(templateOkrs || []).map(objective=>({
+        ...objective,
+        krs: (objective.krs || []).map(kr=>{
+          const existing = byName.get(kr.name);
+          if(!existing) return kr;
+          return {
+            ...kr,
+            actual: existing.actual || '',
+            completion: Number(existing.completion)||0,
+            comment: existing.comment || kr.comment || ''
+          };
+        })
+      }));
+    }
+
+    function dimensionsMatchTemplate(existingDimensions, templateDimensions) {
+      const existingSignature = (existingDimensions || []).map(dim=>`${dim.id}:${dim.name}:${(dim.kpis || []).map(kpi=>kpi.name).join('|')}`).join('||');
+      const templateSignature = (templateDimensions || []).map(dim=>`${dim.id}:${dim.name}:${(dim.kpis || []).map(kpi=>kpi.name).join('|')}`).join('||');
+      return existingSignature === templateSignature;
+    }
+
+    const baseScore = computed(()=> dimensions.value.reduce((s,d)=>s+dimScore(d),0));
+    const bonusScoreTotal = computed(()=> bonusItems.value.reduce((sum,item)=>sum+bonusItemScore(item),0));
+    const totalScore = computed(()=> baseScore.value + bonusScoreTotal.value);
     const totalWeight = computed(()=> dimensions.value.reduce((s,d)=>s+dimWeight(d),0));
+    const scoreRingPercent = computed(()=> totalWeight.value ? Math.min(100, Math.max(0, totalScore.value / totalWeight.value * 100)) : 0);
+    const quarterlyOkrCompletion = computed(()=>{
+      const krs = quarterlyOkrs.value.flatMap(item=>item.krs || []);
+      if(!krs.length) return 0;
+      return Math.round(krs.reduce((sum,kr)=>sum+(Number(kr.completion)||0),0) / krs.length);
+    });
 
     const finalGrade = computed(()=>{
       const pct = totalWeight.value ? (totalScore.value / totalWeight.value * 100) : 0;
@@ -1557,17 +1793,17 @@ createApp({
       return okrExpanded.value ? '暂不填写季度OKR' : '填写季度OKR复盘';
     });
     const performanceScoreUsage = computed(()=> isMonthlyKpiTemplate.value
-      ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度仅用于趋势汇总和成长路径判断。'
+      ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
       : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。'
     );
     const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
-      ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表，季度只汇总趋势、成长路径和是否进入下一阶段。'
+      ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表；季度OKR用于成长目标复盘，不替代月度KPI。'
       : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。'
     );
     const workflowReviewTag = computed(()=> isMonthlyKpiTemplate.value ? '每月填写' : '季度末填写');
     const workflowReviewTitle = computed(()=> isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘');
     const workflowReviewCopy = computed(()=> isMonthlyKpiTemplate.value
-      ? '用于Kori当月正式评分，覆盖AP、AR、出纳、其他和综合评价；季度末只做趋势汇总，不另起一套OKR。'
+      ? '用于Kori当月正式评分，覆盖制度执行、AP/出纳、AR、报表分析和综合评价；季度OKR另行记录成长目标完成率。'
       : '用于季度总结、横向校准、个人发展追踪和下季度目标设定。平时可以不填，不作为月度奖金扣回依据。'
     );
     const showMonthlyBonusTable = computed(()=> !['no_monthly_bonus','quarterly_commission'].includes(compensationMode.value));
@@ -1698,6 +1934,8 @@ createApp({
       monthlyBonuses.value = data.monthlyBonuses;
       gradeScale.value = data.gradeScale || gradeScale.value;
       dimensions.value = data.dimensions || dimensions.value;
+      bonusItems.value = normalizeBonusItems(data.bonusItems);
+      quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
     }
 
     function undoLastAction() {
@@ -1775,9 +2013,11 @@ createApp({
       monthlyBonuses.value = data.monthlyBonuses;
       gradeScale.value = data.gradeScale || gradeScale.value;
       dimensions.value = data.dimensions || dimensions.value;
+      bonusItems.value = normalizeBonusItems(data.bonusItems);
+      quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       comparePeriod.value = meta.value.period;
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
-      okrExpanded.value = Boolean(record.okrFilledCount);
+      okrExpanded.value = isMonthlyKpiTemplate.value || Boolean(record.okrFilledCount);
       showToast('已载入员工记录');
     }
 
@@ -1855,9 +2095,15 @@ createApp({
     }
 
     function hasQuarterProgress(data) {
-      return (data.dimensions || [])
+      const hasKpiProgress = (data.dimensions || [])
         .flatMap(dim=>dim.kpis || [])
         .some(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim());
+      const hasBonusProgress = (data.bonusItems || [])
+        .some(item=>Number(item.quantity) || Number(item.score));
+      const hasQuarterlyOkrProgress = (data.quarterlyOkrs || [])
+        .flatMap(objective=>objective.krs || [])
+        .some(kr=>String(kr.actual || '').trim() || Number(kr.completion));
+      return hasKpiProgress || hasBonusProgress || hasQuarterlyOkrProgress;
     }
 
     function upgradeDataForProfileTemplate(data, profile, period) {
@@ -1867,6 +2113,7 @@ createApp({
       if(!template) return data;
       const matchesProfileTemplate = data.meta?.templateName === template.templateName;
       const canReplaceQuarterTemplate = !matchesProfileTemplate && !hasQuarterProgress(data);
+      const needsKoriV1Upgrade = profile.name === 'Kori' && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
       data.meta = {
         ...(data.meta || {}),
         employeeName: profile.name,
@@ -1874,7 +2121,7 @@ createApp({
         department: departmentForEmployee(profile.name)
       };
       data.department = departmentForEmployee(profile.name);
-      if(matchesProfileTemplate || canReplaceQuarterTemplate) {
+      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade) {
         data.meta.templateName = template.templateName;
         data.meta.templateVersion = `${quarterKeyFromPeriod(effectivePeriod)}-role${template.isPlaceholder ? '-placeholder' : ''}`;
         data.bonusBase = template.bonusBase;
@@ -1884,6 +2131,17 @@ createApp({
       }
       if(canReplaceQuarterTemplate) {
         data.dimensions = deepClone(template.dimensions);
+        data.bonusItems = deepClone(template.bonusItems || []);
+        data.quarterlyOkrs = deepClone(template.quarterlyOkrs || []);
+      } else if(needsKoriV1Upgrade) {
+        data.dimensions = mergeTemplateDimensionsPreservingProgress(data.dimensions, template.dimensions);
+        data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
+        data.quarterlyOkrs = (data.quarterlyOkrs && data.quarterlyOkrs.length)
+          ? mergeQuarterlyOkrsPreservingProgress(data.quarterlyOkrs, template.quarterlyOkrs || [])
+          : deepClone(template.quarterlyOkrs || []);
+      } else {
+        data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
+        data.quarterlyOkrs = normalizeQuarterlyOkrs((data.quarterlyOkrs && data.quarterlyOkrs.length) ? data.quarterlyOkrs : (template.quarterlyOkrs || []));
       }
       normalizeProfileMonthlyBonuses(data, profile, effectivePeriod);
       return data;
@@ -1913,6 +2171,8 @@ createApp({
       monthlyBonuses.value = data.monthlyBonuses || monthlyBonuses.value;
       gradeScale.value = data.gradeScale || gradeScale.value;
       dimensions.value = data.dimensions || dimensions.value;
+      bonusItems.value = normalizeBonusItems(data.bonusItems);
+      quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
     }
 
     function currentDepartment() {
@@ -2048,7 +2308,9 @@ createApp({
         compensationNote: template.compensationNote,
         monthlyBonuses: withTimQ1FixedBonuses(buildMonthlyBonuses(period, template.bonusBase), profile, period),
         gradeScale: deepClone(DEFAULT_TEMPLATE.gradeScale),
-        dimensions: deepClone(template.dimensions)
+        dimensions: deepClone(template.dimensions),
+        bonusItems: deepClone(template.bonusItems || []),
+        quarterlyOkrs: deepClone(template.quarterlyOkrs || [])
       };
     }
 
@@ -2063,6 +2325,8 @@ createApp({
       monthlyBonuses.value = data.monthlyBonuses;
       gradeScale.value = data.gradeScale;
       dimensions.value = data.dimensions;
+      bonusItems.value = normalizeBonusItems(data.bonusItems);
+      quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
@@ -2094,6 +2358,8 @@ createApp({
       bonusBase.value = DEFAULT_TEMPLATE.bonusBase;
       bonusCurrency.value = DEFAULT_TEMPLATE.bonusCurrency;
       monthlyBonuses.value = buildMonthlyBonuses(meta.value.period, bonusBase.value);
+      bonusItems.value = [];
+      quarterlyOkrs.value = [];
       dimensions.value = dimensions.value.map(dim=>({
         ...dim,
         kpis: dim.kpis.map(kpi=>({ ...kpi, selectedTier:null, score:0, comment:'' }))
@@ -2349,7 +2615,7 @@ createApp({
     let saveTimer = null;
     function getData() {
       const department = currentDepartment();
-      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:gradeScale.value, dimensions:dimensions.value };
+      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:gradeScale.value, dimensions:dimensions.value, bonusItems:bonusItems.value, quarterlyOkrs:quarterlyOkrs.value };
     }
     function autoSave() {
       clearTimeout(saveTimer);
@@ -2358,7 +2624,7 @@ createApp({
         saveTime.value = new Date().toLocaleTimeString('zh-CN');
       }, 2000);
     }
-    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions], autoSave, {deep:true});
+    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs], autoSave, {deep:true});
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
     });
@@ -2366,6 +2632,7 @@ createApp({
       normalizeCurrentProfileTemplate();
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentDepartment();
+      if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
       persistRecords();
       if(cloudEndpoint.value.trim()) syncCloudRecords(true);
@@ -2404,6 +2671,8 @@ createApp({
             monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || meta.value.period, data.bonusBase || bonusBase.value);
             gradeScale.value = data.gradeScale || gradeScale.value;
             dimensions.value = data.dimensions;
+            bonusItems.value = normalizeBonusItems(data.bonusItems);
+            quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
             showToast('导入成功');
           } else {
             showToast('文件格式不正确');
@@ -2445,9 +2714,11 @@ createApp({
       wsMonthly['!cols'] = [{wch:10},{wch:14},{wch:8},{wch:14},{wch:14},{wch:14},{wch:36}];
       XLSX.utils.book_append_sheet(wb, wsMonthly, '月度奖金');
 
-      // Sheet 2: Quarterly OKR results
+      // Sheet 2: Performance scoring results
+      const performanceSheetName = isMonthlyKpiTemplate.value ? '月度KPI' : '季度OKR';
+      const performanceTitle = isMonthlyKpiTemplate.value ? '月度KPI考核表' : '季度OKR考核表';
       const rows = [
-        [`${meta.value.templateName} 季度OKR考核表`],
+        [`${meta.value.templateName} ${performanceTitle}`],
         [`被考核人: ${meta.value.employeeName}`, `部门: ${currentDept}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`],
         [],
         ['目标','KR编号','关键结果','权重(分)','证据口径','完成档位','得分','完成说明/证据']
@@ -2457,18 +2728,53 @@ createApp({
           rows.push([dim.id+' '+dim.name, kpi.id, kpi.name, kpi.weight, kpi.target||'', kpi.selectedTier||'未评', kpi.score, kpi.comment||'']);
         }
       }
+      if(bonusItems.value.length) {
+        rows.push([]);
+        rows.push(['加分项','','项目','','计分口径','','加分','说明/证据']);
+        bonusItems.value.forEach(item=>{
+          rows.push([
+            '加分项',
+            item.id,
+            item.name,
+            '',
+            `数量 ${Number(item.quantity)||0} x 每项 ${Number(item.pointsPerUnit)||0}`,
+            '',
+            bonusItemScore(item),
+            item.comment || ''
+          ]);
+        });
+        rows.push(['基础分','','','','',' ',baseScore.value,'']);
+        rows.push(['加分合计','','','','',' ',bonusScoreTotal.value,'']);
+      }
       rows.push([]);
       rows.push(['合计','','','','',' ',totalScore.value,'']);
-      rows.push(['季度结果','','',finalGrade.value.grade+' - '+finalGrade.value.label]);
+      rows.push([isMonthlyKpiTemplate.value ? '月度KPI结果' : '季度结果','','',finalGrade.value.grade+' - '+finalGrade.value.label]);
       rows.push(['绩效系数','','',finalGrade.value.coefficient]);
-      rows.push(['结果用途','','','季度复盘、下季度目标校准、岗位模板优化']);
+      rows.push(['结果用途','','',isMonthlyKpiTemplate.value ? '当月奖金核算、月度复盘、季度趋势汇总' : '季度复盘、下季度目标校准、岗位模板优化']);
       const ws1 = XLSX.utils.aoa_to_sheet(rows);
       ws1['!cols'] = [{wch:14},{wch:8},{wch:28},{wch:8},{wch:30},{wch:8},{wch:6},{wch:20}];
-      XLSX.utils.book_append_sheet(wb, ws1, '季度OKR');
+      XLSX.utils.book_append_sheet(wb, ws1, performanceSheetName);
+
+      if(quarterlyOkrs.value.length) {
+        const okrRows = [
+          [`${meta.value.templateName} 季度OKR成长目标`],
+          [`被考核人: ${meta.value.employeeName}`, `部门: ${currentDept}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`, `平均完成率: ${quarterlyOkrCompletion.value}%`],
+          [],
+          ['目标','KR编号','关键结果','目标值','实际完成值','完成率','复盘说明']
+        ];
+        quarterlyOkrs.value.forEach(objective=>{
+          (objective.krs || []).forEach(kr=>{
+            okrRows.push([`${objective.id} ${objective.objective}`, kr.id, kr.name, kr.target || '', kr.actual || '', `${Number(kr.completion)||0}%`, kr.comment || '']);
+          });
+        });
+        const wsOkr = XLSX.utils.aoa_to_sheet(okrRows);
+        wsOkr['!cols'] = [{wch:24},{wch:8},{wch:34},{wch:18},{wch:18},{wch:10},{wch:28}];
+        XLSX.utils.book_append_sheet(wb, wsOkr, performanceSheetName === '季度OKR' ? '季度成长OKR' : '季度OKR');
+      }
 
       // Sheet 3: Scoring criteria
       const rows2 = [
-        ['OKR 完成档位说明'],
+        [`${performanceSheetName} 完成档位说明`],
         ['编号','关键结果','满分','S档','A档','B档','C档']
       ];
       for(const dim of dimensions.value) {
@@ -2489,7 +2795,7 @@ createApp({
       if(records.value.length) {
         const rows3 = [
           ['员工横向比较与纵向追踪记录库'],
-          ['员工','部门','期间','月度应发','月度实发','已评月份','季度OKR分数','季度等级','OKR状态','保存时间']
+          ['员工','部门','期间','月度应发','月度实发','已评月份','绩效分数','绩效等级','考核状态','保存时间']
         ];
         records.value.forEach(record=>{
           rows3.push([
@@ -2561,6 +2867,8 @@ createApp({
       data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || currentQuarterLabel());
       data.dimensions = data.dimensions || DEFAULT_TEMPLATE.dimensions;
+      data.bonusItems = normalizeBonusItems(data.bonusItems);
+      data.quarterlyOkrs = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       return data;
     }
 
@@ -2574,6 +2882,8 @@ createApp({
       const summary = summarizeEvaluationData(data);
       const showMonthly = !['no_monthly_bonus','quarterly_commission'].includes(data.compensationMode);
       const title = `${data.meta?.employeeName || '员工'}_${data.meta?.period || ''}_绩效考核`;
+      const isMonthlyKpiReport = /月度\s*KPI|KPI考核/i.test(data.meta?.templateName || '');
+      const performanceTitle = isMonthlyKpiReport ? '月度KPI' : '季度OKR';
       const monthlyHtml = showMonthly ? `
         <h2>月度奖金</h2>
         <table>
@@ -2590,7 +2900,7 @@ createApp({
               </tr>`).join('')}
           </tbody>
         </table>` : '';
-      const okrHtml = (data.dimensions || []).map(dim=>`
+      const performanceHtml = (data.dimensions || []).map(dim=>`
         <h3>${escapeHtml(dim.id)} ${escapeHtml(dim.name)}</h3>
         <table>
           <thead><tr><th>KR</th><th>关键结果</th><th>权重</th><th>证据口径</th><th>档位</th><th>得分</th><th>说明</th></tr></thead>
@@ -2607,6 +2917,39 @@ createApp({
               </tr>`).join('')}
           </tbody>
         </table>`).join('');
+      const bonusHtml = (data.bonusItems || []).length ? `
+        <h2>加分项</h2>
+        <table>
+          <thead><tr><th>项目</th><th>数量</th><th>每项分值</th><th>加分</th><th>说明/证据</th></tr></thead>
+          <tbody>
+            ${(data.bonusItems || []).map(item=>`
+              <tr>
+                <td>${escapeHtml(item.name || '')}</td>
+                <td>${escapeHtml(Number(item.quantity)||0)}</td>
+                <td>${escapeHtml(Number(item.pointsPerUnit)||0)}</td>
+                <td>${escapeHtml(bonusItemScore(item))}</td>
+                <td>${escapeHtml(item.comment || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : '';
+      const quarterlyOkrHtml = (data.quarterlyOkrs || []).length ? `
+        <h2>季度OKR成长目标</h2>
+        ${(data.quarterlyOkrs || []).map(objective=>`
+          <h3>${escapeHtml(objective.id)} ${escapeHtml(objective.objective || '')}</h3>
+          <table>
+            <thead><tr><th>KR</th><th>关键结果</th><th>目标值</th><th>实际完成值</th><th>完成率</th><th>复盘说明</th></tr></thead>
+            <tbody>
+              ${(objective.krs || []).map(kr=>`
+                <tr>
+                  <td>${escapeHtml(kr.id)}</td>
+                  <td>${escapeHtml(kr.name || '')}</td>
+                  <td>${escapeHtml(kr.target || '')}</td>
+                  <td>${escapeHtml(kr.actual || '')}</td>
+                  <td>${escapeHtml(Number(kr.completion)||0)}%</td>
+                  <td>${escapeHtml(kr.comment || '')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`).join('')}` : '';
       return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -2635,8 +2978,8 @@ createApp({
     <div><strong>考核人：</strong>${escapeHtml(data.meta?.evaluatorName || '')}</div>
     <div><strong>期间：</strong>${escapeHtml(data.meta?.period || '')}</div>
     <div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>
-    <div><strong>季度得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
-    <div><strong>季度等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
+    <div><strong>${escapeHtml(performanceTitle)}得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
+    <div><strong>等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
     <div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>
     <div><strong>月度实发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyPaidTotal}</div>
     <div><strong>保存时间：</strong>${escapeHtml(savedAt ? formatDateTime(savedAt) : new Date().toLocaleString('zh-CN'))}</div>
@@ -2644,11 +2987,16 @@ createApp({
   <div class="note">${escapeHtml(data.compensationNote || '')}</div>
   <div class="summary">
     <div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>
-    <div>OKR状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
+    <div>基础分：${summary.baseScore}/${summary.quarterWeight}</div>
+    <div>加分项：+${summary.bonusScoreTotal}</div>
+    <div>${escapeHtml(performanceTitle)}状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
+    ${(data.quarterlyOkrs || []).length ? `<div>季度OKR完成率：${summary.quarterlyOkrCompletion}%</div>` : ''}
   </div>
   ${monthlyHtml}
-  <h2>季度OKR</h2>
-  ${okrHtml}
+  <h2>${escapeHtml(performanceTitle)}</h2>
+  ${performanceHtml}
+  ${bonusHtml}
+  ${quarterlyOkrHtml}
 </body>
 </html>`;
     }
@@ -2667,6 +3015,8 @@ createApp({
       monthlyBonuses.value = fresh.monthlyBonuses;
       gradeScale.value = fresh.gradeScale;
       dimensions.value = fresh.dimensions;
+      bonusItems.value = normalizeBonusItems(fresh.bonusItems);
+      quarterlyOkrs.value = normalizeQuarterlyOkrs(fresh.quarterlyOkrs);
       localStorage.removeItem(STORAGE_KEY);
       showToast('已重置');
     }
@@ -2718,6 +3068,11 @@ createApp({
       const tpl = deepClone(getData());
       const profile = profileForEmployee(tpl.meta?.employeeName);
       tpl.dimensions.forEach(d=>d.kpis.forEach(k=>{ k.selectedTier=null; k.score=0; k.comment=''; }));
+      tpl.bonusItems = normalizeBonusItems(tpl.bonusItems).map(item=>({ ...item, quantity:0, score:0 }));
+      tpl.quarterlyOkrs = normalizeQuarterlyOkrs(tpl.quarterlyOkrs).map(objective=>({
+        ...objective,
+        krs: objective.krs.map(kr=>({ ...kr, actual:'', completion:0 }))
+      }));
       tpl.monthlyBonuses = withTimQ1FixedBonuses(buildMonthlyBonuses(tpl.meta.period, tpl.bonusBase), profile, tpl.meta.period);
       tpl.meta.employeeName = '';
       tpl.meta.evaluatorName = '';
@@ -2747,6 +3102,8 @@ createApp({
             monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(meta.value.period, bonusBase.value);
             gradeScale.value = data.gradeScale || gradeScale.value;
             dimensions.value = data.dimensions;
+            bonusItems.value = normalizeBonusItems(data.bonusItems);
+            quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
             showToast('模版导入成功');
             drawerOpen.value = false;
           } else {
@@ -2759,13 +3116,14 @@ createApp({
     }
 
     return {
-      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions,
+      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs,
       publicUrl, managerShareUrl, amyAdminUrl, cloudEndpoint, cloudStatus, isAdminMode, adminToolsOpen,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
-      totalScore, totalWeight, finalGrade, gradeColor, bonusAmount,
+      baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, quarterlyOkrCompletion,
+      finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
@@ -2779,6 +3137,7 @@ createApp({
       copyPublicLink, copyAmyAdminLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient, departmentClass,
+      bonusItemScore, syncBonusItemScore, addBonusItem, removeBonusItem, setKpiScore, setOkrCompletion,
       selectTier, toggleDim, showToast,
       exportJSON, triggerImport, importJSON,
       exportExcel, printPage, resetAll,
@@ -2837,6 +3196,8 @@ function buildRecordFromData(data) {
 function summarizeEvaluationData(data) {
   const gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
   const dimensions = data.dimensions || [];
+  const bonusItems = Array.isArray(data.bonusItems) ? data.bonusItems : [];
+  const quarterlyOkrs = Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [];
   const monthlyBonuses = data.monthlyBonuses || [];
   const currency = data.bonusCurrency || 'USD';
   const defaultBase = Number(data.bonusBase) || 0;
@@ -2845,23 +3206,40 @@ function summarizeEvaluationData(data) {
   const monthlyPaidTotal = monthlyBonuses.reduce((sum,row)=>sum + (Number(row.paid)||0), 0);
   const ratedMonthCount = monthlyBonuses.filter(row=>row.grade).length;
   const allKpis = dimensions.flatMap(dim=>dim.kpis || []);
-  const quarterScore = allKpis.reduce((sum,kpi)=>sum + (Number(kpi.score)||0), 0);
+  const baseScore = allKpis.reduce((sum,kpi)=>sum + (Number(kpi.score)||0), 0);
+  const bonusScoreTotal = bonusItems.reduce((sum,item)=>{
+    const manualScore = Number(item.score);
+    if(Number.isFinite(manualScore)) return sum + Math.max(0, manualScore);
+    return sum + Math.max(0, (Number(item.quantity)||0) * (Number(item.pointsPerUnit)||0));
+  }, 0);
+  const quarterScore = baseScore + bonusScoreTotal;
   const quarterWeight = allKpis.reduce((sum,kpi)=>sum + (Number(kpi.weight)||0), 0);
   const pct = quarterWeight ? quarterScore / quarterWeight * 100 : 0;
   const sorted = [...gradeScale].sort((a,b)=>b.minScore - a.minScore);
   const quarterGrade = (sorted.find(item=>pct >= item.minScore) || sorted[sorted.length - 1] || {}).grade || 'C';
-  const okrFilledCount = allKpis.filter(kpi=>kpi.selectedTier).length;
-  const developmentNote = allKpis.map(kpi=>String(kpi.comment || '').trim()).filter(Boolean).join('；').slice(0, 80);
+  const okrFilledCount = allKpis.filter(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim()).length;
+  const quarterlyKrs = quarterlyOkrs.flatMap(objective=>objective.krs || []);
+  const quarterlyOkrCompletion = quarterlyKrs.length
+    ? Math.round(quarterlyKrs.reduce((sum,kr)=>sum+(Number(kr.completion)||0),0) / quarterlyKrs.length)
+    : 0;
+  const developmentNote = [
+    ...allKpis.map(kpi=>String(kpi.comment || '').trim()),
+    ...bonusItems.map(item=>String(item.comment || '').trim()),
+    ...quarterlyKrs.map(kr=>String(kr.actual || kr.comment || '').trim())
+  ].filter(Boolean).join('；').slice(0, 80);
   return {
     currency,
     monthlyDueTotal,
     monthlyPaidTotal,
     ratedMonthCount,
     monthCount: monthlyBonuses.length,
+    baseScore,
+    bonusScoreTotal,
     quarterScore,
     quarterWeight,
     quarterGrade,
     okrFilledCount,
+    quarterlyOkrCompletion,
     developmentNote
   };
 }
