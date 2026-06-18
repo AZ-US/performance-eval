@@ -49,6 +49,8 @@ body {
 .admin-toolbar-title { font-size:13px; font-weight:800; color:var(--text-light); }
 .admin-toolbar-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 .admin-cloud-row { width:100%; margin-bottom:0 !important; }
+.viewer-scope-bar { margin-top:12px; padding:9px 12px; border-radius:10px; background:#FFFBEB; color:#92400E; font-size:13px; font-weight:800; border:1px solid #FDE68A; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.viewer-scope-bar span { color:#78350F; }
 .btn { border:none; border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
 .btn:disabled { opacity:0.45; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
 .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
@@ -387,6 +389,7 @@ body {
       <div class="admin-toolbar-actions">
         <button class="btn btn-outline" @click="copyPublicLink">复制总经理链接</button>
         <button class="btn btn-outline" @click="copyAmyAdminLink">复制Amy链接</button>
+        <button class="btn btn-outline" @click="copyAgnesFinanceLink">复制Agnes财务链接</button>
         <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
         <button class="btn btn-outline" @click="exportJSON">JSON</button>
         <button class="btn btn-outline" @click="exportExcel">Excel</button>
@@ -401,6 +404,9 @@ body {
         <button class="btn btn-outline" @click="saveCloudEndpoint">保存地址</button>
         <span>{{cloudStatus}}</span>
       </div>
+    </div>
+    <div class="viewer-scope-bar" v-if="isScopedViewer">
+      当前查看身份：<span>{{viewerScopeLabel}}</span>，页面仅显示该部门人员和记录。
     </div>
   </header>
 
@@ -440,7 +446,7 @@ body {
           <div class="section-subtitle">点击下方员工姓名即可切换；新增员工用于开始填写新人员。</div>
         </div>
         <div class="quick-nav-actions">
-          <button class="btn btn-outline" @click="startNewEmployee">新增员工</button>
+          <button class="btn btn-outline" v-if="!isScopedViewer || isAdminMode" @click="startNewEmployee">新增员工</button>
         </div>
       </div>
       <div class="quick-employee-list" v-if="quickEmployeeCards.length">
@@ -1503,6 +1509,15 @@ function departmentKey(department) {
   return 'import';
 }
 
+function scopeKeyFromParam(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if(['all', '全部', '全部部门', 'all departments'].includes(text)) return 'all';
+  if(['export', 'export dept', 'export department', '出口', '出口部'].includes(text)) return 'export';
+  if(['import', 'import dept', 'import department', '进口', '进口部'].includes(text)) return 'import';
+  if(['finance', 'finance dept', 'finance department', '财务', '财务部'].includes(text)) return 'finance';
+  return 'all';
+}
+
 function departmentLabel(department) {
   return DEPARTMENT_LABELS[departmentKey(department)] || DEPARTMENT_LABELS.import;
 }
@@ -1572,6 +1587,14 @@ createApp({
     const urlParams = new URLSearchParams(window.location.search);
     const isAdminMode = ref(urlParams.get('admin') === '1');
     const adminToolsOpen = ref(isAdminMode.value);
+    const viewerName = (urlParams.get('viewer') || '').trim();
+    const viewerScopeDefaults = { agnes:'finance', damon:'all', amy:'all' };
+    const viewerScopeKey = scopeKeyFromParam(urlParams.get('dept') || urlParams.get('scope') || viewerScopeDefaults[viewerName.toLowerCase()] || 'all');
+    const isScopedViewer = computed(()=>viewerScopeKey !== 'all');
+    const viewerScopeLabel = computed(()=>{
+      const scopeLabel = viewerScopeKey === 'all' ? '全部部门' : (DEPARTMENT_LABELS[viewerScopeKey] || '指定部门');
+      return viewerName ? `${viewerName} · ${scopeLabel}` : scopeLabel;
+    });
     const urlCloudEndpoint = (urlParams.get('cloud') || '').trim();
     const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
     const ignoredSavedCloudEndpoint = savedCloudEndpoint.includes('TEST_DEPLOYMENT');
@@ -1586,8 +1609,17 @@ createApp({
       if(includeAdmin) url.searchParams.set('admin', '1');
       return url.toString();
     }
+    function buildScopedSharedUrl(viewer, dept) {
+      const endpoint = cloudEndpoint.value.trim();
+      const url = new URL(publicUrl);
+      if(endpoint) url.searchParams.set('cloud', endpoint);
+      url.searchParams.set('viewer', viewer);
+      url.searchParams.set('dept', dept);
+      return url.toString();
+    }
     const managerShareUrl = computed(()=>buildSharedUrl(false));
     const amyAdminUrl = computed(()=>buildSharedUrl(true));
+    const agnesFinanceUrl = computed(()=>buildScopedSharedUrl('Agnes', 'finance'));
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -1755,18 +1787,26 @@ createApp({
     const monthlyDueTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+monthlyDue(row), 0));
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
-    const profileNames = computed(()=> Object.values(PERSON_PROFILES).map(profile=>profile.name));
+    function viewerCanAccessEmployee(name, data = {}) {
+      if(!isScopedViewer.value) return true;
+      return departmentKey(departmentForEmployee(name, data)) === viewerScopeKey;
+    }
+    function viewerCanAccessRecord(record) {
+      return Boolean(record && viewerCanAccessEmployee(record.employeeName, record.data));
+    }
+    const visibleRecords = computed(()=> records.value.filter(record=>viewerCanAccessRecord(record)));
+    const profileNames = computed(()=> Object.values(PERSON_PROFILES).map(profile=>profile.name).filter(name=>viewerCanAccessEmployee(name)));
     const employeeNames = computed(()=> [...new Set([
       ...profileNames.value.filter(name=>!isHiddenEmployeeName(name)),
-      ...records.value.map(record=>record.employeeName).filter(name=>name && !isHiddenEmployeeName(name))
+      ...visibleRecords.value.map(record=>record.employeeName).filter(name=>name && !isHiddenEmployeeName(name))
     ])].sort((a,b)=>a.localeCompare(b, 'zh-CN')));
-    const departmentCount = computed(()=> new Set(records.value.map(record=>record.department || departmentForEmployee(record.employeeName, record.data)).filter(Boolean)).size);
-    const comparisonRecords = computed(()=> records.value
+    const departmentCount = computed(()=> new Set(visibleRecords.value.map(record=>record.department || departmentForEmployee(record.employeeName, record.data)).filter(Boolean)).size);
+    const comparisonRecords = computed(()=> visibleRecords.value
       .filter(record=>record.period === comparePeriod.value && !isHiddenEmployeeName(record.employeeName))
       .sort((a,b)=> b.monthlyPaidTotal - a.monthlyPaidTotal || b.quarterScore - a.quarterScore || a.employeeName.localeCompare(b.employeeName, 'zh-CN'))
     );
     const timelineRecords = computed(()=> selectedEmployee.value
-      ? records.value.filter(record=>record.employeeName === selectedEmployee.value && !isHiddenEmployeeName(record.employeeName)).sort((a,b)=>a.period.localeCompare(b.period))
+      ? visibleRecords.value.filter(record=>record.employeeName === selectedEmployee.value && !isHiddenEmployeeName(record.employeeName)).sort((a,b)=>a.period.localeCompare(b.period))
       : []
     );
     const quickEmployeeCards = computed(()=> employeeNames.value.map(name=>{
@@ -1778,7 +1818,7 @@ createApp({
         ...card,
         department,
         departmentClass: departmentClass(department),
-        savedRecordCount: records.value.filter(item=>item.employeeName === name).length
+        savedRecordCount: visibleRecords.value.filter(item=>item.employeeName === name).length
       };
     }).filter(Boolean));
     const canUndo = computed(()=>undoStack.value.length > 0);
@@ -1964,7 +2004,10 @@ createApp({
       const list = Array.isArray(incoming) ? incoming : [];
       const rules = list.filter(isEmployeeRuleRecord);
       if(rules.length) applyEmployeeRules(rules);
-      records.value = normalizeRecordList([...(records.value || []), ...list.filter(record=>!isEmployeeRuleRecord(record))]);
+      const incomingRecords = list
+        .filter(record=>!isEmployeeRuleRecord(record))
+        .filter(record=>!isScopedViewer.value || viewerCanAccessRecord(record));
+      records.value = normalizeRecordList([...(records.value || []), ...incomingRecords]);
       persistRecords();
     }
 
@@ -1981,6 +2024,10 @@ createApp({
       const data = deepClone(getData());
       upgradeDataForProfileTemplate(data, profileForEmployee(employeeName), data.meta?.period);
       const record = buildRecordFromData(data);
+      if(!viewerCanAccessRecord(record)) {
+        showToast(`${viewerScopeLabel.value} 无权保存该员工`);
+        return false;
+      }
       const idx = records.value.findIndex(item=>item.employeeName === record.employeeName && item.period === record.period);
       if(idx >= 0) {
         records.value.splice(idx, 1, record);
@@ -1996,6 +2043,10 @@ createApp({
     }
 
     function loadRecord(record) {
+      if(!viewerCanAccessRecord(record)) {
+        showToast(`${viewerScopeLabel.value} 无权查看该员工`);
+        return;
+      }
       pushUndoSnapshot(`载入 ${record.employeeName}`);
       const data = deepClone(record.data);
       const profile = profileForEmployee(record.employeeName);
@@ -2022,7 +2073,7 @@ createApp({
     }
 
     function latestRecordForEmployee(name) {
-      return records.value
+      return visibleRecords.value
         .filter(record=>record.employeeName === name)
         .sort((a,b)=>b.period.localeCompare(a.period) || new Date(b.savedAt) - new Date(a.savedAt))[0] || null;
     }
@@ -2333,8 +2384,43 @@ createApp({
       showToast(`已载入 ${profile.name} 的OKR模版`);
     }
 
+    function applyProfileWithoutUndo(profile) {
+      const data = buildProfileData(profile);
+      meta.value = data.meta;
+      bonusBase.value = data.bonusBase;
+      bonusCurrency.value = data.bonusCurrency;
+      compensationMode.value = data.compensationMode;
+      compensationNote.value = data.compensationNote;
+      monthlyBonuses.value = data.monthlyBonuses;
+      gradeScale.value = data.gradeScale;
+      dimensions.value = data.dimensions;
+      bonusItems.value = normalizeBonusItems(data.bonusItems);
+      quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      selectedEmployee.value = profile.name;
+      quickEmployeeSelect.value = profile.name;
+      okrExpanded.value = true;
+    }
+
+    function enforceViewerScopeOnCurrentDraft() {
+      if(!isScopedViewer.value) return;
+      if(viewerCanAccessEmployee(meta.value.employeeName, { meta:meta.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value })) return;
+      const firstName = employeeNames.value[0] || profileNames.value[0];
+      const profile = profileForEmployee(firstName);
+      if(profile) {
+        applyProfileWithoutUndo(profile);
+      } else {
+        meta.value = { ...meta.value, employeeName:'' };
+        selectedEmployee.value = '';
+        quickEmployeeSelect.value = '';
+      }
+    }
+
     function quickOpenEmployee(name) {
       if(!name) return;
+      if(!viewerCanAccessEmployee(name)) {
+        showToast(`${viewerScopeLabel.value} 无权查看该员工`);
+        return;
+      }
       const record = latestRecordForEmployee(name);
       quickEmployeeSelect.value = name;
       const profile = profileForEmployee(name);
@@ -2442,7 +2528,7 @@ createApp({
     }
 
     function exportRecordLibrary() {
-      const payload = { version:1, exportedAt:new Date().toISOString(), records:records.value };
+      const payload = { version:1, exportedAt:new Date().toISOString(), records:isScopedViewer.value ? visibleRecords.value : records.value };
       const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -2548,6 +2634,16 @@ createApp({
       }
     }
 
+    async function copyAgnesFinanceLink() {
+      const link = agnesFinanceUrl.value;
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Agnes财务链接已复制');
+      } catch {
+        window.prompt('复制这个链接发给Agnes', link);
+      }
+    }
+
     function exportSubmissionPackage() {
       if((meta.value.employeeName || '').trim()) saveCurrentRecord();
       if(!records.value.length) {
@@ -2634,6 +2730,7 @@ createApp({
       normalizeCurrentDepartment();
       if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
+      enforceViewerScopeOnCurrentDraft();
       persistRecords();
       if(cloudEndpoint.value.trim()) syncCloudRecords(true);
     });
@@ -2792,12 +2889,12 @@ createApp({
       ws2['!cols'] = [{wch:6},{wch:28},{wch:6},{wch:22},{wch:22},{wch:22},{wch:22}];
       XLSX.utils.book_append_sheet(wb, ws2, '评分标准');
 
-      if(records.value.length) {
+      if(visibleRecords.value.length) {
         const rows3 = [
           ['员工横向比较与纵向追踪记录库'],
           ['员工','部门','期间','月度应发','月度实发','已评月份','绩效分数','绩效等级','考核状态','保存时间']
         ];
-        records.value.forEach(record=>{
+        visibleRecords.value.forEach(record=>{
           rows3.push([
             record.employeeName,
             record.department || departmentForEmployee(record.employeeName, record.data),
@@ -2822,6 +2919,10 @@ createApp({
     }
 
     function exportEmployeePdf(name) {
+      if(!viewerCanAccessEmployee(name)) {
+        showToast(`${viewerScopeLabel.value} 无权导出该员工`);
+        return;
+      }
       const record = latestRecordForEmployee(name);
       const profile = profileForEmployee(name);
       let data;
@@ -3117,7 +3218,8 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs,
-      publicUrl, managerShareUrl, amyAdminUrl, cloudEndpoint, cloudStatus, isAdminMode, adminToolsOpen,
+      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, cloudEndpoint, cloudStatus,
+      isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible, canUndo,
@@ -3134,7 +3236,7 @@ createApp({
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
-      copyPublicLink, copyAmyAdminLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
+      copyPublicLink, copyAmyAdminLink, copyAgnesFinanceLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient, departmentClass,
       bonusItemScore, syncBonusItemScore, addBonusItem, removeBonusItem, setKpiScore, setOkrCompletion,
