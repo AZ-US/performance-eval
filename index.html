@@ -846,8 +846,16 @@ body {
       </div>
     </section>
 
+    <section class="okr-panel-card" v-if="quarterlyOkrs.length">
+      <div>
+        <div class="section-title">季度OKR复盘</div>
+        <div class="okr-panel-note">{{quarterlyOkrPanelNote}}</div>
+      </div>
+      <button class="btn btn-primary" @click="quarterlyOkrExpanded=!quarterlyOkrExpanded">{{quarterlyOkrToggleLabel}}</button>
+    </section>
+
     <!-- Quarterly OKR -->
-    <section class="records-card quarterly-okr-card" v-if="quarterlyOkrs.length && okrExpanded">
+    <section class="records-card quarterly-okr-card" v-if="quarterlyOkrs.length && quarterlyOkrExpanded">
       <div class="section-title-row">
         <div>
           <div class="section-title">季度OKR</div>
@@ -976,7 +984,7 @@ const DEFAULT_TEMPLATE = {
   gradeScale: [
     { grade:"S", label:"高度达成 Stretch Achieved", minScore:90, maxScore:100, coefficient:1.2 },
     { grade:"A", label:"达成 Achieved", minScore:75, maxScore:89, coefficient:1.0 },
-    { grade:"B", label:"部分达成 Partially Achieved", minScore:60, maxScore:74, coefficient:0.7 },
+    { grade:"B", label:"部分达成 Partially Achieved", minScore:60, maxScore:74, coefficient:0.8 },
     { grade:"C", label:"未达成 Not Achieved", minScore:0, maxScore:59, coefficient:0.0 }
   ],
   dimensions: [
@@ -1292,7 +1300,7 @@ const PERSON_PROFILES = {
     compensationMode: "monthly_accelerator",
     bonusBase: 1000,
     bonusCurrency: "USD",
-    compensationNote: "Tim原月度固定1000；Q2建议试行“1000月度基准 x 等级系数”的加成模式。S=1.2，A=1.0，B=0.7，C=0；特殊突破可在备注中说明加成依据。",
+    compensationNote: "Tim原月度固定1000；Q2建议试行“1000月度基准 x 等级系数”的加成模式。S=1.2，A=1.0，B=0.8，C=0；特殊突破可在备注中说明加成依据。",
     dimensions: [
       { id:"O1", name:"订舱结构与稳定性", kpis:[
         profileKpi("KR1","Q2订舱量达到Q1的≥140%",12,"从有量转向结构健康、可持续，按Q1基准比较。","≥150%且稳定","达到≥140%","接近目标但不稳定","明显低于目标"),
@@ -1415,6 +1423,10 @@ function buildMonthlyBonuses(period, base) {
 }
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+function normalizeGradeScale(scale) {
+  const source = Array.isArray(scale) ? scale : DEFAULT_TEMPLATE.gradeScale;
+  return source.map(item => item.grade === 'B' ? { ...item, coefficient:0.8 } : item);
+}
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1572,13 +1584,14 @@ createApp({
     const compensationMode = ref(initial.compensationMode || DEFAULT_TEMPLATE.compensationMode);
     const compensationNote = ref(initial.compensationNote || DEFAULT_TEMPLATE.compensationNote);
     const monthlyBonuses = ref(initial.monthlyBonuses);
-    const gradeScale = ref(initial.gradeScale);
+    const gradeScale = ref(normalizeGradeScale(initial.gradeScale));
     const dimensions = ref(initial.dimensions);
     const bonusItems = ref(normalizeBonusItems(initial.bonusItems));
     const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
     const collapsedDims = ref({});
     const drawerOpen = ref(false);
     const okrExpanded = ref(false);
+    const quarterlyOkrExpanded = ref(false);
     const saveTime = ref('');
     const toastMsg = ref('');
     const toastVisible = ref(false);
@@ -1698,6 +1711,12 @@ createApp({
       }));
     }
 
+    function hasQuarterlyOkrInput(items) {
+      return (Array.isArray(items) ? items : [])
+        .flatMap(objective=>objective.krs || [])
+        .some(kr=>String(kr.actual || '').trim() || Number(kr.completion));
+    }
+
     function setKpiScore(kpi) {
       kpi.score = Math.max(0, Math.min(Number(kpi.weight)||0, Number(kpi.score)||0));
       const matchingTier = (kpi.tiers || []).find(tier=>Number(tier.points) === Number(kpi.score));
@@ -1760,10 +1779,16 @@ createApp({
       if(!krs.length) return 0;
       return Math.round(krs.reduce((sum,kr)=>sum+(Number(kr.completion)||0),0) / krs.length);
     });
+    const quarterlyOkrHasProgress = computed(()=>hasQuarterlyOkrInput(quarterlyOkrs.value));
+    const quarterlyOkrPanelNote = computed(()=> quarterlyOkrExpanded.value
+      ? '当前正在填写季度OKR成长目标复盘。该模块独立于月度KPI，不参与月度奖金计算。'
+      : '季度OKR用于季末复盘成长目标；平时可收起，不影响月度KPI评分和奖金发放。'
+    );
+    const quarterlyOkrToggleLabel = computed(()=> quarterlyOkrExpanded.value ? '收起季度OKR' : '填写季度OKR复盘');
 
     const finalGrade = computed(()=>{
       const pct = totalWeight.value ? (totalScore.value / totalWeight.value * 100) : 0;
-      const sorted = [...gradeScale.value].sort((a,b)=>b.minScore - a.minScore);
+      const sorted = [...normalizeGradeScale(gradeScale.value)].sort((a,b)=>b.minScore - a.minScore);
       for(const g of sorted) {
         if(pct >= g.minScore) return g;
       }
@@ -1781,7 +1806,7 @@ createApp({
     const bonusAmount = computed(()=> Math.round(bonusBase.value * finalGrade.value.coefficient));
 
     function gradeConfig(grade) {
-      return gradeScale.value.find(g=>g.grade===grade) || null;
+      return normalizeGradeScale(gradeScale.value).find(g=>g.grade===grade) || null;
     }
 
     function monthlyCoefficient(row) {
@@ -1973,7 +1998,8 @@ createApp({
         comparePeriod: comparePeriod.value,
         selectedEmployee: selectedEmployee.value,
         quickEmployeeSelect: quickEmployeeSelect.value,
-        okrExpanded: okrExpanded.value
+        okrExpanded: okrExpanded.value,
+        quarterlyOkrExpanded: quarterlyOkrExpanded.value
       });
       if(undoStack.value.length > 20) undoStack.value.pop();
     }
@@ -1987,10 +2013,11 @@ createApp({
       compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
       compensationNote.value = data.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       monthlyBonuses.value = data.monthlyBonuses;
-      gradeScale.value = data.gradeScale || gradeScale.value;
+      gradeScale.value = normalizeGradeScale(data.gradeScale || gradeScale.value);
       dimensions.value = data.dimensions || dimensions.value;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
     }
 
     function undoLastAction() {
@@ -2007,6 +2034,7 @@ createApp({
       selectedEmployee.value = snapshot.selectedEmployee;
       quickEmployeeSelect.value = snapshot.quickEmployeeSelect;
       okrExpanded.value = snapshot.okrExpanded;
+      quarterlyOkrExpanded.value = snapshot.quarterlyOkrExpanded || false;
       persistRecords();
       persistEmployeeRenameMap();
       persistEmployeeHiddenNames();
@@ -2077,13 +2105,15 @@ createApp({
       compensationMode.value = data.compensationMode || profileTemplate?.compensationMode || DEFAULT_TEMPLATE.compensationMode;
       compensationNote.value = data.compensationNote || profileTemplate?.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       monthlyBonuses.value = data.monthlyBonuses;
-      gradeScale.value = data.gradeScale || gradeScale.value;
+      gradeScale.value = normalizeGradeScale(data.gradeScale || gradeScale.value);
       dimensions.value = data.dimensions || dimensions.value;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
       comparePeriod.value = meta.value.period;
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
       okrExpanded.value = isMonthlyKpiTemplate.value || Boolean(record.okrFilledCount);
+      quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
       showToast('已载入员工记录');
     }
 
@@ -2235,7 +2265,7 @@ createApp({
       compensationMode.value = data.compensationMode || compensationMode.value;
       compensationNote.value = data.compensationNote || compensationNote.value;
       monthlyBonuses.value = data.monthlyBonuses || monthlyBonuses.value;
-      gradeScale.value = data.gradeScale || gradeScale.value;
+      gradeScale.value = normalizeGradeScale(data.gradeScale || gradeScale.value);
       dimensions.value = data.dimensions || dimensions.value;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
@@ -2373,7 +2403,7 @@ createApp({
         compensationMode: template.compensationMode,
         compensationNote: template.compensationNote,
         monthlyBonuses: withTimQ1FixedBonuses(buildMonthlyBonuses(period, template.bonusBase), profile, period),
-        gradeScale: deepClone(DEFAULT_TEMPLATE.gradeScale),
+        gradeScale: normalizeGradeScale(DEFAULT_TEMPLATE.gradeScale),
         dimensions: deepClone(template.dimensions),
         bonusItems: deepClone(template.bonusItems || []),
         quarterlyOkrs: deepClone(template.quarterlyOkrs || [])
@@ -2389,13 +2419,14 @@ createApp({
       compensationMode.value = data.compensationMode;
       compensationNote.value = data.compensationNote;
       monthlyBonuses.value = data.monthlyBonuses;
-      gradeScale.value = data.gradeScale;
+      gradeScale.value = normalizeGradeScale(data.gradeScale);
       dimensions.value = data.dimensions;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
+      quarterlyOkrExpanded.value = false;
       showToast(`已载入 ${profile.name} 的OKR模版`);
     }
 
@@ -2407,13 +2438,14 @@ createApp({
       compensationMode.value = data.compensationMode;
       compensationNote.value = data.compensationNote;
       monthlyBonuses.value = data.monthlyBonuses;
-      gradeScale.value = data.gradeScale;
+      gradeScale.value = normalizeGradeScale(data.gradeScale);
       dimensions.value = data.dimensions;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
+      quarterlyOkrExpanded.value = false;
     }
 
     function enforceViewerScopeOnCurrentDraft() {
@@ -2470,6 +2502,7 @@ createApp({
       selectedEmployee.value = '';
       quickEmployeeSelect.value = '';
       okrExpanded.value = false;
+      quarterlyOkrExpanded.value = false;
       showToast('已准备新增员工');
       setTimeout(()=>{
         document.querySelector('.app-header')?.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -2728,7 +2761,7 @@ createApp({
     let saveTimer = null;
     function getData() {
       const department = currentDepartment();
-      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:gradeScale.value, dimensions:dimensions.value, bonusItems:bonusItems.value, quarterlyOkrs:quarterlyOkrs.value };
+      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, quarterlyOkrs:quarterlyOkrs.value };
     }
     function autoSave() {
       clearTimeout(saveTimer);
@@ -2746,6 +2779,7 @@ createApp({
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentDepartment();
       if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
+      if(hasQuarterlyOkrInput(quarterlyOkrs.value)) quarterlyOkrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
       enforceViewerScopeOnCurrentDraft();
       persistRecords();
@@ -2783,10 +2817,11 @@ createApp({
             compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
             compensationNote.value = data.compensationNote || DEFAULT_TEMPLATE.compensationNote;
             monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || meta.value.period, data.bonusBase || bonusBase.value);
-            gradeScale.value = data.gradeScale || gradeScale.value;
+            gradeScale.value = normalizeGradeScale(data.gradeScale || gradeScale.value);
             dimensions.value = data.dimensions;
             bonusItems.value = normalizeBonusItems(data.bonusItems);
             quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+            quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
             showToast('导入成功');
           } else {
             showToast('文件格式不正确');
@@ -2981,7 +3016,7 @@ createApp({
       data.compensationNote = data.compensationNote || profileTemplate?.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       data.department = departmentForEmployee(data.meta?.employeeName || employeeName, data);
       data.meta = { ...(data.meta || {}), department:data.department };
-      data.gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
+      data.gradeScale = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale);
       data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || currentQuarterLabel());
       data.dimensions = Array.isArray(data.dimensions) ? data.dimensions : [];
@@ -2991,7 +3026,7 @@ createApp({
     }
 
     function reportMonthlyDue(row, data) {
-      const grade = (data.gradeScale || DEFAULT_TEMPLATE.gradeScale).find(item=>item.grade === row.grade);
+      const grade = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale).find(item=>item.grade === row.grade);
       const base = Number(row.base ?? data.bonusBase) || 0;
       return Math.round(base * (grade?.coefficient || 0));
     }
@@ -3131,10 +3166,11 @@ createApp({
       compensationMode.value = fresh.compensationMode;
       compensationNote.value = fresh.compensationNote;
       monthlyBonuses.value = fresh.monthlyBonuses;
-      gradeScale.value = fresh.gradeScale;
+      gradeScale.value = normalizeGradeScale(fresh.gradeScale);
       dimensions.value = fresh.dimensions;
       bonusItems.value = normalizeBonusItems(fresh.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(fresh.quarterlyOkrs);
+      quarterlyOkrExpanded.value = false;
       localStorage.removeItem(STORAGE_KEY);
       showToast('已重置');
     }
@@ -3218,10 +3254,11 @@ createApp({
             compensationMode.value = data.compensationMode || compensationMode.value;
             compensationNote.value = data.compensationNote || compensationNote.value;
             monthlyBonuses.value = data.monthlyBonuses || buildMonthlyBonuses(meta.value.period, bonusBase.value);
-            gradeScale.value = data.gradeScale || gradeScale.value;
+            gradeScale.value = normalizeGradeScale(data.gradeScale || gradeScale.value);
             dimensions.value = data.dimensions;
             bonusItems.value = normalizeBonusItems(data.bonusItems);
             quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+            quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
             showToast('模版导入成功');
             drawerOpen.value = false;
           } else {
@@ -3239,9 +3276,10 @@ createApp({
       isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
-      collapsedDims, drawerOpen, okrExpanded, saveTime, toastMsg, toastVisible, canUndo,
+      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
       baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, quarterlyOkrCompletion,
+      quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
@@ -3313,7 +3351,7 @@ function buildRecordFromData(data) {
 }
 
 function summarizeEvaluationData(data) {
-  const gradeScale = data.gradeScale || DEFAULT_TEMPLATE.gradeScale;
+  const gradeScale = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale);
   const dimensions = data.dimensions || [];
   const bonusItems = Array.isArray(data.bonusItems) ? data.bonusItems : [];
   const quarterlyOkrs = Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [];
