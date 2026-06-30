@@ -231,6 +231,18 @@ body {
 .bonus-grade { min-width:96px; }
 .bonus-note { min-width:220px; }
 .compensation-note { background:rgba(239,246,255,0.72); border:1px solid #BFDBFE; color:#1E3A8A; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.65; margin-bottom:14px; }
+.commission-panel { display:flex; flex-direction:column; gap:14px; margin-bottom:16px; }
+.commission-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.commission-control { display:flex; align-items:center; gap:6px; color:var(--text-light); font-size:13px; }
+.commission-control input { width:86px; border:1px solid #E2E8F0; border-radius:8px; padding:6px 9px; font-size:13px; background:white; outline:none; font-family:inherit; }
+.commission-table { min-width:1680px; }
+.commission-table th { white-space:nowrap; }
+.commission-table .compact-number { min-width:74px; }
+.commission-derived { font-weight:800; white-space:nowrap; }
+.commission-muted { color:var(--text-light); font-size:12px; white-space:nowrap; }
+.commission-warning { color:#B45309; font-size:12px; font-weight:700; white-space:nowrap; }
+.commission-rules { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--text-light); }
+.commission-rule-pill { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:999px; padding:5px 9px; }
 .bonus-score-summary { display:inline-flex; width:max-content; max-width:100%; margin-bottom:12px; padding:6px 10px; border-radius:999px; background:#FFFBEB; color:#92400E; font-size:13px; font-weight:800; }
 .score-slider-row { display:grid; grid-template-columns:auto minmax(160px,1fr) 80px auto; gap:10px; align-items:center; margin:10px 0 12px; padding:9px 11px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; }
 .score-slider-row label { font-size:12px; font-weight:800; color:var(--text-light); white-space:nowrap; }
@@ -588,6 +600,88 @@ body {
         </div>
       </div>
       <div class="compensation-note">{{compensationNote}}</div>
+      <div class="commission-panel" v-if="showCommissionPlan">
+        <div class="bonus-stats">
+          <div class="bonus-stat">
+            <div class="bonus-stat-label">提成测算合计</div>
+            <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.totalCommission)}}</div>
+          </div>
+          <div class="bonus-stat">
+            <div class="bonus-stat-label">已录入实际 / 预算箱量</div>
+            <div class="bonus-stat-value">{{commissionSummary.actualVolume}} / {{commissionSummary.budgetVolume}}</div>
+          </div>
+          <div class="bonus-stat">
+            <div class="bonus-stat-label">已录入月份</div>
+            <div class="bonus-stat-value">{{commissionSummary.filledMonthCount}} / {{commissionSummary.monthCount}}</div>
+          </div>
+        </div>
+        <div class="commission-controls">
+          <label class="commission-control">基础提成
+            <input type="number" min="0" step="0.01" v-model.number="commissionPlan.baseCommissionPerContainer">
+            <span>{{commissionPlan.currency}}/柜</span>
+          </label>
+          <label class="commission-control">柜均毛利指标
+            <input type="number" min="0" step="0.01" v-model.number="commissionPlan.marginTargetCny">
+            <span>{{commissionPlan.marginCurrency}}</span>
+          </label>
+          <label class="commission-control">年度预算
+            <input type="number" min="0" v-model.number="commissionPlan.budgetTotal">
+            <span>柜</span>
+          </label>
+          <span class="commission-muted">公式：箱量完成比分数 x 毛利完成比分数 x 基础提成 x 客户等级系数</span>
+        </div>
+        <div class="bonus-table-wrap">
+          <table class="bonus-table commission-table">
+            <thead>
+              <tr>
+                <th>月份</th>
+                <th>预算箱量</th>
+                <th>实际箱量</th>
+                <th>箱量完成比</th>
+                <th>柜量分数</th>
+                <th>单柜毛利(CNY)</th>
+                <th>毛利完成比</th>
+                <th>毛利分数</th>
+                <th>矩阵比例</th>
+                <th>单柜提成</th>
+                <th v-for="grade in commissionPlan.customerGrades" :key="'head-'+grade.grade">{{grade.grade}}档 x{{grade.multiplier}}</th>
+                <th>客户档合计</th>
+                <th>月度提成</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in commissionRows" :key="item.row.month">
+                <td><input v-model="item.row.month"></td>
+                <td><input class="compact-number" type="number" min="0" v-model.number="item.row.budgetVolume"></td>
+                <td><input class="compact-number" type="number" min="0" v-model.number="item.row.actualVolume"></td>
+                <td class="commission-derived">{{formatPercent(item.metrics.volumeRate)}}</td>
+                <td class="commission-derived">{{item.metrics.volumeScore.toFixed(2)}}</td>
+                <td><input class="compact-number" type="number" min="0" step="0.01" v-model.number="item.row.profitPerContainerCny"></td>
+                <td class="commission-derived">{{formatPercent(item.metrics.marginRate)}}</td>
+                <td class="commission-derived">{{item.metrics.marginScore.toFixed(2)}}</td>
+                <td class="commission-derived">{{item.metrics.matrixRatio.toFixed(2)}}</td>
+                <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.perContainerCommission)}}</td>
+                <td v-for="grade in commissionPlan.customerGrades" :key="item.row.month+'-'+grade.grade">
+                  <input class="compact-number" type="number" min="0" v-model.number="item.row.gradeVolumes[grade.grade]">
+                </td>
+                <td>
+                  <span class="commission-derived">{{item.metrics.gradeVolumeTotal}}</span>
+                  <span class="commission-warning" v-if="item.metrics.mismatch">与实际箱量不一致</span>
+                </td>
+                <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.totalCommission)}}</td>
+                <td class="bonus-note"><textarea v-model="item.row.note" placeholder="区域、客户等级、异常说明..."></textarea></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="commission-rules">
+          <span class="commission-rule-pill" v-for="rule in commissionPlan.scoringRules" :key="rule.threshold">
+            ≥{{formatPercent(rule.threshold)}} = {{rule.score}}
+          </span>
+        </div>
+        <div class="commission-muted">{{commissionPlan.note}}</div>
+      </div>
       <div class="bonus-stats" v-if="showMonthlyBonusTable">
         <div class="bonus-stat">
           <div class="bonus-stat-label">奖金应发合计</div>
@@ -981,6 +1075,7 @@ const DEFAULT_TEMPLATE = {
   compensationMode: "monthly_bonus",
   compensationNote: "月度奖金按等级系数计算；季度OKR用于复盘和下季度目标校准。",
   monthlyBonuses: buildMonthlyBonuses(currentQuarterLabel(), 300),
+  commissionPlan: null,
   gradeScale: [
     { grade:"S", label:"高度达成 Stretch Achieved", minScore:90, maxScore:100, coefficient:1.2 },
     { grade:"A", label:"达成 Achieved", minScore:75, maxScore:89, coefficient:1.0 },
@@ -1107,6 +1202,64 @@ const DEFAULT_TEMPLATE = {
   ]
 };
 
+const COMMISSION_SCORE_RULES = [
+  { threshold:0, score:0.5 },
+  { threshold:0.5, score:0.6 },
+  { threshold:0.6, score:0.7 },
+  { threshold:0.7, score:0.8 },
+  { threshold:0.8, score:0.9 },
+  { threshold:0.9, score:1.0 },
+  { threshold:1.0, score:1.1 },
+  { threshold:1.2, score:1.2 },
+  { threshold:1.3, score:1.3 },
+  { threshold:1.4, score:1.4 },
+  { threshold:1.5, score:1.5 },
+  { threshold:1.6, score:1.6 },
+  { threshold:1.7, score:1.7 },
+  { threshold:1.8, score:1.8 },
+  { threshold:1.9, score:1.9 }
+];
+const CUSTOMER_GRADE_MULTIPLIERS = [
+  { grade:"A", multiplier:1.2 },
+  { grade:"B", multiplier:1.0 },
+  { grade:"C", multiplier:0.8 },
+  { grade:"D", multiplier:0.6 }
+];
+
+function buildGary2026CommissionPlan() {
+  const budgetByMonth = [350,400,450,500,500,550,600,600,600,650,700,650];
+  const q1 = {
+    "2026-01": { actualVolume:288, profitPerContainerCny:2733.26, gradeVolumes:{ A:41, B:63, C:12, D:172 }, note:"美东173 + 美中115；柜均毛利按合并口径测算" },
+    "2026-02": { actualVolume:315, profitPerContainerCny:1984.88, gradeVolumes:{ A:41, B:44, C:4, D:226 }, note:"美东175 + 美中140；柜均毛利按合并口径测算" },
+    "2026-03": { actualVolume:216, profitPerContainerCny:2275.33, gradeVolumes:{ A:24, B:52, C:9, D:131 }, note:"美东117 + 美中99；柜均毛利按合并口径测算" }
+  };
+  return {
+    title: "Gary 2026季度业务提成测算",
+    currency: "USD",
+    marginCurrency: "CNY",
+    baseCommissionPerContainer: 8,
+    marginTargetCny: 1750,
+    marginTargetUsd: 250,
+    budgetTotal: 6550,
+    companyBudgetTotal: 12200,
+    scoringRules: COMMISSION_SCORE_RULES,
+    customerGrades: CUSTOMER_GRADE_MULTIPLIERS,
+    note: "季度提成 = 客户档箱量 x 基础单柜提成 x 柜量完成比分数 x 毛利完成比分数 x 客户等级系数；客户等级系数用于鼓励开拓更高质量的新市场和新客户。",
+    months: budgetByMonth.map((budgetVolume, index) => {
+      const month = `2026-${String(index + 1).padStart(2, "0")}`;
+      const actual = q1[month] || {};
+      return {
+        month,
+        budgetVolume,
+        actualVolume: actual.actualVolume || 0,
+        profitPerContainerCny: actual.profitPerContainerCny || 0,
+        gradeVolumes: actual.gradeVolumes || { A:0, B:0, C:0, D:0 },
+        note: actual.note || ""
+      };
+    })
+  };
+}
+
 const PERSON_PROFILES = {
   Freesia: {
     name: "Freesia",
@@ -1144,7 +1297,8 @@ const PERSON_PROFILES = {
     compensationMode: "quarterly_commission",
     bonusBase: 0,
     bonusCurrency: "USD",
-    compensationNote: "Gary不设月度奖金，按季度业务提成口径结算；本表用业务控盘、节奏推进和资源调动结果作为季度提成核算依据。具体提成公式待业务指标口径确认后可继续加入。",
+    compensationNote: "Gary不设月度奖金，按季度业务提成口径结算；提成按“箱量完成率分数 x 单柜毛利完成率分数 x 基础单柜提成 x 客户等级系数”计算。客户等级A/B/C/D分别按1.2/1.0/0.8/0.6调整，鼓励销售开拓高质量新市场和新客户。",
+    commissionPlan: buildGary2026CommissionPlan(),
     dimensions: [
       { id:"O1", name:"业务控盘能力", kpis:[
         profileKpi("KR1","建立整体业务滚动预测机制",12,"周度 / 月度更新业务预测，偏差控制在±15%以内。","预测稳定且偏差可控","按周/月更新且基本准确","有预测但偏差或频率不稳","缺少预测机制"),
@@ -1346,6 +1500,7 @@ function prepareQuarterProfileTemplates() {
       compensationNote: profile.compensationNote,
       bonusItems: deepClone(profile.bonusItems || []),
       quarterlyOkrs: deepClone(profile.quarterlyOkrs || []),
+      commissionPlan: deepClone(profile.commissionPlan || null),
       dimensions: profile.dimensions,
       isPlaceholder: false
     };
@@ -1371,6 +1526,7 @@ function buildPlaceholderQuarterProfile(profile, quarter) {
     compensationNote: `${profile.name} ${quarter}暂未配置岗位OKR标准；待上传${quarter}正式文件后再补充，不自动套用其他部门或岗位OKR。${profile.compensationNote}`,
     bonusItems: deepClone(profile.bonusItems || []),
     quarterlyOkrs: [],
+    commissionPlan: deepClone(profile.commissionPlan || null),
     isPlaceholder: true,
     dimensions: []
   };
@@ -1426,6 +1582,109 @@ function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 function normalizeGradeScale(scale) {
   const source = Array.isArray(scale) ? scale : DEFAULT_TEMPLATE.gradeScale;
   return source.map(item => item.grade === 'B' ? { ...item, coefficient:0.8 } : item);
+}
+function normalizeCommissionPlan(plan) {
+  if(!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
+  const customerGrades = (Array.isArray(plan.customerGrades) && plan.customerGrades.length ? plan.customerGrades : CUSTOMER_GRADE_MULTIPLIERS)
+    .map(item=>({ grade:String(item.grade || '').trim() || 'A', multiplier:Number(item.multiplier ?? 1) || 0 }));
+  const scoringRules = (Array.isArray(plan.scoringRules) && plan.scoringRules.length ? plan.scoringRules : COMMISSION_SCORE_RULES)
+    .map(rule=>({ threshold:Number(rule.threshold)||0, score:Number(rule.score)||0 }))
+    .sort((a,b)=>a.threshold - b.threshold);
+  const months = (Array.isArray(plan.months) ? plan.months : []).map((row, index)=>{
+    const gradeVolumes = {};
+    customerGrades.forEach(grade=>{
+      gradeVolumes[grade.grade] = Math.max(0, Number(row.gradeVolumes?.[grade.grade]) || 0);
+    });
+    return {
+      month: row.month || `M${index + 1}`,
+      budgetVolume: Math.max(0, Number(row.budgetVolume)||0),
+      actualVolume: Math.max(0, Number(row.actualVolume)||0),
+      profitPerContainerCny: Math.max(0, Number(row.profitPerContainerCny)||0),
+      gradeVolumes,
+      note: row.note || ''
+    };
+  });
+  return {
+    title: plan.title || '季度业务提成测算',
+    currency: plan.currency || 'USD',
+    marginCurrency: plan.marginCurrency || 'CNY',
+    baseCommissionPerContainer: Math.max(0, Number(plan.baseCommissionPerContainer ?? 8) || 0),
+    marginTargetCny: Math.max(0, Number(plan.marginTargetCny ?? 1750) || 0),
+    marginTargetUsd: Math.max(0, Number(plan.marginTargetUsd ?? 250) || 0),
+    budgetTotal: Math.max(0, Number(plan.budgetTotal)||0),
+    companyBudgetTotal: Math.max(0, Number(plan.companyBudgetTotal)||0),
+    note: plan.note || '',
+    customerGrades,
+    scoringRules,
+    months
+  };
+}
+function commissionGradeVolumeTotal(row, customerGrades = CUSTOMER_GRADE_MULTIPLIERS) {
+  return (customerGrades || []).reduce((sum, grade)=>sum + (Number(row.gradeVolumes?.[grade.grade]) || 0), 0);
+}
+function commissionScoreFromRate(rate, rules = COMMISSION_SCORE_RULES) {
+  const ratio = Number(rate) || 0;
+  return [...(rules || COMMISSION_SCORE_RULES)]
+    .sort((a,b)=>Number(a.threshold) - Number(b.threshold))
+    .reduce((score, rule)=>ratio >= Number(rule.threshold) ? Number(rule.score) : score, 0);
+}
+function commissionRowMetrics(plan, row) {
+  const normalizedPlan = normalizeCommissionPlan(plan);
+  if(!normalizedPlan || !row) {
+    return { gradeVolumeTotal:0, effectiveVolume:0, volumeRate:0, marginRate:0, volumeScore:0, marginScore:0, matrixRatio:0, perContainerCommission:0, gradeCommissions:{}, totalCommission:0, mismatch:false };
+  }
+  const gradeVolumeTotal = commissionGradeVolumeTotal(row, normalizedPlan.customerGrades);
+  const effectiveVolume = Number(row.actualVolume) || gradeVolumeTotal;
+  const volumeRate = row.budgetVolume ? effectiveVolume / Number(row.budgetVolume) : 0;
+  const marginRate = normalizedPlan.marginTargetCny ? (Number(row.profitPerContainerCny)||0) / normalizedPlan.marginTargetCny : 0;
+  const volumeScore = commissionScoreFromRate(volumeRate, normalizedPlan.scoringRules);
+  const marginScore = commissionScoreFromRate(marginRate, normalizedPlan.scoringRules);
+  const matrixRatio = volumeScore * marginScore;
+  const perContainerCommission = normalizedPlan.baseCommissionPerContainer * matrixRatio;
+  const gradeCommissions = {};
+  let totalCommission = 0;
+  normalizedPlan.customerGrades.forEach(grade=>{
+    const amount = (Number(row.gradeVolumes?.[grade.grade]) || 0) * perContainerCommission * grade.multiplier;
+    gradeCommissions[grade.grade] = amount;
+    totalCommission += amount;
+  });
+  return {
+    gradeVolumeTotal,
+    effectiveVolume,
+    volumeRate,
+    marginRate,
+    volumeScore,
+    marginScore,
+    matrixRatio,
+    perContainerCommission,
+    gradeCommissions,
+    totalCommission,
+    mismatch: Boolean(row.actualVolume) && Math.abs(Number(row.actualVolume) - gradeVolumeTotal) > 0.01
+  };
+}
+function summarizeCommissionPlan(plan) {
+  const normalizedPlan = normalizeCommissionPlan(plan);
+  if(!normalizedPlan) return { totalCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 };
+  return normalizedPlan.months.reduce((summary, row)=>{
+    const metrics = commissionRowMetrics(normalizedPlan, row);
+    const isFilled = Boolean(metrics.effectiveVolume || metrics.gradeVolumeTotal || Number(row.profitPerContainerCny));
+    summary.totalCommission += metrics.totalCommission;
+    if(isFilled) {
+      summary.budgetVolume += Number(row.budgetVolume)||0;
+      summary.actualVolume += metrics.effectiveVolume;
+      summary.gradeVolumeTotal += metrics.gradeVolumeTotal;
+      summary.filledMonthCount += 1;
+    }
+    summary.monthCount += 1;
+    summary.volumeRate = summary.budgetVolume ? summary.actualVolume / summary.budgetVolume : 0;
+    return summary;
+  }, { totalCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 });
+}
+function formatPercent(value) {
+  return `${((Number(value)||0) * 100).toFixed(1)}%`;
+}
+function formatMoney(value) {
+  return (Number(value)||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
 function escapeHtml(value) {
   return String(value ?? '')
@@ -1588,6 +1847,7 @@ createApp({
     const dimensions = ref(initial.dimensions);
     const bonusItems = ref(normalizeBonusItems(initial.bonusItems));
     const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
+    const commissionPlan = ref(normalizeCommissionPlan(initial.commissionPlan));
     const collapsedDims = ref({});
     const drawerOpen = ref(false);
     const okrExpanded = ref(false);
@@ -1785,6 +2045,16 @@ createApp({
       : '季度OKR用于季末复盘成长目标；平时可收起，不影响月度KPI评分和奖金发放。'
     );
     const quarterlyOkrToggleLabel = computed(()=> quarterlyOkrExpanded.value ? '收起季度OKR' : '填写季度OKR复盘');
+    const showCommissionPlan = computed(()=> compensationMode.value === 'quarterly_commission' && Boolean(commissionPlan.value?.months?.length));
+    const commissionRows = computed(()=> {
+      const plan = normalizeCommissionPlan(commissionPlan.value);
+      if(!plan) return [];
+      return plan.months.map((row, index)=>({
+        row: commissionPlan.value.months[index],
+        metrics: commissionRowMetrics(commissionPlan.value, commissionPlan.value.months[index])
+      }));
+    });
+    const commissionSummary = computed(()=>summarizeCommissionPlan(commissionPlan.value));
 
     const finalGrade = computed(()=>{
       const pct = totalWeight.value ? (totalScore.value / totalWeight.value * 100) : 0;
@@ -1874,11 +2144,15 @@ createApp({
     });
     const performanceScoreUsage = computed(()=> isMonthlyKpiTemplate.value
       ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
-      : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。'
+      : (compensationMode.value === 'quarterly_commission'
+        ? '季度业务提成按下方箱量、毛利和客户等级公式测算；OKR用于业务控盘能力复盘和下季度动作校准。'
+        : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。')
     );
     const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
       ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表；季度OKR用于成长目标复盘，不替代月度KPI。'
-      : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。'
+      : (compensationMode.value === 'quarterly_commission'
+        ? '给考评人的口径：Gary不填写月度奖金表；每月追踪箱量、柜均毛利和客户档，季度按业务提成公式结算。'
+        : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。')
     );
     const workflowReviewTag = computed(()=> isMonthlyKpiTemplate.value ? '每月填写' : '季度末填写');
     const workflowReviewTitle = computed(()=> isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘');
@@ -2017,6 +2291,7 @@ createApp({
       dimensions.value = data.dimensions || dimensions.value;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
     }
 
@@ -2109,6 +2384,7 @@ createApp({
       dimensions.value = data.dimensions || dimensions.value;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
       comparePeriod.value = meta.value.period;
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
@@ -2199,7 +2475,9 @@ createApp({
       const hasQuarterlyOkrProgress = (data.quarterlyOkrs || [])
         .flatMap(objective=>objective.krs || [])
         .some(kr=>String(kr.actual || '').trim() || Number(kr.completion));
-      return hasKpiProgress || hasBonusProgress || hasQuarterlyOkrProgress;
+      const commissionSummary = summarizeCommissionPlan(data.commissionPlan);
+      const hasCommissionProgress = Boolean(commissionSummary.filledMonthCount);
+      return hasKpiProgress || hasBonusProgress || hasQuarterlyOkrProgress || hasCommissionProgress;
     }
 
     function upgradeDataForProfileTemplate(data, profile, period) {
@@ -2239,6 +2517,7 @@ createApp({
         data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
         data.quarterlyOkrs = normalizeQuarterlyOkrs((data.quarterlyOkrs && data.quarterlyOkrs.length) ? data.quarterlyOkrs : (template.quarterlyOkrs || []));
       }
+      data.commissionPlan = normalizeCommissionPlan(data.commissionPlan || template.commissionPlan || null);
       normalizeProfileMonthlyBonuses(data, profile, effectivePeriod);
       return data;
     }
@@ -2269,6 +2548,7 @@ createApp({
       dimensions.value = data.dimensions || dimensions.value;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
     }
 
     function currentDepartment() {
@@ -2406,7 +2686,8 @@ createApp({
         gradeScale: normalizeGradeScale(DEFAULT_TEMPLATE.gradeScale),
         dimensions: deepClone(template.dimensions),
         bonusItems: deepClone(template.bonusItems || []),
-        quarterlyOkrs: deepClone(template.quarterlyOkrs || [])
+        quarterlyOkrs: deepClone(template.quarterlyOkrs || []),
+        commissionPlan: deepClone(template.commissionPlan || null)
       };
     }
 
@@ -2423,6 +2704,7 @@ createApp({
       dimensions.value = data.dimensions;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
@@ -2442,6 +2724,7 @@ createApp({
       dimensions.value = data.dimensions;
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
@@ -2498,6 +2781,7 @@ createApp({
       monthlyBonuses.value = buildMonthlyBonuses(meta.value.period, bonusBase.value);
       bonusItems.value = [];
       quarterlyOkrs.value = [];
+      commissionPlan.value = null;
       dimensions.value = [];
       selectedEmployee.value = '';
       quickEmployeeSelect.value = '';
@@ -2761,7 +3045,7 @@ createApp({
     let saveTimer = null;
     function getData() {
       const department = currentDepartment();
-      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, quarterlyOkrs:quarterlyOkrs.value };
+      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, quarterlyOkrs:quarterlyOkrs.value, commissionPlan:normalizeCommissionPlan(commissionPlan.value) };
     }
     function autoSave() {
       clearTimeout(saveTimer);
@@ -2770,7 +3054,7 @@ createApp({
         saveTime.value = new Date().toLocaleTimeString('zh-CN');
       }, 2000);
     }
-    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs], autoSave, {deep:true});
+    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs, commissionPlan], autoSave, {deep:true});
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
     });
@@ -2821,6 +3105,7 @@ createApp({
             dimensions.value = data.dimensions;
             bonusItems.value = normalizeBonusItems(data.bonusItems);
             quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+            commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
             quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
             showToast('导入成功');
           } else {
@@ -2862,6 +3147,43 @@ createApp({
       const wsMonthly = XLSX.utils.aoa_to_sheet(monthlyRows);
       wsMonthly['!cols'] = [{wch:10},{wch:14},{wch:8},{wch:14},{wch:14},{wch:14},{wch:36}];
       XLSX.utils.book_append_sheet(wb, wsMonthly, '月度奖金');
+
+      const exportCommissionPlan = normalizeCommissionPlan(commissionPlan.value);
+      if(exportCommissionPlan) {
+        const summary = summarizeCommissionPlan(exportCommissionPlan);
+        const commissionRowsForSheet = [
+          [`${meta.value.templateName} 季度业务提成测算`],
+          [`被考核人: ${meta.value.employeeName}`, `部门: ${currentDept}`, `考核人: ${meta.value.evaluatorName}`, `期间: ${meta.value.period}`],
+          [`基础提成: ${exportCommissionPlan.currency} ${exportCommissionPlan.baseCommissionPerContainer}/柜`, `柜均毛利指标: ${exportCommissionPlan.marginCurrency} ${exportCommissionPlan.marginTargetCny}`, `测算提成合计: ${exportCommissionPlan.currency} ${formatMoney(summary.totalCommission)}`, `实际/预算: ${summary.actualVolume}/${summary.budgetVolume}`],
+          [],
+          ['月份','预算箱量','实际箱量','箱量完成比','柜量分数','单柜毛利(CNY)','毛利完成比','毛利分数','矩阵比例','单柜提成', ...exportCommissionPlan.customerGrades.map(grade=>`${grade.grade}档 x${grade.multiplier}`), '客户档合计','月度提成','备注']
+        ];
+        exportCommissionPlan.months.forEach(row=>{
+          const metrics = commissionRowMetrics(exportCommissionPlan, row);
+          commissionRowsForSheet.push([
+            row.month,
+            row.budgetVolume,
+            metrics.effectiveVolume,
+            formatPercent(metrics.volumeRate),
+            metrics.volumeScore,
+            row.profitPerContainerCny,
+            formatPercent(metrics.marginRate),
+            metrics.marginScore,
+            metrics.matrixRatio,
+            `${exportCommissionPlan.currency} ${formatMoney(metrics.perContainerCommission)}`,
+            ...exportCommissionPlan.customerGrades.map(grade=>row.gradeVolumes?.[grade.grade] || 0),
+            metrics.gradeVolumeTotal,
+            `${exportCommissionPlan.currency} ${formatMoney(metrics.totalCommission)}`,
+            row.note || ''
+          ]);
+        });
+        commissionRowsForSheet.push([]);
+        commissionRowsForSheet.push(['计分规则', ...exportCommissionPlan.scoringRules.map(rule=>`≥${formatPercent(rule.threshold)}=${rule.score}`)]);
+        commissionRowsForSheet.push(['说明', exportCommissionPlan.note || '']);
+        const wsCommission = XLSX.utils.aoa_to_sheet(commissionRowsForSheet);
+        wsCommission['!cols'] = [{wch:10},{wch:10},{wch:10},{wch:12},{wch:10},{wch:14},{wch:12},{wch:10},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:14},{wch:32}];
+        XLSX.utils.book_append_sheet(wb, wsCommission, '季度业务提成');
+      }
 
       // Sheet 2: Performance scoring results
       const performanceSheetName = isMonthlyKpiTemplate.value ? '月度KPI' : '季度OKR';
@@ -3022,6 +3344,7 @@ createApp({
       data.dimensions = Array.isArray(data.dimensions) ? data.dimensions : [];
       data.bonusItems = normalizeBonusItems(data.bonusItems);
       data.quarterlyOkrs = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+      data.commissionPlan = normalizeCommissionPlan(data.commissionPlan || profileTemplate?.commissionPlan || null);
       return data;
     }
 
@@ -3037,6 +3360,39 @@ createApp({
       const title = `${data.meta?.employeeName || '员工'}_${data.meta?.period || ''}_绩效考核`;
       const isMonthlyKpiReport = /月度\s*KPI|KPI考核/i.test(data.meta?.templateName || '');
       const performanceTitle = isMonthlyKpiReport ? '月度KPI' : '季度OKR';
+      const reportCommissionPlan = normalizeCommissionPlan(data.commissionPlan);
+      const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan);
+      const commissionHtml = reportCommissionPlan ? `
+        <h2>季度业务提成</h2>
+        <div class="summary">
+          <div>基础提成：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.baseCommissionPerContainer)}/柜</div>
+          <div>柜均毛利指标：${escapeHtml(reportCommissionPlan.marginCurrency)} ${formatMoney(reportCommissionPlan.marginTargetCny)}</div>
+          <div>提成测算合计：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionSummary.totalCommission)}</div>
+          <div>实际/预算箱量：${reportCommissionSummary.actualVolume}/${reportCommissionSummary.budgetVolume}</div>
+        </div>
+        <table>
+          <thead><tr><th>月份</th><th>预算</th><th>实际</th><th>箱量完成比</th><th>柜量分数</th><th>单柜毛利</th><th>毛利完成比</th><th>毛利分数</th><th>矩阵比例</th><th>单柜提成</th>${reportCommissionPlan.customerGrades.map(grade=>`<th>${escapeHtml(grade.grade)}档 x${grade.multiplier}</th>`).join('')}<th>月度提成</th><th>备注</th></tr></thead>
+          <tbody>
+            ${reportCommissionPlan.months.map(row=>{
+              const metrics = commissionRowMetrics(reportCommissionPlan, row);
+              return `<tr>
+                <td>${escapeHtml(row.month)}</td>
+                <td>${escapeHtml(row.budgetVolume)}</td>
+                <td>${escapeHtml(metrics.effectiveVolume)}</td>
+                <td>${escapeHtml(formatPercent(metrics.volumeRate))}</td>
+                <td>${escapeHtml(metrics.volumeScore.toFixed(2))}</td>
+                <td>${escapeHtml(formatMoney(row.profitPerContainerCny))}</td>
+                <td>${escapeHtml(formatPercent(metrics.marginRate))}</td>
+                <td>${escapeHtml(metrics.marginScore.toFixed(2))}</td>
+                <td>${escapeHtml(metrics.matrixRatio.toFixed(2))}</td>
+                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.perContainerCommission))}</td>
+                ${reportCommissionPlan.customerGrades.map(grade=>`<td>${escapeHtml(row.gradeVolumes?.[grade.grade] || 0)}</td>`).join('')}
+                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.totalCommission))}</td>
+                <td>${escapeHtml(row.note || '')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>` : '';
       const monthlyHtml = showMonthly ? `
         <h2>月度奖金</h2>
         <table>
@@ -3142,9 +3498,11 @@ createApp({
     <div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>
     <div>基础分：${summary.baseScore}/${summary.quarterWeight}</div>
     <div>加分项：+${summary.bonusScoreTotal}</div>
+    ${summary.commissionTotal ? `<div>季度业务提成：${escapeHtml(summary.currency)} ${formatMoney(summary.commissionTotal)}</div>` : ''}
     <div>${escapeHtml(performanceTitle)}状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
     ${(data.quarterlyOkrs || []).length ? `<div>季度OKR完成率：${summary.quarterlyOkrCompletion}%</div>` : ''}
   </div>
+  ${commissionHtml}
   ${monthlyHtml}
   <h2>${escapeHtml(performanceTitle)}</h2>
   ${performanceHtml}
@@ -3170,6 +3528,7 @@ createApp({
       dimensions.value = fresh.dimensions;
       bonusItems.value = normalizeBonusItems(fresh.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(fresh.quarterlyOkrs);
+      commissionPlan.value = normalizeCommissionPlan(fresh.commissionPlan);
       quarterlyOkrExpanded.value = false;
       localStorage.removeItem(STORAGE_KEY);
       showToast('已重置');
@@ -3258,6 +3617,7 @@ createApp({
             dimensions.value = data.dimensions;
             bonusItems.value = normalizeBonusItems(data.bonusItems);
             quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
+            commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
             quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
             showToast('模版导入成功');
             drawerOpen.value = false;
@@ -3271,7 +3631,7 @@ createApp({
     }
 
     return {
-      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs,
+      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs, commissionPlan,
       publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, cloudEndpoint, cloudStatus,
       isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
@@ -3282,6 +3642,7 @@ createApp({
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
+      showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       isMonthlyKpiTemplate, performancePanelTitle, performancePanelNote, performanceToggleLabel,
@@ -3355,6 +3716,7 @@ function summarizeEvaluationData(data) {
   const dimensions = data.dimensions || [];
   const bonusItems = Array.isArray(data.bonusItems) ? data.bonusItems : [];
   const quarterlyOkrs = Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [];
+  const commissionSummary = summarizeCommissionPlan(data.commissionPlan);
   const monthlyBonuses = data.monthlyBonuses || [];
   const currency = data.bonusCurrency || 'USD';
   const defaultBase = Number(data.bonusBase) || 0;
@@ -3397,6 +3759,9 @@ function summarizeEvaluationData(data) {
     quarterGrade,
     okrFilledCount,
     quarterlyOkrCompletion,
+    commissionTotal: commissionSummary.totalCommission,
+    commissionActualVolume: commissionSummary.actualVolume,
+    commissionBudgetVolume: commissionSummary.budgetVolume,
     developmentNote
   };
 }
