@@ -240,6 +240,8 @@ body {
 .commission-table .compact-number { min-width:74px; }
 .commission-derived { font-weight:800; white-space:nowrap; }
 .commission-muted { color:var(--text-light); font-size:12px; white-space:nowrap; }
+.commission-month-cell { min-width:70px; }
+.commission-month-label { display:inline-flex; align-items:center; justify-content:center; min-width:46px; padding:5px 9px; border-radius:999px; background:#EFF6FF; color:#1D4ED8; font-weight:800; white-space:nowrap; }
 .commission-warning { color:#B45309; font-size:12px; font-weight:700; white-space:nowrap; }
 .commission-rules { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--text-light); }
 .commission-rule-pill { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:999px; padding:5px 9px; }
@@ -652,7 +654,9 @@ body {
             </thead>
             <tbody>
               <tr v-for="item in commissionRows" :key="item.row.month">
-                <td><input v-model="item.row.month"></td>
+                <td class="commission-month-cell">
+                  <span class="commission-month-label" :title="item.row.month">{{formatCommissionMonth(item.row.month)}}</span>
+                </td>
                 <td><input class="compact-number" type="number" min="0" v-model.number="item.row.budgetVolume"></td>
                 <td><input class="compact-number" type="number" min="0" v-model.number="item.row.actualVolume"></td>
                 <td class="commission-derived">{{formatPercent(item.metrics.volumeRate)}}</td>
@@ -1685,6 +1689,14 @@ function formatPercent(value) {
 }
 function formatMoney(value) {
   return (Number(value)||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function formatCommissionMonth(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/(?:^|\D)(\d{1,2})$/);
+  if(match) return `${Number(match[1])}月`;
+  const dateMatch = text.match(/^(\d{4})-(\d{1,2})$/);
+  if(dateMatch) return `${Number(dateMatch[2])}月`;
+  return text || '-';
 }
 function escapeHtml(value) {
   return String(value ?? '')
@@ -3161,7 +3173,7 @@ createApp({
         exportCommissionPlan.months.forEach(row=>{
           const metrics = commissionRowMetrics(exportCommissionPlan, row);
           commissionRowsForSheet.push([
-            row.month,
+            formatCommissionMonth(row.month),
             row.budgetVolume,
             metrics.effectiveVolume,
             formatPercent(metrics.volumeRate),
@@ -3376,7 +3388,7 @@ createApp({
             ${reportCommissionPlan.months.map(row=>{
               const metrics = commissionRowMetrics(reportCommissionPlan, row);
               return `<tr>
-                <td>${escapeHtml(row.month)}</td>
+                <td>${escapeHtml(formatCommissionMonth(row.month))}</td>
                 <td>${escapeHtml(row.budgetVolume)}</td>
                 <td>${escapeHtml(metrics.effectiveVolume)}</td>
                 <td>${escapeHtml(formatPercent(metrics.volumeRate))}</td>
@@ -3642,7 +3654,7 @@ createApp({
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
-      showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney,
+      showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       isMonthlyKpiTemplate, performancePanelTitle, performancePanelNote, performanceToggleLabel,
