@@ -254,6 +254,7 @@ body {
 .quarterly-okr-card { border-color:#C7D2FE; }
 .quarterly-okr-objective { margin-top:14px; }
 .quarterly-okr-title { font-weight:800; color:var(--text); margin-bottom:8px; }
+.quarterly-okr-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
 .okr-completion-cell { display:grid; grid-template-columns:minmax(120px,1fr) 64px auto; gap:8px; align-items:center; min-width:220px; }
 
 /* Workflow and records */
@@ -906,6 +907,11 @@ body {
       </div>
     </div>
 
+    <div class="bonus-submit-row" v-if="okrExpanded && dimensions.length">
+      <span class="bonus-submit-hint">{{isMonthlyKpiTemplate ? '填写月度KPI后可直接提交' : '填写季度考核复盘后可直接提交'}}</span>
+      <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
+    </div>
+
     <!-- Bonus Items -->
     <section class="bonus-card extra-score-card" v-if="okrExpanded && (bonusItems.length || isMonthlyKpiTemplate)">
       <div class="section-title-row">
@@ -959,9 +965,12 @@ body {
           <div class="section-title">季度OKR</div>
           <div class="section-subtitle">每季初设定成长目标，季末填写实际完成值和复盘说明；该模块不替代月度KPI。</div>
         </div>
-        <div class="record-stat" style="min-width:130px">
-          <div class="record-stat-label">OKR完成率</div>
-          <div class="record-stat-value">{{quarterlyOkrCompletion}}%</div>
+        <div class="quarterly-okr-actions">
+          <div class="record-stat" style="min-width:130px">
+            <div class="record-stat-label">OKR完成率</div>
+            <div class="record-stat-value">{{quarterlyOkrCompletion}}%</div>
+          </div>
+          <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
         </div>
       </div>
       <div class="quarterly-okr-objective" v-for="objective in quarterlyOkrs" :key="objective.id">
@@ -994,6 +1003,10 @@ body {
             </tbody>
           </table>
         </div>
+      </div>
+      <div class="bonus-submit-row">
+        <span class="bonus-submit-hint">填写季度OKR复盘后可直接提交</span>
+        <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
       </div>
     </section>
 
