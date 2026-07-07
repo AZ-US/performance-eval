@@ -246,6 +246,17 @@ body {
 .commission-rules { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--text-light); }
 .commission-rule-pill { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:999px; padding:5px 9px; }
 .bonus-score-summary { display:inline-flex; width:max-content; max-width:100%; margin-bottom:12px; padding:6px 10px; border-radius:999px; background:#FFFBEB; color:#92400E; font-size:13px; font-weight:800; }
+.monthly-kpi-switch { background:rgba(255,255,255,0.66); border:1px solid rgba(226,232,240,0.9); border-radius:14px; padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.monthly-kpi-switch-title { font-size:13px; color:var(--text-light); font-weight:800; margin-bottom:4px; }
+.monthly-kpi-switch-current { font-size:15px; font-weight:800; }
+.monthly-kpi-tabs { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.monthly-kpi-tab { border:1px solid #E2E8F0; background:white; border-radius:10px; padding:8px 12px; min-width:92px; display:flex; flex-direction:column; align-items:flex-start; gap:2px; cursor:pointer; font-family:inherit; transition:all 0.2s; }
+.monthly-kpi-tab:hover { border-color:var(--primary); color:var(--primary); }
+.monthly-kpi-tab.active { border-color:var(--primary); background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 12px rgba(59,130,246,0.16); }
+.monthly-kpi-tab strong { font-size:13px; }
+.monthly-kpi-tab span { font-size:12px; color:var(--text-light); }
+.monthly-kpi-tab.active span { color:#1D4ED8; }
+.active-kpi-month td { background:#EFF6FF; }
 .score-slider-row { display:grid; grid-template-columns:auto minmax(160px,1fr) 80px auto; gap:10px; align-items:center; margin:10px 0 12px; padding:9px 11px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; }
 .score-slider-row label { font-size:12px; font-weight:800; color:var(--text-light); white-space:nowrap; }
 .score-slider-row input[type="range"], .okr-completion-cell input[type="range"] { width:100%; accent-color:var(--primary); }
@@ -553,6 +564,24 @@ body {
       &#9888; 当前总权重为 {{totalWeight}} 分，建议调整为 100 分
     </div>
 
+    <div class="monthly-kpi-switch" v-if="okrExpanded && showMonthlyKpiMonthTabs">
+      <div>
+        <div class="monthly-kpi-switch-title">KPI考核月份</div>
+        <div class="monthly-kpi-switch-current">{{formatCommissionMonth(activeKpiMonth)}} · {{totalScore}} / {{totalWeight}} 分</div>
+      </div>
+      <div class="monthly-kpi-tabs">
+        <button class="monthly-kpi-tab"
+                v-for="month in monthlyKpiMonths"
+                :key="month"
+                :class="{active: activeKpiMonth===month}"
+                @click="switchMonthlyKpiMonth(month)">
+          <strong>{{formatCommissionMonth(month)}}</strong>
+          <span>{{monthlyKpiSnapshotScore(month)}} / {{monthlyKpiSnapshotWeight(month)}} 分</span>
+        </button>
+        <button class="btn btn-outline" @click="applyActiveMonthlyKpiToBonus">同步到奖金表</button>
+      </div>
+    </div>
+
     <!-- Summary -->
     <div class="summary-card" v-show="okrExpanded && dimensions.length">
       <div class="score-ring">
@@ -712,6 +741,7 @@ body {
             <tr>
               <th>月份</th>
               <th>月度等级</th>
+              <th v-if="isMonthlyKpiTemplate">KPI分数</th>
               <th>系数</th>
               <th>月奖金基准</th>
               <th>应发奖金</th>
@@ -720,7 +750,7 @@ body {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in monthlyBonuses" :key="row.month">
+            <tr v-for="row in monthlyBonuses" :key="row.month" :class="{'active-kpi-month': isActiveKpiMonth(row.month)}">
               <td><input v-model="row.month"></td>
               <td class="bonus-grade">
                 <select v-model="row.grade">
@@ -728,6 +758,7 @@ body {
                   <option v-for="g in gradeScale" :key="g.grade" :value="g.grade">{{g.grade}} - {{g.label}}</option>
                 </select>
               </td>
+              <td class="bonus-amount" v-if="isMonthlyKpiTemplate">{{monthlyKpiSnapshotScore(row.month)}} / {{monthlyKpiSnapshotWeight(row.month)}}</td>
               <td>{{monthlyCoefficient(row)}}</td>
               <td><input type="number" v-model.number="row.base"></td>
               <td class="bonus-amount">{{bonusCurrency}} {{monthlyDue(row)}}</td>
@@ -1908,6 +1939,8 @@ createApp({
     const bonusItems = ref(normalizeBonusItems(initial.bonusItems));
     const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
     const commissionPlan = ref(normalizeCommissionPlan(initial.commissionPlan));
+    const monthlyKpiSnapshots = ref(initial.monthlyKpiSnapshots || {});
+    const activeKpiMonth = ref(initial.activeKpiMonth || getQuarterMonths(initial.meta?.period || currentQuarterLabel())[0]);
     const collapsedDims = ref({});
     const drawerOpen = ref(false);
     const okrExpanded = ref(false);
@@ -2028,6 +2061,117 @@ createApp({
     function removeBonusItem(index) {
       pushUndoSnapshot('删除加分项');
       bonusItems.value.splice(index, 1);
+    }
+
+    function resetKpiDimensionsProgress(items) {
+      return deepClone(Array.isArray(items) ? items : []).map(dim=>({
+        ...dim,
+        kpis: (dim.kpis || []).map(kpi=>({
+          ...kpi,
+          selectedTier:null,
+          score:0,
+          comment:''
+        }))
+      }));
+    }
+
+    function resetBonusItemsProgress(items) {
+      return normalizeBonusItems(items).map(item=>({
+        ...item,
+        quantity:0,
+        score:0,
+        comment:''
+      }));
+    }
+
+    function kpiSnapshotBaseScore(snapshot) {
+      return (snapshot?.dimensions || []).reduce((sum, dim)=>
+        sum + (dim.kpis || []).reduce((inner, kpi)=>inner + (Number(kpi.score)||0), 0), 0);
+    }
+
+    function kpiSnapshotWeight(snapshot) {
+      return (snapshot?.dimensions || []).reduce((sum, dim)=>
+        sum + (dim.kpis || []).reduce((inner, kpi)=>inner + (Number(kpi.weight)||0), 0), 0);
+    }
+
+    function kpiSnapshotBonusScore(snapshot) {
+      return normalizeBonusItems(snapshot?.bonusItems).reduce((sum,item)=>sum+bonusItemScore(item),0);
+    }
+
+    function kpiSnapshotTotalScore(snapshot) {
+      return kpiSnapshotBaseScore(snapshot) + kpiSnapshotBonusScore(snapshot);
+    }
+
+    function hasMonthlyKpiProgressSnapshot(snapshot) {
+      const hasKpi = (snapshot?.dimensions || [])
+        .flatMap(dim=>dim.kpis || [])
+        .some(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim());
+      const hasBonus = normalizeBonusItems(snapshot?.bonusItems)
+        .some(item=>Number(item.quantity) || Number(item.score) || String(item.comment || '').trim());
+      return hasKpi || hasBonus;
+    }
+
+    function buildMonthlyKpiSnapshot(dimensionsSource, bonusItemsSource) {
+      return {
+        dimensions: deepClone(Array.isArray(dimensionsSource) ? dimensionsSource : []),
+        bonusItems: normalizeBonusItems(deepClone(bonusItemsSource || []))
+      };
+    }
+
+    function blankMonthlyKpiSnapshot(template = {}) {
+      return {
+        dimensions: resetKpiDimensionsProgress(template.dimensions || []),
+        bonusItems: resetBonusItemsProgress(template.bonusItems || [])
+      };
+    }
+
+    function normalizeMonthlyKpiSnapshot(snapshot, template = {}) {
+      const templateDimensions = Array.isArray(template.dimensions) ? template.dimensions : [];
+      const sourceDimensions = Array.isArray(snapshot?.dimensions) && snapshot.dimensions.length ? snapshot.dimensions : null;
+      const dimensions = sourceDimensions
+        ? (templateDimensions.length ? mergeTemplateDimensionsPreservingProgress(sourceDimensions, templateDimensions) : deepClone(sourceDimensions))
+        : resetKpiDimensionsProgress(templateDimensions);
+      const bonusItems = Array.isArray(snapshot?.bonusItems)
+        ? normalizeBonusItems(snapshot.bonusItems)
+        : resetBonusItemsProgress(template.bonusItems || []);
+      return { dimensions, bonusItems };
+    }
+
+    function dataUsesMonthlyKpi(data, profile, period) {
+      const template = profile ? profileQuarterTemplate(profile, period) : null;
+      return /月度\s*KPI|KPI考核/i.test([
+        data?.meta?.templateName,
+        template?.templateName
+      ].filter(Boolean).join(' '));
+    }
+
+    function normalizeMonthlyKpiState(data, profile, period) {
+      if(!data || !dataUsesMonthlyKpi(data, profile, period)) return data;
+      const effectivePeriod = period || data.meta?.period || currentQuarterLabel();
+      const template = profile ? profileQuarterTemplate(profile, effectivePeriod) : data;
+      const months = getQuarterMonths(effectivePeriod);
+      const existingMap = data.monthlyKpiSnapshots && typeof data.monthlyKpiSnapshots === 'object' && !Array.isArray(data.monthlyKpiSnapshots)
+        ? data.monthlyKpiSnapshots
+        : {};
+      const existingKeys = Object.keys(existingMap);
+      const legacySnapshot = buildMonthlyKpiSnapshot(data.dimensions || template.dimensions || [], data.bonusItems || template.bonusItems || []);
+      const legacyHasProgress = hasMonthlyKpiProgressSnapshot(legacySnapshot);
+      const activeMonth = months.includes(data.activeKpiMonth) ? data.activeKpiMonth : months[0];
+      const nextMap = {};
+      months.forEach(month=>{
+        if(existingMap[month]) {
+          nextMap[month] = normalizeMonthlyKpiSnapshot(existingMap[month], template);
+        } else if(!existingKeys.length && legacyHasProgress && month === activeMonth) {
+          nextMap[month] = normalizeMonthlyKpiSnapshot(legacySnapshot, template);
+        } else {
+          nextMap[month] = blankMonthlyKpiSnapshot(template);
+        }
+      });
+      data.monthlyKpiSnapshots = nextMap;
+      data.activeKpiMonth = activeMonth;
+      data.dimensions = deepClone(nextMap[activeMonth]?.dimensions || []);
+      data.bonusItems = normalizeBonusItems(nextMap[activeMonth]?.bonusItems || []);
+      return data;
     }
 
     function normalizeQuarterlyOkrs(items) {
@@ -2213,6 +2357,15 @@ createApp({
     }).filter(Boolean));
     const canUndo = computed(()=>undoStack.value.length > 0);
     const isMonthlyKpiTemplate = computed(()=>/月度\s*KPI|KPI考核/i.test(meta.value.templateName || ''));
+    const monthlyKpiMonths = computed(()=> {
+      const months = monthlyBonuses.value
+        .filter(row=>!row.isHistoricalFixed)
+        .map(row=>String(row.month || '').trim())
+        .filter(Boolean);
+      return [...new Set(months.length ? months : getQuarterMonths(meta.value.period || currentQuarterLabel()))];
+    });
+    const showMonthlyKpiMonthTabs = computed(()=>isMonthlyKpiTemplate.value && monthlyKpiMonths.value.length > 1);
+    const activeMonthlyBonusRow = computed(()=>monthlyBonuses.value.find(row=>row.month === activeKpiMonth.value) || null);
     const hasConfiguredPerformanceTemplate = computed(()=>dimensions.value.length > 0);
     const performancePanelTitle = computed(()=>{
       if(!hasConfiguredPerformanceTemplate.value) return 'OKR标准未配置';
@@ -2299,7 +2452,96 @@ createApp({
         return old || { month, grade:'', base:bonusBase.value, paid:0, comment:'' };
       });
       monthlyBonuses.value = withTimQ1FixedBonuses(quarterRows, profileForEmployee(meta.value.employeeName), meta.value.period);
+      normalizeCurrentMonthlyKpiState();
       showToast('季度月份已同步');
+    }
+
+    function monthlyKpiSnapshotForMonth(month) {
+      if(isMonthlyKpiTemplate.value && month === activeKpiMonth.value) {
+        return buildMonthlyKpiSnapshot(dimensions.value, bonusItems.value);
+      }
+      return monthlyKpiSnapshots.value?.[month] || null;
+    }
+
+    function monthlyKpiSnapshotScore(month) {
+      return kpiSnapshotTotalScore(monthlyKpiSnapshotForMonth(month));
+    }
+
+    function monthlyKpiSnapshotWeight(month) {
+      return kpiSnapshotWeight(monthlyKpiSnapshotForMonth(month));
+    }
+
+    function isActiveKpiMonth(month) {
+      return isMonthlyKpiTemplate.value && month === activeKpiMonth.value;
+    }
+
+    function saveActiveMonthlyKpiSnapshot() {
+      if(!isMonthlyKpiTemplate.value || !activeKpiMonth.value) return monthlyKpiSnapshots.value;
+      const snapshot = buildMonthlyKpiSnapshot(dimensions.value, bonusItems.value);
+      const current = monthlyKpiSnapshots.value?.[activeKpiMonth.value] || null;
+      if(JSON.stringify(current) !== JSON.stringify(snapshot)) {
+        monthlyKpiSnapshots.value = {
+          ...(monthlyKpiSnapshots.value || {}),
+          [activeKpiMonth.value]: snapshot
+        };
+      }
+      return monthlyKpiSnapshots.value;
+    }
+
+    function loadMonthlyKpiSnapshot(month) {
+      if(!isMonthlyKpiTemplate.value || !month) return;
+      const profile = profileForEmployee(meta.value.employeeName);
+      const template = profile ? profileQuarterTemplate(profile, meta.value.period) : { dimensions:dimensions.value, bonusItems:bonusItems.value };
+      const snapshot = normalizeMonthlyKpiSnapshot(monthlyKpiSnapshots.value?.[month], template);
+      dimensions.value = deepClone(snapshot.dimensions);
+      bonusItems.value = normalizeBonusItems(snapshot.bonusItems);
+    }
+
+    function normalizeCurrentMonthlyKpiState() {
+      const profile = profileForEmployee(meta.value.employeeName);
+      const data = {
+        meta: meta.value,
+        dimensions: dimensions.value,
+        bonusItems: bonusItems.value,
+        monthlyKpiSnapshots: monthlyKpiSnapshots.value,
+        activeKpiMonth: activeKpiMonth.value
+      };
+      normalizeMonthlyKpiState(data, profile, meta.value.period);
+      if(data.monthlyKpiSnapshots) monthlyKpiSnapshots.value = data.monthlyKpiSnapshots;
+      if(data.activeKpiMonth) activeKpiMonth.value = data.activeKpiMonth;
+      if(isMonthlyKpiTemplate.value) {
+        dimensions.value = data.dimensions || dimensions.value;
+        bonusItems.value = normalizeBonusItems(data.bonusItems);
+      }
+    }
+
+    function switchMonthlyKpiMonth(month) {
+      if(!monthlyKpiMonths.value.includes(month)) return;
+      if(month === activeKpiMonth.value) return;
+      pushUndoSnapshot(`切换KPI月份 ${formatCommissionMonth(month)}`);
+      saveActiveMonthlyKpiSnapshot();
+      activeKpiMonth.value = month;
+      loadMonthlyKpiSnapshot(month);
+      showToast(`已切换到 ${formatCommissionMonth(month)} KPI`);
+    }
+
+    function applyActiveMonthlyKpiToBonus() {
+      if(!isMonthlyKpiTemplate.value || !activeKpiMonth.value) return;
+      const row = activeMonthlyBonusRow.value;
+      if(!row) {
+        showToast('未找到当前月份的奖金行');
+        return;
+      }
+      pushUndoSnapshot(`同步 ${formatCommissionMonth(activeKpiMonth.value)} KPI到奖金`);
+      saveActiveMonthlyKpiSnapshot();
+      row.grade = finalGrade.value.grade;
+      row.base = Number(row.base ?? bonusBase.value) || bonusBase.value;
+      row.paid = monthlyDue(row);
+      const note = `${formatCommissionMonth(activeKpiMonth.value)} KPI ${totalScore.value}/${totalWeight.value}，等级${finalGrade.value.grade}`;
+      if(!String(row.comment || '').includes(`${formatCommissionMonth(activeKpiMonth.value)} KPI`)) {
+        row.comment = row.comment ? `${note}；${row.comment}` : note;
+      }
+      showToast(`已同步 ${formatCommissionMonth(activeKpiMonth.value)} 到奖金表`);
     }
 
     function applyBaseToMonths() {
@@ -2366,7 +2608,9 @@ createApp({
 
     function restoreData(data) {
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase || bonusBase.value);
-      normalizeProfileMonthlyBonuses(data, profileForEmployee(data.meta?.employeeName), data.meta?.period);
+      const profile = profileForEmployee(data.meta?.employeeName);
+      normalizeProfileMonthlyBonuses(data, profile, data.meta?.period);
+      normalizeMonthlyKpiState(data, profile, data.meta?.period);
       meta.value = data.meta || meta.value;
       bonusBase.value = data.bonusBase ?? bonusBase.value;
       bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
@@ -2378,6 +2622,8 @@ createApp({
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+      monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
+      activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || currentQuarterLabel())[0];
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
     }
 
@@ -2424,6 +2670,7 @@ createApp({
       if(employeeName !== (meta.value.employeeName || '').trim()) {
         meta.value = { ...meta.value, employeeName };
       }
+      saveActiveMonthlyKpiSnapshot();
       pushUndoSnapshot('保存员工记录');
       const data = deepClone(getData());
       upgradeDataForProfileTemplate(data, profileForEmployee(employeeName), data.meta?.period);
@@ -2460,6 +2707,7 @@ createApp({
       const fallbackBase = profileTemplate?.bonusBase ?? bonusBase.value;
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase ?? fallbackBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel());
+      normalizeMonthlyKpiState(data, profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel());
       meta.value = data.meta || meta.value;
       bonusBase.value = data.bonusBase ?? fallbackBase;
       bonusCurrency.value = data.bonusCurrency || profileTemplate?.bonusCurrency || bonusCurrency.value;
@@ -2471,6 +2719,8 @@ createApp({
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+      monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
+      activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
       comparePeriod.value = meta.value.period;
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
@@ -2605,6 +2855,7 @@ createApp({
       }
       data.commissionPlan = normalizeCommissionPlan(data.commissionPlan || template.commissionPlan || null);
       normalizeProfileMonthlyBonuses(data, profile, effectivePeriod);
+      normalizeMonthlyKpiState(data, profile, effectivePeriod);
       return data;
     }
 
@@ -2669,6 +2920,8 @@ createApp({
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+      monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
+      activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
     }
 
     function currentDepartment() {
@@ -2787,7 +3040,7 @@ createApp({
       const period = meta.value.period || currentQuarterLabel();
       const quarterKey = quarterKeyFromPeriod(period);
       const template = profileQuarterTemplate(profile, period);
-      return {
+      const data = {
         meta: {
           ...deepClone(DEFAULT_TEMPLATE.meta),
           templateName: template.templateName,
@@ -2809,6 +3062,8 @@ createApp({
         quarterlyOkrs: deepClone(template.quarterlyOkrs || []),
         commissionPlan: deepClone(template.commissionPlan || null)
       };
+      normalizeMonthlyKpiState(data, profile, period);
+      return data;
     }
 
     function applyProfile(profile) {
@@ -2825,6 +3080,8 @@ createApp({
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+      monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
+      activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || currentQuarterLabel())[0];
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
@@ -2845,6 +3102,8 @@ createApp({
       bonusItems.value = normalizeBonusItems(data.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+      monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
+      activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || currentQuarterLabel())[0];
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
@@ -2903,6 +3162,8 @@ createApp({
       quarterlyOkrs.value = [];
       commissionPlan.value = null;
       dimensions.value = [];
+      monthlyKpiSnapshots.value = {};
+      activeKpiMonth.value = getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
       selectedEmployee.value = '';
       quickEmployeeSelect.value = '';
       okrExpanded.value = false;
@@ -3174,8 +3435,9 @@ createApp({
     // Auto-save
     let saveTimer = null;
     function getData() {
+      saveActiveMonthlyKpiSnapshot();
       const department = currentDepartment();
-      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, quarterlyOkrs:quarterlyOkrs.value, commissionPlan:normalizeCommissionPlan(commissionPlan.value) };
+      return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, monthlyKpiSnapshots:monthlyKpiSnapshots.value, activeKpiMonth:activeKpiMonth.value, quarterlyOkrs:quarterlyOkrs.value, commissionPlan:normalizeCommissionPlan(commissionPlan.value) };
     }
     function autoSave() {
       clearTimeout(saveTimer);
@@ -3184,7 +3446,7 @@ createApp({
         saveTime.value = new Date().toLocaleTimeString('zh-CN');
       }, 2000);
     }
-    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs, commissionPlan], autoSave, {deep:true});
+    watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, commissionPlan], autoSave, {deep:true});
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
     });
@@ -3192,6 +3454,7 @@ createApp({
       normalizeCurrentDraftPeriod();
       normalizeCurrentProfileTemplate();
       normalizeCurrentMonthlyBonuses();
+      normalizeCurrentMonthlyKpiState();
       normalizeCurrentDepartment();
       if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
       if(hasQuarterlyOkrInput(quarterlyOkrs.value)) quarterlyOkrExpanded.value = true;
@@ -3225,7 +3488,9 @@ createApp({
           const data = JSON.parse(ev.target.result);
           if(data.dimensions) {
             pushUndoSnapshot('导入JSON');
-            normalizeProfileMonthlyBonuses(data, profileForEmployee(data.meta?.employeeName), data.meta?.period || meta.value.period);
+            const profile = profileForEmployee(data.meta?.employeeName);
+            normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || meta.value.period);
+            normalizeMonthlyKpiState(data, profile, data.meta?.period || meta.value.period);
             meta.value = data.meta || meta.value;
             bonusBase.value = data.bonusBase || 300;
             bonusCurrency.value = data.bonusCurrency || 'USD';
@@ -3237,6 +3502,8 @@ createApp({
             bonusItems.value = normalizeBonusItems(data.bonusItems);
             quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
             commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+            monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
+            activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || meta.value.period || currentQuarterLabel())[0];
             quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
             showToast('导入成功');
           } else {
@@ -3472,6 +3739,7 @@ createApp({
       data.gradeScale = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale);
       data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || currentQuarterLabel());
+      normalizeMonthlyKpiState(data, profile, data.meta?.period || currentQuarterLabel());
       data.dimensions = Array.isArray(data.dimensions) ? data.dimensions : [];
       data.bonusItems = normalizeBonusItems(data.bonusItems);
       data.quarterlyOkrs = normalizeQuarterlyOkrs(data.quarterlyOkrs);
@@ -3538,6 +3806,32 @@ createApp({
                 <td>${escapeHtml(data.bonusCurrency)} ${Number(row.paid) || 0}</td>
                 <td>${escapeHtml(row.comment || '')}</td>
               </tr>`).join('')}
+          </tbody>
+        </table>` : '';
+      const gradeForSnapshot = (score, weight)=>{
+        const pct = weight ? score / weight * 100 : 0;
+        const sorted = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale).sort((a,b)=>b.minScore - a.minScore);
+        return (sorted.find(item=>pct >= item.minScore) || sorted[sorted.length - 1] || {}).grade || 'C';
+      };
+      const monthlyKpiEntries = Object.entries(data.monthlyKpiSnapshots || {}).sort((a,b)=>a[0].localeCompare(b[0]));
+      const monthlyKpiHtml = isMonthlyKpiReport && monthlyKpiEntries.length ? `
+        <h2>月度KPI汇总</h2>
+        <table>
+          <thead><tr><th>月份</th><th>KPI分数</th><th>等级</th><th>基础分</th><th>加分项</th></tr></thead>
+          <tbody>
+            ${monthlyKpiEntries.map(([month, snapshot])=>{
+              const base = kpiSnapshotBaseScore(snapshot);
+              const bonus = kpiSnapshotBonusScore(snapshot);
+              const score = base + bonus;
+              const weight = kpiSnapshotWeight(snapshot);
+              return `<tr>
+                <td>${escapeHtml(formatCommissionMonth(month))}</td>
+                <td>${escapeHtml(score)} / ${escapeHtml(weight)}</td>
+                <td>${escapeHtml(gradeForSnapshot(score, weight))}</td>
+                <td>${escapeHtml(base)}</td>
+                <td>${escapeHtml(bonus)}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>` : '';
       const performanceHtml = (data.dimensions || []).map(dim=>`
@@ -3635,7 +3929,8 @@ createApp({
   </div>
   ${commissionHtml}
   ${monthlyHtml}
-  <h2>${escapeHtml(performanceTitle)}</h2>
+  ${monthlyKpiHtml}
+  <h2>${escapeHtml(performanceTitle)}${isMonthlyKpiReport && data.activeKpiMonth ? `（${escapeHtml(formatCommissionMonth(data.activeKpiMonth))}）` : ''}</h2>
   ${performanceHtml}
   ${bonusHtml}
   ${quarterlyOkrHtml}
@@ -3660,6 +3955,8 @@ createApp({
       bonusItems.value = normalizeBonusItems(fresh.bonusItems);
       quarterlyOkrs.value = normalizeQuarterlyOkrs(fresh.quarterlyOkrs);
       commissionPlan.value = normalizeCommissionPlan(fresh.commissionPlan);
+      monthlyKpiSnapshots.value = {};
+      activeKpiMonth.value = getQuarterMonths(fresh.meta?.period || currentQuarterLabel())[0];
       quarterlyOkrExpanded.value = false;
       localStorage.removeItem(STORAGE_KEY);
       showToast('已重置');
@@ -3749,6 +4046,9 @@ createApp({
             bonusItems.value = normalizeBonusItems(data.bonusItems);
             quarterlyOkrs.value = normalizeQuarterlyOkrs(data.quarterlyOkrs);
             commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
+            monthlyKpiSnapshots.value = {};
+            activeKpiMonth.value = getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
+            normalizeCurrentMonthlyKpiState();
             quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
             showToast('模版导入成功');
             drawerOpen.value = false;
@@ -3762,7 +4062,7 @@ createApp({
     }
 
     return {
-      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs, commissionPlan,
+      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, commissionPlan,
       publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, cloudEndpoint, cloudStatus,
       isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
@@ -3773,12 +4073,14 @@ createApp({
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
+      monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
       showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       isMonthlyKpiTemplate, performancePanelTitle, performancePanelNote, performanceToggleLabel,
       performanceScoreUsage, workflowRuleSubtitle, workflowReviewTag, workflowReviewTitle, workflowReviewCopy,
       monthlyCoefficient, monthlyDue, syncBonusMonths, changeAssessmentPeriod, applyBaseToMonths, fillPaidFromDue,
+      switchMonthlyKpiMonth, applyActiveMonthlyKpiToBonus,
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
