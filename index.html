@@ -405,6 +405,7 @@ body {
         <button class="btn btn-outline" @click="copyPublicLink">复制总经理链接</button>
         <button class="btn btn-outline" @click="copyAmyAdminLink">复制Amy链接</button>
         <button class="btn btn-outline" @click="copyAgnesFinanceLink">复制Agnes财务链接</button>
+        <button class="btn btn-outline" @click="copyChrisXuLink">复制Chris Xu负责人链接</button>
         <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
         <button class="btn btn-outline" @click="exportJSON">JSON</button>
         <button class="btn btn-outline" @click="exportExcel">Excel</button>
@@ -421,7 +422,7 @@ body {
       </div>
     </div>
     <div class="viewer-scope-bar" v-if="isScopedViewer">
-      当前查看身份：<span>{{viewerScopeLabel}}</span>，页面仅显示该部门人员和记录。
+      当前查看身份：<span>{{viewerScopeLabel}}</span>，{{viewerScopeDescription}}
     </div>
   </header>
 
@@ -1901,11 +1902,17 @@ createApp({
     const viewerName = (urlParams.get('viewer') || '').trim();
     const viewerScopeDefaults = { agnes:'finance', damon:'all', amy:'all' };
     const viewerScopeKey = scopeKeyFromParam(urlParams.get('dept') || urlParams.get('scope') || viewerScopeDefaults[viewerName.toLowerCase()] || 'all');
-    const isScopedViewer = computed(()=>viewerScopeKey !== 'all');
+    const scopedEmployeeName = canonicalEmployeeName(urlParams.get('employee') || urlParams.get('person') || '', employeeRenameMap.value);
+    const isScopedViewer = computed(()=>viewerScopeKey !== 'all' || Boolean(scopedEmployeeName));
     const viewerScopeLabel = computed(()=>{
+      if(scopedEmployeeName) return viewerName ? `${viewerName} · ${scopedEmployeeName}` : scopedEmployeeName;
       const scopeLabel = viewerScopeKey === 'all' ? '全部部门' : (DEPARTMENT_LABELS[viewerScopeKey] || '指定部门');
       return viewerName ? `${viewerName} · ${scopeLabel}` : scopeLabel;
     });
+    const viewerScopeDescription = computed(()=> scopedEmployeeName
+      ? '页面仅显示该员工和相关提交记录。'
+      : '页面仅显示该部门人员和记录。'
+    );
     const urlCloudEndpoint = (urlParams.get('cloud') || '').trim();
     const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
     const ignoredSavedCloudEndpoint = savedCloudEndpoint.includes('TEST_DEPLOYMENT');
@@ -1928,9 +1935,18 @@ createApp({
       url.searchParams.set('dept', dept);
       return url.toString();
     }
+    function buildEmployeeSharedUrl(viewer, employee) {
+      const endpoint = cloudEndpoint.value.trim();
+      const url = new URL(publicUrl);
+      if(endpoint) url.searchParams.set('cloud', endpoint);
+      url.searchParams.set('viewer', viewer);
+      url.searchParams.set('employee', employee);
+      return url.toString();
+    }
     const managerShareUrl = computed(()=>buildSharedUrl(false));
     const amyAdminUrl = computed(()=>buildSharedUrl(true));
     const agnesFinanceUrl = computed(()=>buildScopedSharedUrl('Agnes', 'finance'));
+    const chrisXuManagerUrl = computed(()=>buildEmployeeSharedUrl('Chris负责人', 'Chris Xu'));
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -2122,6 +2138,7 @@ createApp({
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
     function viewerCanAccessEmployee(name, data = {}) {
       if(!isScopedViewer.value) return true;
+      if(scopedEmployeeName) return canonicalName(name || data.meta?.employeeName) === scopedEmployeeName;
       return departmentKey(departmentForEmployee(name, data)) === viewerScopeKey;
     }
     function viewerCanAccessRecord(record) {
@@ -3007,6 +3024,16 @@ createApp({
       }
     }
 
+    async function copyChrisXuLink() {
+      const link = chrisXuManagerUrl.value;
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('Chris Xu负责人链接已复制');
+      } catch {
+        window.prompt('复制这个链接发给Chris Xu部门负责人', link);
+      }
+    }
+
     function exportSubmissionPackage() {
       if((meta.value.employeeName || '').trim()) saveCurrentRecord();
       if(!records.value.length) {
@@ -3661,8 +3688,8 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs, commissionPlan,
-      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, cloudEndpoint, cloudStatus,
-      isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel,
+      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, cloudEndpoint, cloudStatus,
+      isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, saveTime, toastMsg, toastVisible, canUndo,
@@ -3681,7 +3708,7 @@ createApp({
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
-      copyPublicLink, copyAmyAdminLink, copyAgnesFinanceLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
+      copyPublicLink, copyAmyAdminLink, copyAgnesFinanceLink, copyChrisXuLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient, departmentClass,
       bonusItemScore, syncBonusItemScore, addBonusItem, removeBonusItem, setKpiScore, setOkrCompletion,
