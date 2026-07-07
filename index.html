@@ -43,7 +43,7 @@ body {
 .header-inputs { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .header-inputs label { font-size:13px; color:var(--text-light); display:flex; align-items:center; gap:4px; }
 .header-inputs input, .header-inputs select { border:1px solid #E2E8F0; border-radius:8px; padding:6px 12px; font-size:14px; background:white; outline:none; transition:border 0.2s; font-family:inherit; }
-.header-inputs input:focus { border-color:var(--primary); }
+.header-inputs input:focus, .header-inputs select:focus { border-color:var(--primary); }
 .header-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .admin-toolbar { margin-top:14px; padding-top:14px; border-top:1px solid rgba(226,232,240,0.9); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .admin-toolbar-title { font-size:13px; font-weight:800; color:var(--text-light); }
@@ -391,7 +391,11 @@ body {
       <div class="header-inputs">
         <label>被考核人 <input v-model="meta.employeeName" placeholder="姓名"></label>
         <label>考核人 <input v-model="meta.evaluatorName" placeholder="姓名"></label>
-        <label>季度 <input v-model="meta.period" placeholder="2026-Q2"></label>
+        <label>季度
+          <select :value="meta.period" @change="changeAssessmentPeriod($event.target.value)">
+            <option v-for="period in assessmentPeriodOptions" :key="period" :value="period">{{period}}</option>
+          </select>
+        </label>
       </div>
       <div class="header-actions">
         <button class="btn btn-outline" :disabled="!canUndo" @click="undoLastAction">撤销</button>
@@ -477,7 +481,7 @@ body {
              @keyup.space.prevent="quickOpenEmployee(card.employeeName)">
           <div class="quick-employee-name">{{card.employeeName}}</div>
           <div class="quick-employee-dept">{{card.department}}</div>
-          <div class="quick-employee-meta">{{card.period}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
+          <div class="quick-employee-meta">{{card.periodLabel}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
           <div class="quick-employee-actions">
             <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName)">PDF</button>
             <button class="quick-employee-mini"
@@ -774,7 +778,9 @@ body {
 
       <div class="records-filters">
         <span>横向比较期间</span>
-        <input v-model="comparePeriod" placeholder="2026-Q2">
+        <select v-model="comparePeriod">
+          <option v-for="period in assessmentPeriodOptions" :key="period" :value="period">{{period}}</option>
+        </select>
         <span>个人追踪</span>
         <select v-model="selectedEmployee">
           <option value="">选择员工</option>
@@ -1588,6 +1594,17 @@ function periodYear(period) {
   return match ? Number(match[1]) : Number(currentQuarterLabel().slice(0, 4));
 }
 
+function periodSortValue(period) {
+  const match = String(period || '').trim().match(/^(\d{4})-Q([1-4])$/i);
+  return match ? Number(match[1]) * 10 + Number(match[2]) : 0;
+}
+
+function buildAssessmentPeriodOptions(anchorPeriod) {
+  const anchorYear = periodYear(normalizePeriodParam(anchorPeriod) || currentQuarterLabel());
+  const years = [anchorYear - 1, anchorYear, anchorYear + 1];
+  return years.flatMap(year => [1, 2, 3, 4].map(quarter => `${year}-Q${quarter}`));
+}
+
 function buildTimQ1FixedBonusRows(period) {
   const year = periodYear(period);
   return ["01", "02", "03"].map(month => ({
@@ -2157,6 +2174,16 @@ createApp({
       return Boolean(record && viewerCanAccessEmployee(record.employeeName, record.data));
     }
     const visibleRecords = computed(()=> records.value.filter(record=>viewerCanAccessRecord(record)));
+    const assessmentPeriodOptions = computed(()=> {
+      const base = buildAssessmentPeriodOptions(meta.value.period || comparePeriod.value || currentQuarterLabel());
+      const extra = [
+        meta.value.period,
+        comparePeriod.value,
+        urlPeriod,
+        ...visibleRecords.value.map(record=>record.period)
+      ].map(period=>normalizePeriodParam(period)).filter(Boolean);
+      return [...new Set([...base, ...extra])].sort((a,b)=>periodSortValue(a) - periodSortValue(b));
+    });
     const profileNames = computed(()=> Object.values(PERSON_PROFILES).map(profile=>profile.name).filter(name=>viewerCanAccessEmployee(name)));
     const employeeNames = computed(()=> [...new Set([
       ...profileNames.value.filter(name=>!isHiddenEmployeeName(name)),
@@ -2180,6 +2207,7 @@ createApp({
         ...card,
         department,
         departmentClass: departmentClass(department),
+        periodLabel: card.isProfile ? '未保存记录' : (card.period || '未保存记录'),
         savedRecordCount: visibleRecords.value.filter(item=>item.employeeName === name).length
       };
     }).filter(Boolean));
@@ -2606,9 +2634,23 @@ createApp({
       return true;
     }
 
-    function normalizeCurrentDraftPeriod() {
-      const targetPeriod = urlPeriod || currentQuarterLabel();
+    function changeAssessmentPeriod(value) {
+      const targetPeriod = normalizePeriodParam(value);
+      if(!targetPeriod) {
+        showToast('请选择有效季度');
+        return;
+      }
+      if(targetPeriod === meta.value.period) {
+        comparePeriod.value = targetPeriod;
+        return;
+      }
+      pushUndoSnapshot(`切换考核季度 ${targetPeriod}`);
       rolloverDraftToPeriod(targetPeriod);
+      showToast(`已切换到 ${targetPeriod}`);
+    }
+
+    function normalizeCurrentDraftPeriod() {
+      if(urlPeriod) rolloverDraftToPeriod(urlPeriod);
     }
 
     function normalizeCurrentProfileTemplate() {
@@ -3723,7 +3765,7 @@ createApp({
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, quarterlyOkrs, commissionPlan,
       publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, cloudEndpoint, cloudStatus,
       isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel, viewerScopeDescription,
-      records, comparePeriod, selectedEmployee, quickEmployeeSelect,
+      records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
@@ -3736,7 +3778,7 @@ createApp({
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       isMonthlyKpiTemplate, performancePanelTitle, performancePanelNote, performanceToggleLabel,
       performanceScoreUsage, workflowRuleSubtitle, workflowReviewTag, workflowReviewTitle, workflowReviewCopy,
-      monthlyCoefficient, monthlyDue, syncBonusMonths, applyBaseToMonths, fillPaidFromDue,
+      monthlyCoefficient, monthlyDue, syncBonusMonths, changeAssessmentPeriod, applyBaseToMonths, fillPaidFromDue,
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
