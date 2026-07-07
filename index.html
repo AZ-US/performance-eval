@@ -1562,6 +1562,16 @@ function currentQuarterLabel() {
   return `${now.getFullYear()}-Q${quarter}`;
 }
 
+function normalizePeriodParam(value) {
+  const text = String(value || '').trim();
+  if(!text) return '';
+  const simple = text.match(/^(\d{4})[-_\s]?Q([1-4])$/i);
+  if(simple) return `${simple[1]}-Q${simple[2]}`;
+  const cn = text.match(/^(\d{4}).*?([1-4])\s*(?:季度|Q)$/i);
+  if(cn) return `${cn[1]}-Q${cn[2]}`;
+  return '';
+}
+
 function getQuarterMonths(period) {
   const fallback = currentQuarterLabel();
   const match = String(period || fallback).trim().match(/^(\d{4})-Q([1-4])$/i);
@@ -1862,7 +1872,10 @@ createApp({
     const RECORDS_KEY = 'employee_eval_records_v1';
     const CLOUD_ENDPOINT_KEY = 'employee_eval_cloud_endpoint_v1';
     const DEFAULT_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyiWj6bwh46kOm_OGdRep8uYOqbURJP_bK0wVl19cZBcpn5o1gJpW3Ks5Thgc9bkjaiOg/exec';
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlPeriod = normalizePeriodParam(urlParams.get('period') || urlParams.get('quarter'));
     const initial = loadInitialData(STORAGE_KEY);
+    if(urlPeriod) initial.meta = { ...(initial.meta || DEFAULT_TEMPLATE.meta), period:urlPeriod };
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
     }
@@ -1896,7 +1909,6 @@ createApp({
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
-    const urlParams = new URLSearchParams(window.location.search);
     const isAdminMode = ref(urlParams.get('admin') === '1');
     const adminToolsOpen = ref(isAdminMode.value);
     const viewerName = (urlParams.get('viewer') || '').trim();
@@ -2579,6 +2591,26 @@ createApp({
       monthlyBonuses.value = normalizeProfileMonthlyBonuses(data, profile, meta.value.period);
     }
 
+    function rolloverDraftToPeriod(targetPeriod) {
+      if(!targetPeriod || meta.value.period === targetPeriod) return false;
+      const targetEmployee = scopedEmployeeName || canonicalName(meta.value.employeeName);
+      meta.value = { ...meta.value, period:targetPeriod };
+      comparePeriod.value = targetPeriod;
+      const profile = profileForEmployee(targetEmployee);
+      if(profile) {
+        applyProfileWithoutUndo(profile);
+        return true;
+      }
+      monthlyBonuses.value = buildMonthlyBonuses(targetPeriod, bonusBase.value);
+      quarterlyOkrExpanded.value = false;
+      return true;
+    }
+
+    function normalizeCurrentDraftPeriod() {
+      const targetPeriod = urlPeriod || currentQuarterLabel();
+      rolloverDraftToPeriod(targetPeriod);
+    }
+
     function normalizeCurrentProfileTemplate() {
       const profile = profileForEmployee(meta.value.employeeName);
       if(!profile) return;
@@ -3115,6 +3147,7 @@ createApp({
       if(period) comparePeriod.value = period;
     });
     onMounted(()=>{
+      normalizeCurrentDraftPeriod();
       normalizeCurrentProfileTemplate();
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentDepartment();
