@@ -828,9 +828,9 @@ body {
               <th>员工</th>
               <th>部门</th>
               <th>期间</th>
-              <th>月度应发</th>
-              <th>月度实发</th>
-              <th>已评月份</th>
+              <th v-if="!isOkrOnlyMode">月度应发</th>
+              <th v-if="!isOkrOnlyMode">月度实发</th>
+              <th v-if="!isOkrOnlyMode">已评月份</th>
               <th>绩效分数</th>
               <th>考核状态</th>
               <th>保存时间</th>
@@ -842,9 +842,9 @@ body {
               <td>{{record.employeeName}}</td>
               <td><span class="department-badge" :class="departmentClass(record.department)">{{record.department}}</span></td>
               <td>{{record.period}}</td>
-              <td>{{record.currency}} {{record.monthlyDueTotal}}</td>
-              <td>{{record.currency}} {{record.monthlyPaidTotal}}</td>
-              <td>{{record.ratedMonthCount}} / {{record.monthCount}}</td>
+              <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyDueTotal}}</td>
+              <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyPaidTotal}}</td>
+              <td v-if="!isOkrOnlyMode">{{record.ratedMonthCount}} / {{record.monthCount}}</td>
               <td>{{record.quarterScore}} / {{record.quarterWeight}} · {{record.quarterGrade}}</td>
               <td>{{record.okrFilledCount ? '已填写' : '暂未填写'}}</td>
               <td>{{formatDateTime(record.savedAt)}}</td>
@@ -856,7 +856,7 @@ body {
             </tr>
           </tbody>
           <tbody v-else>
-            <tr><td colspan="10" class="empty-state">当前期间还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
+            <tr><td :colspan="isOkrOnlyMode ? 7 : 10" class="empty-state">当前期间还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
           </tbody>
         </table>
       </div>
@@ -868,8 +868,8 @@ body {
               <th>员工</th>
               <th>部门</th>
               <th>期间</th>
-              <th>月度应发</th>
-              <th>月度实发</th>
+              <th v-if="!isOkrOnlyMode">月度应发</th>
+              <th v-if="!isOkrOnlyMode">月度实发</th>
               <th>绩效分数</th>
               <th>绩效等级</th>
               <th>发展备注</th>
@@ -880,15 +880,15 @@ body {
               <td>{{record.employeeName}}</td>
               <td><span class="department-badge" :class="departmentClass(record.department)">{{record.department}}</span></td>
               <td>{{record.period}}</td>
-              <td>{{record.currency}} {{record.monthlyDueTotal}}</td>
-              <td>{{record.currency}} {{record.monthlyPaidTotal}}</td>
+              <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyDueTotal}}</td>
+              <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyPaidTotal}}</td>
               <td>{{record.quarterScore}} / {{record.quarterWeight}}</td>
               <td>{{record.quarterGrade}}</td>
               <td>{{record.developmentNote || '可在考核备注中沉淀'}}</td>
             </tr>
           </tbody>
           <tbody v-else>
-            <tr><td colspan="8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
+            <tr><td :colspan="isOkrOnlyMode ? 6 : 8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
           </tbody>
         </table>
       </div>
@@ -3958,14 +3958,14 @@ createApp({
     <div><strong>部门：</strong>${escapeHtml(data.department || data.meta?.department || departmentForEmployee(data.meta?.employeeName, data))}</div>
     <div><strong>考核人：</strong>${escapeHtml(data.meta?.evaluatorName || '')}</div>
     <div><strong>期间：</strong>${escapeHtml(data.meta?.period || '')}</div>
-    <div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>
+    ${reportOkrOnly ? '' : `<div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>`}
     <div><strong>${escapeHtml(performanceTitle)}得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
     <div><strong>等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
     ${reportOkrOnly ? '' : `<div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>`}
     ${reportOkrOnly ? '' : `<div><strong>月度实发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyPaidTotal}</div>`}
     <div><strong>保存时间：</strong>${escapeHtml(savedAt ? formatDateTime(savedAt) : new Date().toLocaleString('zh-CN'))}</div>
   </div>
-  <div class="note">${escapeHtml(data.compensationNote || '')}</div>
+  ${reportOkrOnly ? '' : `<div class="note">${escapeHtml(data.compensationNote || '')}</div>`}
   <div class="summary">
     ${reportOkrOnly ? '' : `<div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>`}
     <div>基础分：${summary.baseScore}/${summary.quarterWeight}</div>
