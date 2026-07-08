@@ -421,6 +421,7 @@ body {
         <button class="btn btn-outline" @click="copyAmyAdminLink">复制Amy链接</button>
         <button class="btn btn-outline" @click="copyAgnesFinanceLink">复制Agnes财务链接</button>
         <button class="btn btn-outline" @click="copyChrisXuLink">复制Chris Xu负责人链接</button>
+        <button class="btn btn-outline" @click="copyOkrGroupLink">复制OKR专项链接</button>
         <button class="btn btn-outline" @click="syncCloudRecords">同步云端记录</button>
         <button class="btn btn-outline" @click="exportJSON">JSON</button>
         <button class="btn btn-outline" @click="exportExcel">Excel</button>
@@ -447,10 +448,11 @@ body {
       <div class="section-title-row">
         <div>
           <div class="section-title">提交测评</div>
-          <div class="section-subtitle">填写员工信息和月度奖金后，点击提交云端。</div>
+          <div class="section-subtitle">{{submissionSubtitle}}</div>
         </div>
         <div class="records-actions">
           <button class="btn btn-success" @click="submitCurrentToCloud">保存并提交云端</button>
+          <button class="btn btn-outline" v-if="isOkrOnlyMode" @click="syncCloudRecords">同步云端记录</button>
           <button class="btn btn-outline" v-if="isAdminMode && adminToolsOpen" @click="saveCurrentRecord">保存到本机</button>
           <button class="btn btn-primary" v-if="isAdminMode && adminToolsOpen" @click="exportSubmissionPackage">导出提交包</button>
         </div>
@@ -508,7 +510,7 @@ body {
     </section>
 
     <!-- Assessment mode -->
-    <section class="mode-card">
+    <section class="mode-card" v-if="!isOkrOnlyMode">
       <div class="mode-main">
         <div class="mode-title-row">
           <div class="section-title" style="margin-bottom:0">当前考核模式</div>
@@ -529,7 +531,7 @@ body {
     </section>
 
     <!-- Workflow rule -->
-    <section class="workflow-card" v-if="isAdminMode && adminToolsOpen">
+    <section class="workflow-card" v-if="isAdminMode && adminToolsOpen && !isOkrOnlyMode">
       <div class="section-title-row">
         <div>
           <div class="section-title">月度与季度填写规则</div>
@@ -621,7 +623,7 @@ body {
     </div>
 
     <!-- Monthly Bonus -->
-    <section class="bonus-card">
+    <section class="bonus-card" v-if="!isOkrOnlyMode">
       <div class="section-title-row">
         <div>
           <div class="section-title">{{compensationTitle}}</div>
@@ -1955,6 +1957,16 @@ createApp({
     const records = ref(loadRecords(RECORDS_KEY));
     const employeeRenameMap = ref(loadEmployeeRenameMap());
     const employeeHiddenNames = ref(loadEmployeeHiddenNames());
+    const isOkrOnlyMode = ['1', 'true', 'yes', 'okr'].includes(String(urlParams.get('okrOnly') || urlParams.get('okr') || '').trim().toLowerCase());
+    const okrGroupEmployeeDefaults = ['Freesia', 'Gary', 'Tim', 'Mia'];
+    const scopedEmployeeNames = (() => {
+      const raw = urlParams.get('employees') || urlParams.get('people') || '';
+      const parsed = raw.split(/[|,;，、]/)
+        .map(name=>canonicalEmployeeName(name, employeeRenameMap.value))
+        .filter(Boolean);
+      return [...new Set(isOkrOnlyMode ? (parsed.length ? parsed : okrGroupEmployeeDefaults) : parsed)];
+    })();
+    const scopedEmployeeSet = new Set(scopedEmployeeNames.map(employeeNameKey));
     const comparePeriod = ref(meta.value.period || currentQuarterLabel());
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
@@ -1965,15 +1977,18 @@ createApp({
     const viewerScopeDefaults = { agnes:'finance', damon:'all', amy:'all' };
     const viewerScopeKey = scopeKeyFromParam(urlParams.get('dept') || urlParams.get('scope') || viewerScopeDefaults[viewerName.toLowerCase()] || 'all');
     const scopedEmployeeName = canonicalEmployeeName(urlParams.get('employee') || urlParams.get('person') || '', employeeRenameMap.value);
-    const isScopedViewer = computed(()=>viewerScopeKey !== 'all' || Boolean(scopedEmployeeName));
+    const isScopedViewer = computed(()=>viewerScopeKey !== 'all' || Boolean(scopedEmployeeName) || scopedEmployeeSet.size > 0);
     const viewerScopeLabel = computed(()=>{
+      if(scopedEmployeeSet.size) return viewerName ? `${viewerName} · OKR专项` : 'OKR专项';
       if(scopedEmployeeName) return viewerName ? `${viewerName} · ${scopedEmployeeName}` : scopedEmployeeName;
       const scopeLabel = viewerScopeKey === 'all' ? '全部部门' : (DEPARTMENT_LABELS[viewerScopeKey] || '指定部门');
       return viewerName ? `${viewerName} · ${scopeLabel}` : scopeLabel;
     });
-    const viewerScopeDescription = computed(()=> scopedEmployeeName
+    const viewerScopeDescription = computed(()=> scopedEmployeeSet.size
+      ? `页面仅显示 ${scopedEmployeeNames.join('、')} 的OKR记录。`
+      : (scopedEmployeeName
       ? '页面仅显示该员工和相关提交记录。'
-      : '页面仅显示该部门人员和记录。'
+      : '页面仅显示该部门人员和记录。')
     );
     const urlCloudEndpoint = (urlParams.get('cloud') || '').trim();
     const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
@@ -2005,10 +2020,22 @@ createApp({
       url.searchParams.set('employee', employee);
       return url.toString();
     }
+    function buildOkrGroupSharedUrl() {
+      const endpoint = cloudEndpoint.value.trim();
+      const url = new URL(publicUrl);
+      if(endpoint) url.searchParams.set('cloud', endpoint);
+      url.searchParams.set('viewer', 'Damon');
+      url.searchParams.set('okrOnly', '1');
+      url.searchParams.set('employees', okrGroupEmployeeDefaults.join(','));
+      const period = normalizePeriodParam(meta.value.period);
+      if(period) url.searchParams.set('period', period);
+      return url.toString();
+    }
     const managerShareUrl = computed(()=>buildSharedUrl(false));
     const amyAdminUrl = computed(()=>buildSharedUrl(true));
     const agnesFinanceUrl = computed(()=>buildScopedSharedUrl('Agnes', 'finance'));
     const chrisXuManagerUrl = computed(()=>buildEmployeeSharedUrl('Chris负责人', 'Chris Xu'));
+    const okrGroupUrl = computed(()=>buildOkrGroupSharedUrl());
 
     const dimGradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
 
@@ -2310,8 +2337,10 @@ createApp({
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
     function viewerCanAccessEmployee(name, data = {}) {
+      const employeeName = canonicalName(name || data.meta?.employeeName);
+      if(scopedEmployeeSet.size) return scopedEmployeeSet.has(employeeNameKey(employeeName));
       if(!isScopedViewer.value) return true;
-      if(scopedEmployeeName) return canonicalName(name || data.meta?.employeeName) === scopedEmployeeName;
+      if(scopedEmployeeName) return employeeName === scopedEmployeeName;
       return departmentKey(departmentForEmployee(name, data)) === viewerScopeKey;
     }
     function viewerCanAccessRecord(record) {
@@ -2367,6 +2396,10 @@ createApp({
     const showMonthlyKpiMonthTabs = computed(()=>isMonthlyKpiTemplate.value && monthlyKpiMonths.value.length > 1);
     const activeMonthlyBonusRow = computed(()=>monthlyBonuses.value.find(row=>row.month === activeKpiMonth.value) || null);
     const hasConfiguredPerformanceTemplate = computed(()=>dimensions.value.length > 0);
+    const submissionSubtitle = computed(()=> isOkrOnlyMode
+      ? `本链接仅填写 ${scopedEmployeeNames.join('、') || '指定人员'} 的OKR信息；保存提交后，Amy和总经理可同步查看。`
+      : '填写员工信息和月度奖金后，点击提交云端。'
+    );
     const performancePanelTitle = computed(()=>{
       if(!hasConfiguredPerformanceTemplate.value) return 'OKR标准未配置';
       return isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘';
@@ -2381,12 +2414,14 @@ createApp({
       if(isMonthlyKpiTemplate.value) return okrExpanded.value ? '收起月度KPI' : '填写月度KPI评分';
       return okrExpanded.value ? '暂不填写季度OKR' : '填写季度OKR复盘';
     });
-    const performanceScoreUsage = computed(()=> isMonthlyKpiTemplate.value
-      ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
-      : (compensationMode.value === 'quarterly_commission'
-        ? '季度业务提成按下方箱量、毛利和客户等级公式测算；OKR用于业务控盘能力复盘和下季度动作校准。'
-        : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。')
-    );
+    const performanceScoreUsage = computed(()=> {
+      if(isOkrOnlyMode) return 'OKR专项链接仅用于填写和查看岗位OKR，不展示月度奖金或提成信息；保存后Amy和总经理可同步云端记录。';
+      return isMonthlyKpiTemplate.value
+        ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
+        : (compensationMode.value === 'quarterly_commission'
+          ? '季度业务提成按下方箱量、毛利和客户等级公式测算；OKR用于业务控盘能力复盘和下季度动作校准。'
+          : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。');
+    });
     const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
       ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表；季度OKR用于成长目标复盘，不替代月度KPI。'
       : (compensationMode.value === 'quarterly_commission'
@@ -3369,6 +3404,16 @@ createApp({
       }
     }
 
+    async function copyOkrGroupLink() {
+      const link = okrGroupUrl.value;
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast('OKR专项链接已复制');
+      } catch {
+        window.prompt('复制这个链接发给总经理', link);
+      }
+    }
+
     function exportSubmissionPackage() {
       if((meta.value.employeeName || '').trim()) saveCurrentRecord();
       if(!records.value.length) {
@@ -3456,6 +3501,7 @@ createApp({
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentMonthlyKpiState();
       normalizeCurrentDepartment();
+      if(isOkrOnlyMode) okrExpanded.value = true;
       if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
       if(hasQuarterlyOkrInput(quarterlyOkrs.value)) quarterlyOkrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
@@ -3755,13 +3801,14 @@ createApp({
 
     function buildEmployeePdfHtml(data, savedAt) {
       const summary = summarizeEvaluationData(data);
-      const showMonthly = !['no_monthly_bonus','quarterly_commission'].includes(data.compensationMode);
+      const reportOkrOnly = isOkrOnlyMode;
+      const showMonthly = !reportOkrOnly && !['no_monthly_bonus','quarterly_commission'].includes(data.compensationMode);
       const title = `${data.meta?.employeeName || '员工'}_${data.meta?.period || ''}_绩效考核`;
       const isMonthlyKpiReport = /月度\s*KPI|KPI考核/i.test(data.meta?.templateName || '');
       const performanceTitle = isMonthlyKpiReport ? '月度KPI' : '季度OKR';
       const reportCommissionPlan = normalizeCommissionPlan(data.commissionPlan);
       const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan);
-      const commissionHtml = reportCommissionPlan ? `
+      const commissionHtml = !reportOkrOnly && reportCommissionPlan ? `
         <h2>季度业务提成</h2>
         <div class="summary">
           <div>基础提成：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.baseCommissionPerContainer)}/柜</div>
@@ -3914,16 +3961,16 @@ createApp({
     <div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>
     <div><strong>${escapeHtml(performanceTitle)}得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
     <div><strong>等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
-    <div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>
-    <div><strong>月度实发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyPaidTotal}</div>
+    ${reportOkrOnly ? '' : `<div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>`}
+    ${reportOkrOnly ? '' : `<div><strong>月度实发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyPaidTotal}</div>`}
     <div><strong>保存时间：</strong>${escapeHtml(savedAt ? formatDateTime(savedAt) : new Date().toLocaleString('zh-CN'))}</div>
   </div>
   <div class="note">${escapeHtml(data.compensationNote || '')}</div>
   <div class="summary">
-    <div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>
+    ${reportOkrOnly ? '' : `<div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>`}
     <div>基础分：${summary.baseScore}/${summary.quarterWeight}</div>
     <div>加分项：+${summary.bonusScoreTotal}</div>
-    ${summary.commissionTotal ? `<div>季度业务提成：${escapeHtml(summary.currency)} ${formatMoney(summary.commissionTotal)}</div>` : ''}
+    ${!reportOkrOnly && summary.commissionTotal ? `<div>季度业务提成：${escapeHtml(summary.currency)} ${formatMoney(summary.commissionTotal)}</div>` : ''}
     <div>${escapeHtml(performanceTitle)}状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
     ${(data.quarterlyOkrs || []).length ? `<div>季度OKR完成率：${summary.quarterlyOkrCompletion}%</div>` : ''}
   </div>
@@ -4063,8 +4110,8 @@ createApp({
 
     return {
       meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, commissionPlan,
-      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, cloudEndpoint, cloudStatus,
-      isAdminMode, adminToolsOpen, isScopedViewer, viewerScopeLabel, viewerScopeDescription,
+      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, okrGroupUrl, cloudEndpoint, cloudStatus,
+      isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
       collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, saveTime, toastMsg, toastVisible, canUndo,
@@ -4077,7 +4124,7 @@ createApp({
       showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
-      isMonthlyKpiTemplate, performancePanelTitle, performancePanelNote, performanceToggleLabel,
+      isMonthlyKpiTemplate, submissionSubtitle, performancePanelTitle, performancePanelNote, performanceToggleLabel,
       performanceScoreUsage, workflowRuleSubtitle, workflowReviewTag, workflowReviewTitle, workflowReviewCopy,
       monthlyCoefficient, monthlyDue, syncBonusMonths, changeAssessmentPeriod, applyBaseToMonths, fillPaidFromDue,
       switchMonthlyKpiMonth, applyActiveMonthlyKpiToBonus,
@@ -4085,7 +4132,7 @@ createApp({
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
       exportRecordLibrary, triggerRecordImport, importRecordLibrary,
       saveCloudEndpoint, submitCurrentToCloud, syncCloudRecords,
-      copyPublicLink, copyAmyAdminLink, copyAgnesFinanceLink, copyChrisXuLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
+      copyPublicLink, copyAmyAdminLink, copyAgnesFinanceLink, copyChrisXuLink, copyOkrGroupLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient, departmentClass,
       bonusItemScore, syncBonusItemScore, addBonusItem, removeBonusItem, setKpiScore, setOkrCompletion,
