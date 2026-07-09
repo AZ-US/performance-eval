@@ -1952,6 +1952,7 @@ createApp({
     const CLOUD_ENDPOINT_KEY = 'employee_eval_cloud_endpoint_v1';
     const DEFAULT_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyiWj6bwh46kOm_OGdRep8uYOqbURJP_bK0wVl19cZBcpn5o1gJpW3Ks5Thgc9bkjaiOg/exec';
     const urlParams = new URLSearchParams(window.location.search);
+    const isLocalFileMode = window.location.protocol === 'file:';
     const urlPeriod = normalizePeriodParam(urlParams.get('period') || urlParams.get('quarter'));
     const initial = loadInitialData(STORAGE_KEY);
     if(urlPeriod) initial.meta = { ...(initial.meta || DEFAULT_TEMPLATE.meta), period:urlPeriod };
@@ -2000,7 +2001,7 @@ createApp({
     const selectedEmployee = ref('');
     const quickEmployeeSelect = ref('');
     const publicUrl = 'https://az-us.github.io/performance-eval/';
-    const isAdminMode = ref(urlParams.get('admin') === '1');
+    const isAdminMode = ref(urlParams.get('admin') === '1' || isLocalFileMode);
     const adminToolsOpen = ref(isAdminMode.value);
     const viewerName = (urlParams.get('viewer') || '').trim();
     const viewerScopeDefaults = { agnes:'finance', damon:'all', amy:'all' };
@@ -3387,8 +3388,15 @@ createApp({
         if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
         if(!silent) pushUndoSnapshot('同步云端记录');
         mergeRecordList(incoming);
-        cloudStatus.value = `已同步 ${incoming.length} 条记录`;
-        if(!silent) showToast('云端记录已同步');
+        const currentPeriodHasRecords = visibleRecords.value.some(record=>record.period === comparePeriod.value);
+        const latestPeriodWithRecords = [...new Set(visibleRecords.value.map(record=>record.period).filter(Boolean))]
+          .sort((a,b)=>periodSortValue(b) - periodSortValue(a))[0];
+        if(!urlPeriod && !currentPeriodHasRecords && latestPeriodWithRecords) {
+          comparePeriod.value = latestPeriodWithRecords;
+          meta.value = { ...meta.value, period:latestPeriodWithRecords };
+        }
+        cloudStatus.value = `已同步 ${incoming.length} 条记录，当前查看 ${comparePeriod.value}`;
+        if(!silent) showToast(`云端记录已同步，当前查看 ${comparePeriod.value}`);
       } catch {
         if(!silent) {
           cloudStatus.value = '云端同步失败，请检查地址或先用JSON导入';
