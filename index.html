@@ -622,6 +622,33 @@ body {
       </div>
     </div>
 
+    <section class="bonus-card" v-if="isOkrOnlyMode && monthlyEvaluationRows.length">
+      <div class="section-title-row">
+        <div>
+          <div class="section-title">月度评估记录</div>
+          <div class="section-subtitle">保留已保存的月度评价、等级和备注。</div>
+        </div>
+      </div>
+      <div class="bonus-table-wrap">
+        <table class="bonus-table">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th>月度等级</th>
+              <th>评估备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in monthlyEvaluationRows" :key="'okr-monthly-'+row.month">
+              <td>{{formatCommissionMonth(row.month)}}</td>
+              <td>{{row.grade || '未评'}}</td>
+              <td class="bonus-note">{{row.comment || '—'}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Monthly Bonus -->
     <section class="bonus-card" v-if="!isOkrOnlyMode">
       <div class="section-title-row">
@@ -830,7 +857,7 @@ body {
               <th>期间</th>
               <th v-if="!isOkrOnlyMode">月度应发</th>
               <th v-if="!isOkrOnlyMode">月度实发</th>
-              <th v-if="!isOkrOnlyMode">已评月份</th>
+              <th>已评月份</th>
               <th>绩效分数</th>
               <th>考核状态</th>
               <th>保存时间</th>
@@ -844,7 +871,7 @@ body {
               <td>{{record.period}}</td>
               <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyDueTotal}}</td>
               <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyPaidTotal}}</td>
-              <td v-if="!isOkrOnlyMode">{{record.ratedMonthCount}} / {{record.monthCount}}</td>
+              <td>{{record.ratedMonthCount}} / {{record.monthCount}}</td>
               <td>{{record.quarterScore}} / {{record.quarterWeight}} · {{record.quarterGrade}}</td>
               <td>{{record.okrFilledCount ? '已填写' : '暂未填写'}}</td>
               <td>{{formatDateTime(record.savedAt)}}</td>
@@ -856,7 +883,7 @@ body {
             </tr>
           </tbody>
           <tbody v-else>
-            <tr><td :colspan="isOkrOnlyMode ? 7 : 10" class="empty-state">当前期间还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
+            <tr><td :colspan="isOkrOnlyMode ? 8 : 10" class="empty-state">当前期间还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
           </tbody>
         </table>
       </div>
@@ -870,6 +897,7 @@ body {
               <th>期间</th>
               <th v-if="!isOkrOnlyMode">月度应发</th>
               <th v-if="!isOkrOnlyMode">月度实发</th>
+              <th v-if="isOkrOnlyMode">已评月份</th>
               <th>绩效分数</th>
               <th>绩效等级</th>
               <th>发展备注</th>
@@ -882,13 +910,14 @@ body {
               <td>{{record.period}}</td>
               <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyDueTotal}}</td>
               <td v-if="!isOkrOnlyMode">{{record.currency}} {{record.monthlyPaidTotal}}</td>
+              <td v-if="isOkrOnlyMode">{{record.ratedMonthCount}} / {{record.monthCount}}</td>
               <td>{{record.quarterScore}} / {{record.quarterWeight}}</td>
               <td>{{record.quarterGrade}}</td>
               <td>{{record.developmentNote || '可在考核备注中沉淀'}}</td>
             </tr>
           </tbody>
           <tbody v-else>
-            <tr><td :colspan="isOkrOnlyMode ? 6 : 8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
+            <tr><td :colspan="isOkrOnlyMode ? 7 : 8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
           </tbody>
         </table>
       </div>
@@ -2336,6 +2365,10 @@ createApp({
     const monthlyDueTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+monthlyDue(row), 0));
     const monthlyPaidTotal = computed(()=> monthlyBonuses.value.reduce((sum,row)=>sum+(Number(row.paid)||0), 0));
     const ratedMonthCount = computed(()=> monthlyBonuses.value.filter(row=>row.grade).length);
+    const monthlyEvaluationRows = computed(()=> monthlyBonuses.value.filter(row=>{
+      const month = String(row.month || '').trim();
+      return Boolean(row.grade || row.comment || monthlyKpiSnapshots.value?.[month]);
+    }));
     function viewerCanAccessEmployee(name, data = {}) {
       const employeeName = canonicalName(name || data.meta?.employeeName);
       if(scopedEmployeeSet.size) return scopedEmployeeSet.has(employeeNameKey(employeeName));
@@ -2415,7 +2448,7 @@ createApp({
       return okrExpanded.value ? '暂不填写季度OKR' : '填写季度OKR复盘';
     });
     const performanceScoreUsage = computed(()=> {
-      if(isOkrOnlyMode) return 'OKR专项链接仅用于填写和查看岗位OKR，不展示月度奖金或提成信息；保存后Amy和总经理可同步云端记录。';
+      if(isOkrOnlyMode) return 'OKR专项链接用于岗位OKR复盘，并保留已保存的月度评估记录；不展示月度奖金或提成金额。';
       return isMonthlyKpiTemplate.value
         ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
         : (compensationMode.value === 'quarterly_commission'
@@ -3855,6 +3888,23 @@ createApp({
               </tr>`).join('')}
           </tbody>
         </table>` : '';
+      const reportMonthlyEvaluationRows = (data.monthlyBonuses || []).filter(row=>{
+        const month = String(row.month || '').trim();
+        return Boolean(row.grade || row.comment || data.monthlyKpiSnapshots?.[month]);
+      });
+      const monthlyEvaluationHtml = reportOkrOnly && reportMonthlyEvaluationRows.length ? `
+        <h2>月度评估记录</h2>
+        <table>
+          <thead><tr><th>月份</th><th>等级</th><th>评估备注</th></tr></thead>
+          <tbody>
+            ${reportMonthlyEvaluationRows.map(row=>`
+              <tr>
+                <td>${escapeHtml(formatCommissionMonth(row.month))}</td>
+                <td>${escapeHtml(row.grade || '未评')}</td>
+                <td>${escapeHtml(row.comment || '')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : '';
       const gradeForSnapshot = (score, weight)=>{
         const pct = weight ? score / weight * 100 : 0;
         const sorted = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale).sort((a,b)=>b.minScore - a.minScore);
@@ -3963,6 +4013,7 @@ createApp({
     <div><strong>等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
     ${reportOkrOnly ? '' : `<div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>`}
     ${reportOkrOnly ? '' : `<div><strong>月度实发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyPaidTotal}</div>`}
+    ${reportOkrOnly ? `<div><strong>月度评估：</strong>${summary.ratedMonthCount}/${summary.monthCount}</div>` : ''}
     <div><strong>保存时间：</strong>${escapeHtml(savedAt ? formatDateTime(savedAt) : new Date().toLocaleString('zh-CN'))}</div>
   </div>
   ${reportOkrOnly ? '' : `<div class="note">${escapeHtml(data.compensationNote || '')}</div>`}
@@ -3976,6 +4027,7 @@ createApp({
   </div>
   ${commissionHtml}
   ${monthlyHtml}
+  ${monthlyEvaluationHtml}
   ${monthlyKpiHtml}
   <h2>${escapeHtml(performanceTitle)}${isMonthlyKpiReport && data.activeKpiMonth ? `（${escapeHtml(formatCommissionMonth(data.activeKpiMonth))}）` : ''}</h2>
   ${performanceHtml}
@@ -4119,7 +4171,7 @@ createApp({
       baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, quarterlyOkrCompletion,
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
       finalGrade, gradeColor, bonusAmount,
-      monthlyDueTotal, monthlyPaidTotal, ratedMonthCount,
+      monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
       showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
