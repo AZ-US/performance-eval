@@ -3344,8 +3344,20 @@ createApp({
           headers: {'Content-Type':'text/plain;charset=utf-8'},
           body: JSON.stringify({version:1, submittedAt:new Date().toISOString(), record})
         });
-        cloudStatus.value = `已提交云端 ${new Date().toLocaleTimeString('zh-CN')}`;
-        showToast('已提交云端');
+        cloudStatus.value = '已发送云端，正在确认...';
+        try {
+          const verified = await verifyCloudSubmission(endpoint, record);
+          if(verified) {
+            cloudStatus.value = `云端已确认：${record.employeeName} ${record.period} ${formatDateTime(verified.savedAt)}`;
+            showToast('云端已确认保存');
+          } else {
+            cloudStatus.value = '已发送，但云端暂未确认；请稍后点“同步云端记录”检查';
+            showToast('已发送，但云端暂未确认');
+          }
+        } catch {
+          cloudStatus.value = '已发送，但确认失败；请稍后点“同步云端记录”检查';
+          showToast('已发送，云端确认失败');
+        }
       } catch {
         cloudStatus.value = '云端提交失败，请导出提交包兜底';
         showToast('云端提交失败');
@@ -3372,6 +3384,20 @@ createApp({
         script.src = `${endpoint}${separator}action=list&callback=${callbackName}&_=${Date.now()}`;
         document.head.appendChild(script);
       });
+    }
+
+    async function verifyCloudSubmission(endpoint, record) {
+      await new Promise(resolve=>setTimeout(resolve, 1200));
+      const payload = await fetchCloudJsonp(endpoint);
+      const incoming = Array.isArray(payload) ? payload : payload.records;
+      if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
+      mergeRecordList(incoming);
+      const submittedTime = Date.parse(record.savedAt || '');
+      return incoming.find(item=>{
+        if(!item || item.id !== record.id) return false;
+        const itemTime = Date.parse(item.savedAt || '');
+        return !submittedTime || itemTime >= submittedTime;
+      }) || null;
     }
 
     async function syncCloudRecords(silent = false) {
