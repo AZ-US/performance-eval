@@ -2,7 +2,7 @@ const SHEET_NAME = 'records';
 
 function doPost(e) {
   try {
-    const payload = JSON.parse(e.postData.contents || '{}');
+    const payload = parsePayload_(e);
     const record = payload.record || payload;
     upsertRecord_(record);
     return json_({ok: true, savedAt: new Date().toISOString(), id: record.id});
@@ -21,6 +21,20 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
   return json_(payload);
+}
+
+function parsePayload_(e) {
+  const raw = e && e.postData && e.postData.contents ? e.postData.contents : '';
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      // Continue to form payload fallback below.
+    }
+  }
+  const formPayload = e && e.parameter && e.parameter.payload ? e.parameter.payload : '';
+  if (formPayload) return JSON.parse(formPayload);
+  throw new Error('Missing payload');
 }
 
 function upsertRecord_(record) {

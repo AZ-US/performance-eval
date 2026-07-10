@@ -3400,7 +3400,8 @@ createApp({
       cloudStatus.value = '正在提交云端...';
       try {
         const sentVia = await sendCloudPayload(endpoint, record);
-        cloudStatus.value = sentVia === 'beacon' ? '备用通道已发送，正在确认...' : '已发送云端，正在确认...';
+        const channelLabel = sentVia === 'form' ? '表单通道' : (sentVia === 'beacon' ? '备用通道' : '云端');
+        cloudStatus.value = `${channelLabel}已发送，正在确认...`;
         try {
           const verified = await verifyCloudSubmission(endpoint, record);
           if(verified) {
@@ -3435,8 +3436,50 @@ createApp({
           const blob = new Blob([body], {type:'text/plain;charset=utf-8'});
           if(navigator.sendBeacon(endpoint, blob)) return 'beacon';
         }
-        throw err;
+        await submitCloudPayloadByForm(endpoint, body);
+        return 'form';
       }
+    }
+
+    function submitCloudPayloadByForm(endpoint, body) {
+      return new Promise((resolve, reject)=>{
+        const frameName = `employeeEvalSubmit_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const iframe = document.createElement('iframe');
+        iframe.name = frameName;
+        iframe.style.display = 'none';
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = endpoint;
+        form.target = frameName;
+        form.style.display = 'none';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'payload';
+        input.value = body;
+        form.appendChild(input);
+        const cleanup = ()=>{
+          form.remove();
+          iframe.remove();
+        };
+        iframe.onload = ()=>{
+          cleanup();
+          resolve();
+        };
+        document.body.appendChild(iframe);
+        document.body.appendChild(form);
+        try {
+          form.submit();
+          setTimeout(()=>{
+            if(document.body.contains(form) || document.body.contains(iframe)) {
+              cleanup();
+              resolve();
+            }
+          }, 2500);
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      });
     }
 
     function fetchCloudJsonp(endpoint) {
