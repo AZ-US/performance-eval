@@ -580,7 +580,7 @@ body {
           <strong>{{formatCommissionMonth(month)}}</strong>
           <span>{{monthlyKpiSnapshotScore(month)}} / {{monthlyKpiSnapshotWeight(month)}} 分</span>
         </button>
-        <button class="btn btn-outline" @click="applyActiveMonthlyKpiToBonus">同步到奖金表</button>
+        <button class="btn btn-outline" @click="applyActiveMonthlyKpiToBonus">重新同步到奖金表</button>
       </div>
     </div>
 
@@ -782,7 +782,7 @@ body {
             <tr v-for="row in monthlyBonuses" :key="row.month" :class="{'active-kpi-month': isActiveKpiMonth(row.month)}">
               <td><input v-model="row.month"></td>
               <td class="bonus-grade">
-                <select v-model="row.grade">
+                <select v-model="row.grade" @change="markMonthlyBonusGradeManual(row)">
                   <option value="">未评</option>
                   <option v-for="g in gradeScale" :key="g.grade" :value="g.grade">{{g.grade}} - {{g.label}}</option>
                 </select>
@@ -2554,6 +2554,7 @@ createApp({
           [activeKpiMonth.value]: snapshot
         };
       }
+      autoSyncMonthlyKpiToBonus(activeKpiMonth.value);
       return monthlyKpiSnapshots.value;
     }
 
@@ -2591,26 +2592,86 @@ createApp({
       saveActiveMonthlyKpiSnapshot();
       activeKpiMonth.value = month;
       loadMonthlyKpiSnapshot(month);
+      autoSyncMonthlyKpiToBonus(month);
       showToast(`已切换到 ${formatCommissionMonth(month)} KPI`);
+    }
+
+    function hasMonthlyKpiScoringResult(snapshot) {
+      const hasKpiScore = (snapshot?.dimensions || [])
+        .flatMap(dim=>dim.kpis || [])
+        .some(kpi=>kpi.selectedTier || Number(kpi.score));
+      const hasBonusScore = normalizeBonusItems(snapshot?.bonusItems)
+        .some(item=>Number(item.quantity) || Number(item.score));
+      return hasKpiScore || hasBonusScore;
+    }
+
+    function monthlyKpiGradeFromSnapshot(snapshot) {
+      if(!snapshot || !hasMonthlyKpiScoringResult(snapshot)) return null;
+      const score = kpiSnapshotTotalScore(snapshot);
+      const weight = kpiSnapshotWeight(snapshot);
+      if(!weight) return null;
+      const pct = score / weight * 100;
+      const sorted = [...normalizeGradeScale(gradeScale.value)].sort((a,b)=>b.minScore - a.minScore);
+      const grade = sorted.find(item=>pct >= item.minScore) || sorted[sorted.length - 1] || null;
+      return grade ? { ...grade, score, weight } : null;
+    }
+
+    function markMonthlyBonusGradeManual(row) {
+      if(!isMonthlyKpiTemplate.value || !row) return;
+      const autoGrade = String(row.autoKpiGrade || '');
+      const currentGrade = String(row.grade || '');
+      row.manualGrade = Boolean(currentGrade || autoGrade) && currentGrade !== autoGrade;
+    }
+
+    function autoSyncMonthlyKpiToBonus(month, options = {}) {
+      if(!isMonthlyKpiTemplate.value || !month) return false;
+      const row = monthlyBonuses.value.find(item=>item.month === month);
+      if(!row) return false;
+      const snapshot = monthlyKpiSnapshotForMonth(month);
+      const result = monthlyKpiGradeFromSnapshot(snapshot);
+      if(!result) return false;
+      const previousAutoGrade = String(row.autoKpiGrade || '');
+      const currentGrade = String(row.grade || '');
+      const manualOverride = row.manualGrade === true
+        || (currentGrade && previousAutoGrade && currentGrade !== previousAutoGrade)
+        || (currentGrade && !previousAutoGrade && !options.force);
+      if(manualOverride && !options.force) return false;
+      const previousAutoPaid = Number(row.autoKpiPaid);
+      const currentPaid = Number(row.paid) || 0;
+      const shouldUpdatePaid = options.force || !currentPaid || (Number.isFinite(previousAutoPaid) && currentPaid === previousAutoPaid);
+      row.grade = result.grade;
+      row.autoKpiGrade = result.grade;
+      row.autoKpiScore = result.score;
+      row.autoKpiWeight = result.weight;
+      row.manualGrade = false;
+      row.base = Number(row.base ?? bonusBase.value) || bonusBase.value;
+      if(shouldUpdatePaid) {
+        row.paid = monthlyDue(row);
+        row.autoKpiPaid = row.paid;
+      }
+      return true;
+    }
+
+    function autoSyncAllMonthlyKpiBonuses() {
+      if(!isMonthlyKpiTemplate.value) return;
+      monthlyKpiMonths.value.forEach(month=>autoSyncMonthlyKpiToBonus(month));
     }
 
     function applyActiveMonthlyKpiToBonus() {
       if(!isMonthlyKpiTemplate.value || !activeKpiMonth.value) return;
-      const row = activeMonthlyBonusRow.value;
-      if(!row) {
-        showToast('未找到当前月份的奖金行');
-        return;
-      }
       pushUndoSnapshot(`同步 ${formatCommissionMonth(activeKpiMonth.value)} KPI到奖金`);
       saveActiveMonthlyKpiSnapshot();
-      row.grade = finalGrade.value.grade;
-      row.base = Number(row.base ?? bonusBase.value) || bonusBase.value;
-      row.paid = monthlyDue(row);
-      const note = `${formatCommissionMonth(activeKpiMonth.value)} KPI ${totalScore.value}/${totalWeight.value}，等级${finalGrade.value.grade}`;
-      if(!String(row.comment || '').includes(`${formatCommissionMonth(activeKpiMonth.value)} KPI`)) {
-        row.comment = row.comment ? `${note}；${row.comment}` : note;
+      const synced = autoSyncMonthlyKpiToBonus(activeKpiMonth.value, {force:true});
+      const row = activeMonthlyBonusRow.value;
+      if(row && synced) {
+        const note = `${formatCommissionMonth(activeKpiMonth.value)} KPI ${totalScore.value}/${totalWeight.value}，等级${row.grade}`;
+        if(!String(row.comment || '').includes(`${formatCommissionMonth(activeKpiMonth.value)} KPI`)) {
+          row.comment = row.comment ? `${note}；${row.comment}` : note;
+        }
+        showToast(`已同步 ${formatCommissionMonth(activeKpiMonth.value)} 到奖金表`);
+      } else {
+        showToast('当前月份暂无可同步的KPI结果');
       }
-      showToast(`已同步 ${formatCommissionMonth(activeKpiMonth.value)} 到奖金表`);
     }
 
     function applyBaseToMonths() {
@@ -3550,6 +3611,7 @@ createApp({
         const tier = kpi.tiers.find(t=>t.grade===grade);
         kpi.score = tier ? tier.points : 0;
       }
+      autoSyncMonthlyKpiToBonus(activeKpiMonth.value);
     }
 
     function toggleDim(id) {
@@ -3566,6 +3628,7 @@ createApp({
     let saveTimer = null;
     function getData() {
       saveActiveMonthlyKpiSnapshot();
+      autoSyncAllMonthlyKpiBonuses();
       const department = currentDepartment();
       return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, monthlyKpiSnapshots:monthlyKpiSnapshots.value, activeKpiMonth:activeKpiMonth.value, quarterlyOkrs:quarterlyOkrs.value, commissionPlan:normalizeCommissionPlan(commissionPlan.value) };
     }
@@ -4231,6 +4294,7 @@ createApp({
       isMonthlyKpiTemplate, submissionSubtitle, performancePanelTitle, performancePanelNote, performanceToggleLabel,
       performanceScoreUsage, workflowRuleSubtitle, workflowReviewTag, workflowReviewTitle, workflowReviewCopy,
       monthlyCoefficient, monthlyDue, syncBonusMonths, changeAssessmentPeriod, applyBaseToMonths, fillPaidFromDue,
+      markMonthlyBonusGradeManual,
       switchMonthlyKpiMonth, applyActiveMonthlyKpiToBonus,
       saveCurrentRecord, loadRecord, deleteRecord,
       quickOpenEmployee, startNewEmployee, deleteEmployeeRecords, renameEmployeeRecords,
