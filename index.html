@@ -3338,13 +3338,8 @@ createApp({
       if(!record) return;
       cloudStatus.value = '正在提交云端...';
       try {
-        await fetch(endpoint, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {'Content-Type':'text/plain;charset=utf-8'},
-          body: JSON.stringify({version:1, submittedAt:new Date().toISOString(), record})
-        });
-        cloudStatus.value = '已发送云端，正在确认...';
+        const sentVia = await sendCloudPayload(endpoint, record);
+        cloudStatus.value = sentVia === 'beacon' ? '备用通道已发送，正在确认...' : '已发送云端，正在确认...';
         try {
           const verified = await verifyCloudSubmission(endpoint, record);
           if(verified) {
@@ -3361,6 +3356,25 @@ createApp({
       } catch {
         cloudStatus.value = '云端提交失败，请导出提交包兜底';
         showToast('云端提交失败');
+      }
+    }
+
+    async function sendCloudPayload(endpoint, record) {
+      const body = JSON.stringify({version:1, submittedAt:new Date().toISOString(), record});
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type':'text/plain;charset=utf-8'},
+          body
+        });
+        return 'fetch';
+      } catch (err) {
+        if(navigator.sendBeacon) {
+          const blob = new Blob([body], {type:'text/plain;charset=utf-8'});
+          if(navigator.sendBeacon(endpoint, blob)) return 'beacon';
+        }
+        throw err;
       }
     }
 
@@ -3387,17 +3401,21 @@ createApp({
     }
 
     async function verifyCloudSubmission(endpoint, record) {
-      await new Promise(resolve=>setTimeout(resolve, 1200));
-      const payload = await fetchCloudJsonp(endpoint);
-      const incoming = Array.isArray(payload) ? payload : payload.records;
-      if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
-      mergeRecordList(incoming);
       const submittedTime = Date.parse(record.savedAt || '');
-      return incoming.find(item=>{
-        if(!item || item.id !== record.id) return false;
-        const itemTime = Date.parse(item.savedAt || '');
-        return !submittedTime || itemTime >= submittedTime;
-      }) || null;
+      for(const delayMs of [1500, 2500, 4000]) {
+        await new Promise(resolve=>setTimeout(resolve, delayMs));
+        const payload = await fetchCloudJsonp(endpoint);
+        const incoming = Array.isArray(payload) ? payload : payload.records;
+        if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
+        mergeRecordList(incoming);
+        const verified = incoming.find(item=>{
+          if(!item || item.id !== record.id) return false;
+          const itemTime = Date.parse(item.savedAt || '');
+          return !submittedTime || itemTime >= submittedTime;
+        });
+        if(verified) return verified;
+      }
+      return null;
     }
 
     async function syncCloudRecords(silent = false) {
