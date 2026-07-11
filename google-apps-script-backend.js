@@ -1,4 +1,5 @@
 const SHEET_NAME = 'records';
+const SPREADSHEET_ID = '1lZPkM8gHSKKh31szuB2OFkSf5cjoMTnJoGcpnIiB9WY';
 
 function doPost(e) {
   try {
@@ -78,7 +79,7 @@ function getRecords_() {
 }
 
 function getSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
   if (sheet.getLastRow() === 0) {
@@ -95,6 +96,13 @@ function getSheet_() {
     ]);
   }
   return sheet;
+}
+
+function getSpreadsheet_() {
+  if (SPREADSHEET_ID) return SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('Missing active spreadsheet');
+  return ss;
 }
 
 function json_(payload) {

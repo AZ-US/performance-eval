@@ -1950,7 +1950,15 @@ createApp({
     const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
     const RECORDS_KEY = 'employee_eval_records_v1';
     const CLOUD_ENDPOINT_KEY = 'employee_eval_cloud_endpoint_v1';
-    const DEFAULT_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyiWj6bwh46kOm_OGdRep8uYOqbURJP_bK0wVl19cZBcpn5o1gJpW3Ks5Thgc9bkjaiOg/exec';
+    const DEFAULT_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwkGHCMY1NoYJGswSnMUTPBnoQ1UCaJcNe7_vA2_mls9HiOJPNIIoYkuNx4bNjF1KGz/exec';
+    const LEGACY_CLOUD_ENDPOINTS = [
+      'https://script.google.com/macros/s/AKfycbyiWj6bwh46kOm_OGdRep8uYOqbURJP_bK0wVl19cZBcpn5o1gJpW3Ks5Thgc9bkjaiOg/exec'
+    ];
+    function normalizeCloudEndpoint(endpoint) {
+      const value = (endpoint || '').trim();
+      if(!value || value.includes('TEST_DEPLOYMENT')) return '';
+      return LEGACY_CLOUD_ENDPOINTS.includes(value) ? DEFAULT_CLOUD_ENDPOINT : value;
+    }
     const urlParams = new URLSearchParams(window.location.search);
     const isLocalFileMode = window.location.protocol === 'file:';
     const urlPeriod = normalizePeriodParam(urlParams.get('period') || urlParams.get('quarter'));
@@ -2020,12 +2028,13 @@ createApp({
       ? '页面仅显示该员工和相关提交记录。'
       : '页面仅显示该部门人员和记录。')
     );
-    const urlCloudEndpoint = (urlParams.get('cloud') || '').trim();
-    const savedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
-    const ignoredSavedCloudEndpoint = savedCloudEndpoint.includes('TEST_DEPLOYMENT');
-    const initialCloudEndpoint = urlCloudEndpoint || (ignoredSavedCloudEndpoint ? '' : savedCloudEndpoint) || DEFAULT_CLOUD_ENDPOINT;
+    const rawUrlCloudEndpoint = (urlParams.get('cloud') || '').trim();
+    const rawSavedCloudEndpoint = (localStorage.getItem(CLOUD_ENDPOINT_KEY) || '').trim();
+    const urlCloudEndpoint = normalizeCloudEndpoint(rawUrlCloudEndpoint);
+    const savedCloudEndpoint = normalizeCloudEndpoint(rawSavedCloudEndpoint);
+    const initialCloudEndpoint = urlCloudEndpoint || savedCloudEndpoint || DEFAULT_CLOUD_ENDPOINT;
     const cloudEndpoint = ref(initialCloudEndpoint);
-    if(urlCloudEndpoint || ignoredSavedCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, initialCloudEndpoint);
+    if(rawUrlCloudEndpoint || rawSavedCloudEndpoint !== initialCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, initialCloudEndpoint);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
     function buildSharedUrl(includeAdmin = false) {
       const endpoint = cloudEndpoint.value.trim();
