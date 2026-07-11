@@ -2934,10 +2934,28 @@ createApp({
       ];
     }
 
+    function normalizeMonthlyBonusRowsForPeriod(rows, profile, period, base) {
+      const effectivePeriod = period || currentQuarterLabel();
+      const expectedRows = withTimQ1FixedBonuses(buildMonthlyBonuses(effectivePeriod, base), profile, effectivePeriod);
+      const expectedMonths = new Set(expectedRows.map(row=>row.month));
+      const existingByMonth = new Map((Array.isArray(rows) ? rows : [])
+        .filter(row=>expectedMonths.has(row.month))
+        .map(row=>[row.month, row]));
+      const mergedRows = expectedRows.map(row=>{
+        const existing = existingByMonth.get(row.month);
+        return existing ? { ...row, ...existing } : row;
+      });
+      return withTimQ1FixedBonuses(mergedRows, profile, effectivePeriod);
+    }
+
     function normalizeProfileMonthlyBonuses(data, profile, period) {
       const effectivePeriod = period || data.meta?.period || currentQuarterLabel();
-      if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(effectivePeriod, data.bonusBase ?? bonusBase.value);
-      data.monthlyBonuses = withTimQ1FixedBonuses(data.monthlyBonuses, profile, effectivePeriod);
+      data.monthlyBonuses = normalizeMonthlyBonusRowsForPeriod(
+        data.monthlyBonuses,
+        profile,
+        effectivePeriod,
+        data.bonusBase ?? bonusBase.value
+      );
       return data.monthlyBonuses;
     }
 
@@ -3000,7 +3018,6 @@ createApp({
 
     function normalizeCurrentMonthlyBonuses() {
       const profile = profileForEmployee(meta.value.employeeName);
-      if(!profile) return;
       const data = {
         meta: meta.value,
         bonusBase: bonusBase.value,
@@ -3551,6 +3568,8 @@ createApp({
         if(!urlPeriod && !currentPeriodHasRecords && latestPeriodWithRecords) {
           comparePeriod.value = latestPeriodWithRecords;
           meta.value = { ...meta.value, period:latestPeriodWithRecords };
+          normalizeCurrentMonthlyBonuses();
+          normalizeCurrentMonthlyKpiState();
         }
         cloudStatus.value = `已同步 ${incoming.length} 条记录，当前查看 ${comparePeriod.value}`;
         if(!silent) showToast(`云端记录已同步，当前查看 ${comparePeriod.value}`);
