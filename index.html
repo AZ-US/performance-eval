@@ -1814,7 +1814,7 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-const { createApp, ref, computed, watch, onMounted } = Vue;
+const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
 const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
 const EMPLOYEE_HIDE_KEY = 'employee_eval_hidden_names_v1';
@@ -3548,8 +3548,9 @@ createApp({
       return null;
     }
 
-    async function syncCloudRecords(silent = false) {
+    async function syncCloudRecords(silent = false, options = {}) {
       silent = silent === true;
+      const allowPeriodAutoSwitch = options.allowPeriodAutoSwitch !== false;
       const endpoint = cloudEndpoint.value.trim();
       if(!endpoint) {
         if(!silent) showToast('请先配置云端提交地址');
@@ -3565,7 +3566,7 @@ createApp({
         const currentPeriodHasRecords = visibleRecords.value.some(record=>record.period === comparePeriod.value);
         const latestPeriodWithRecords = [...new Set(visibleRecords.value.map(record=>record.period).filter(Boolean))]
           .sort((a,b)=>periodSortValue(b) - periodSortValue(a))[0];
-        if(!urlPeriod && !currentPeriodHasRecords && latestPeriodWithRecords) {
+        if(allowPeriodAutoSwitch && !urlPeriod && !currentPeriodHasRecords && latestPeriodWithRecords) {
           comparePeriod.value = latestPeriodWithRecords;
           meta.value = { ...meta.value, period:latestPeriodWithRecords };
           normalizeCurrentMonthlyBonuses();
@@ -3697,6 +3698,7 @@ createApp({
 
     // Auto-save
     let saveTimer = null;
+    let cloudSyncTimer = null;
     function getData() {
       saveActiveMonthlyKpiSnapshot();
       autoSyncAllMonthlyKpiBonuses();
@@ -3727,6 +3729,15 @@ createApp({
       enforceViewerScopeOnCurrentDraft();
       persistRecords();
       if(cloudEndpoint.value.trim()) syncCloudRecords(true);
+      if(isAdminMode.value && cloudEndpoint.value.trim()) {
+        cloudSyncTimer = setInterval(()=>{
+          if(document.hidden) return;
+          syncCloudRecords(true, { allowPeriodAutoSwitch:false });
+        }, 60000);
+      }
+    });
+    onUnmounted(()=>{
+      if(cloudSyncTimer) clearInterval(cloudSyncTimer);
     });
 
     // Export JSON
