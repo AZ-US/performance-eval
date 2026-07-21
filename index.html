@@ -730,7 +730,7 @@ body {
             <input type="number" min="0" step="0.01" v-model.number="commissionPlan.reviewThreshold">
             <span>{{commissionPlan.currency}}</span>
           </label>
-          <span class="commission-muted">Business按0-120录入，Leadership按0-100录入；Business不再重复计算箱量和毛利。</span>
+          <span class="commission-muted">Business和Leadership来自上方OKR评分，保存时自动同步到本季度提成月份。</span>
         </div>
         <div class="bonus-table-wrap">
           <table class="bonus-table commission-table">
@@ -751,10 +751,8 @@ body {
                 <th>客户档合计</th>
                 <th>Customer原模型</th>
                 <th>Customer计入</th>
-                <th v-for="def in commissionPlan.businessKpiDefs" :key="'business-head-'+def.key">{{def.label}}</th>
                 <th>Business得分</th>
                 <th>Business计入</th>
-                <th v-for="def in commissionPlan.leadershipKpiDefs" :key="'leadership-head-'+def.key">{{def.label}}</th>
                 <th>Leadership得分</th>
                 <th>Leadership计入</th>
                 <th>最终提成</th>
@@ -786,14 +784,8 @@ body {
                 </td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.customerCommission)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.customerWeightedCommission)}}</td>
-                <td v-for="def in commissionPlan.businessKpiDefs" :key="item.row.month+'-business-'+def.key">
-                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.businessKpis[def.key]" :disabled="item.metrics.legacyModel" :title="def.label + '，0-' + def.maxScore">
-                </td>
                 <td class="commission-derived">{{formatPercent(item.metrics.businessScore)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.businessCommission)}}</td>
-                <td v-for="def in commissionPlan.leadershipKpiDefs" :key="item.row.month+'-leadership-'+def.key">
-                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.leadershipKpis[def.key]" :disabled="item.metrics.legacyModel" :title="def.label + '，0-' + def.maxScore">
-                </td>
                 <td class="commission-derived">{{formatPercent(item.metrics.leadershipScore)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.leadershipCommission)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.totalCommission)}}</td>
@@ -1453,6 +1445,32 @@ const GARY_LEADERSHIP_KPI_DEFS = [
   { key:"sopTraining", label:"培训/SOP沉淀", weight:0.10, maxScore:100 },
   { key:"collaborationFeedback", label:"协作反馈", weight:0.10, maxScore:100 }
 ];
+const GARY_TRANSITION_COMPENSATION_NOTE = "Gary不设固定月度奖金，Q3/Q4按新提成模型过渡。Customer按客户贡献计算；Business重点看Pipeline、重点客户推进、新客户/新市场、航线策略和经营复盘；Leadership重点看员工培养、授权备份、问题关闭、SOP沉淀和协作反馈。";
+function garyCommissionKpi(id, name, weight, module, key, target, sDesc, aDesc, bDesc, cDesc) {
+  return {
+    ...profileKpi(id, name, weight, target, sDesc, aDesc, bDesc, cDesc),
+    commissionModule: module,
+    commissionKey: key
+  };
+}
+function buildGaryQ3Q4Dimensions() {
+  return [
+    { id:"BIZ", name:"Business经营动作", kpis:[
+      garyCommissionKpi("B1","Pipeline覆盖",18,"business","pipelineCoverage","季度滚动Pipeline覆盖目标；以客户清单、预计箱量/利润、阶段状态和周度更新记录为证据。","覆盖≥120%，结构清楚且持续更新","覆盖≥100%，主要机会清楚","覆盖80%-99%，更新或质量不稳定","覆盖不足或缺少有效Pipeline"),
+      garyCommissionKpi("B2","重点客户推进",15,"business","keyCustomerProgress","围绕Top客户形成季度推进计划，记录拜访、报价、方案、异常协调和出货改善结果。","≥3个重点客户有明确进展和证据","2个以上重点客户有实质推进","有推进但结果不清或证据不足","缺少重点客户推进动作"),
+      garyCommissionKpi("B3","新客户/新市场开发",12,"business","newCustomerDevelopment","推进新客户、新区域或新产品机会，记录线索、报价、试单、转化和下一步动作。","形成可复制新机会并有落地结果","有有效新机会和明确跟进","有线索但转化弱","无有效新增动作"),
+      garyCommissionKpi("B4","产品/航线策略执行",9,"business","routeStrategyExecution","围绕航线、价格、舱位、客户结构形成策略动作，并沉淀复盘。","策略落地且对业务有明显帮助","完成主要策略动作","有想法但落地不足","缺少策略动作"),
+      garyCommissionKpi("B5","经营复盘质量",6,"business","reviewQuality","按月/季度复盘目标差异、客户结构、机会清单和下阶段动作，复盘需要可追踪。","复盘有数据、有判断、有动作","复盘完整且可跟进","复盘偏描述，行动弱","缺少有效复盘")
+    ]},
+    { id:"LEAD", name:"Leadership团队管理", kpis:[
+      garyCommissionKpi("L1","员工培养提升",14,"leadership","talentImprovement","明确团队成员培养目标，记录带教、能力提升、独立承接事项和阶段反馈。","培养目标清晰且有可验证提升","有持续培养和反馈","培养动作零散","缺少培养安排"),
+      garyCommissionKpi("L2","授权备份建设",10,"leadership","delegationBackup","建立关键客户、航线、报价、异常处理的备份机制，降低关键事项对单人的依赖。","备份机制稳定且可独立承接","主要事项有备份安排","备份不稳定或覆盖不足","关键事项仍高度依赖个人"),
+      garyCommissionKpi("L3","团队问题关闭",8,"leadership","issueClosure","建立问题清单和责任人，按期关闭客户、流程、协作和人员执行问题。","重点问题按期关闭并复盘","主要问题能持续推进","有清单但关闭不足","问题长期悬置"),
+      garyCommissionKpi("L4","培训/SOP沉淀",4,"leadership","sopTraining","沉淀客户开发、报价、航线策略、异常处理或交接SOP，并组织必要培训。","形成可复用材料并完成培训","有材料且开始使用","材料零散","无有效沉淀"),
+      garyCommissionKpi("L5","协作反馈",4,"leadership","collaborationFeedback","与操作、财务、客服、海外/分公司协作顺畅，关键事项反馈及时。","协作反馈稳定正向","主要协作顺畅","偶有延迟或信息不清","协作问题影响结果")
+    ]}
+  ];
+}
 const GARY_COMMISSION_TREND_PEOPLE = [
   { key:"Gary", label:"Gary", color:"#2563EB" },
   { key:"Jasmine", label:"Jasmine（已离职）", color:"#F59E0B" }
@@ -1516,7 +1534,7 @@ function buildGary2026CommissionPlan() {
     leadershipKpiDefs: GARY_LEADERSHIP_KPI_DEFS,
     scoringRules: COMMISSION_SCORE_RULES,
     customerGrades: CUSTOMER_GRADE_MULTIPLIERS,
-    note: "Q1/Q2继续沿用原客户提成模型和原数据结果；Q3/Q4最终提成 = Customer原模型提成 x 阶段权重 + Q1月均基准 x Business权重 x Business KPI得分 + Q1月均基准 x Leadership权重 x Leadership KPI得分。Business不再重复计算箱量和毛利；Customer原模型不设120%封顶，超过复核线仅提示复核。",
+    note: "Q1/Q2保持原客户提成模型和历史数据；Q3/Q4按新提成模型过渡，Customer、Business、Leadership结果汇总为季度业务提成。Business和Leadership由上方OKR评分自动同步。",
     months: budgetByMonth.map((budgetVolume, index) => {
       const month = `2026-${String(index + 1).padStart(2, "0")}`;
       const actual = q1[month] || {};
@@ -1569,10 +1587,19 @@ const PERSON_PROFILES = {
   Gary: {
     name: "Gary",
     templateName: "Gary Q3/Q4 出口业务经理KPI",
+    detailedQuarters: ["Q3","Q4"],
+    quarterTemplateNames: {
+      Q3: "Gary Q3 出口业务经理OKR+提成",
+      Q4: "Gary Q4 出口业务经理OKR+提成"
+    },
+    quarterTemplates: {
+      Q3: { dimensions: buildGaryQ3Q4Dimensions(), compensationNote: GARY_TRANSITION_COMPENSATION_NOTE },
+      Q4: { dimensions: buildGaryQ3Q4Dimensions(), compensationNote: GARY_TRANSITION_COMPENSATION_NOTE }
+    },
     compensationMode: "quarterly_commission",
     bonusBase: 0,
     bonusCurrency: "USD",
-    compensationNote: "Gary不设固定月度奖金，按Q3/Q4出口业务经理KPI提成模型结算。Customer继续沿用原客户提成公式且不做120%封顶；Business不再重复计算箱量和毛利，改为Pipeline、重点客户推进、新客户/新市场、航线策略和经营复盘；Leadership按员工培养、授权备份、问题关闭、SOP沉淀和协作反馈量化评分。",
+    compensationNote: GARY_TRANSITION_COMPENSATION_NOTE,
     commissionPlan: buildGary2026CommissionPlan(),
     dimensions: [
       { id:"O1", name:"业务控盘能力", kpis:[
@@ -1784,10 +1811,23 @@ function prepareQuarterProfileTemplates() {
       isPlaceholder: false
     };
     const detailedQuarters = new Set(profile.detailedQuarters || []);
-    const detailedQuarterProfile = (quarterKey) => ({
-      ...q2,
-      templateName: profile.quarterTemplateNames?.[quarterKey] || `${profile.name} ${quarterKey} OKR`
-    });
+    const detailedQuarterProfile = (quarterKey) => {
+      const override = profile.quarterTemplates?.[quarterKey] || {};
+      return {
+        ...q2,
+        ...override,
+        templateName: override.templateName || profile.quarterTemplateNames?.[quarterKey] || `${profile.name} ${quarterKey} OKR`,
+        compensationMode: override.compensationMode || q2.compensationMode,
+        bonusBase: override.bonusBase ?? q2.bonusBase,
+        bonusCurrency: override.bonusCurrency || q2.bonusCurrency,
+        compensationNote: override.compensationNote || q2.compensationNote,
+        bonusItems: deepClone(override.bonusItems ?? q2.bonusItems ?? []),
+        quarterlyOkrs: deepClone(override.quarterlyOkrs ?? q2.quarterlyOkrs ?? []),
+        commissionPlan: deepClone(override.commissionPlan ?? q2.commissionPlan ?? null),
+        dimensions: deepClone(override.dimensions ?? q2.dimensions ?? []),
+        isPlaceholder: false
+      };
+    };
     profile.quarters = {
       Q2: q2,
       Q3: detailedQuarters.has("Q3") ? detailedQuarterProfile("Q3") : buildPlaceholderQuarterProfile(profile, "Q3"),
@@ -1899,6 +1939,52 @@ function getQuarterMonths(period) {
   const quarter = match ? Number(match[2]) : Number(fallback.slice(-1));
   const startMonth = (quarter - 1) * 3 + 1;
   return [0, 1, 2].map(offset => `${year}-${String(startMonth + offset).padStart(2, '0')}`);
+}
+
+function hasGaryCommissionOkrInput(dimensionsSource) {
+  return (Array.isArray(dimensionsSource) ? dimensionsSource : [])
+    .flatMap(dim=>dim.kpis || [])
+    .filter(kpi=>kpi.commissionModule && kpi.commissionKey)
+    .some(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim());
+}
+
+function garyOkrCommissionScores(dimensionsSource, plan) {
+  const normalizedPlan = normalizeCommissionPlan(plan);
+  const businessDefs = new Map((normalizedPlan?.businessKpiDefs || GARY_BUSINESS_KPI_DEFS).map(def=>[def.key, def]));
+  const leadershipDefs = new Map((normalizedPlan?.leadershipKpiDefs || GARY_LEADERSHIP_KPI_DEFS).map(def=>[def.key, def]));
+  const scores = { business:{}, leadership:{} };
+  (Array.isArray(dimensionsSource) ? dimensionsSource : []).forEach(dim=>{
+    (dim.kpis || []).forEach(kpi=>{
+      const module = String(kpi.commissionModule || '').trim();
+      const key = String(kpi.commissionKey || '').trim();
+      const def = module === 'business' ? businessDefs.get(key) : (module === 'leadership' ? leadershipDefs.get(key) : null);
+      if(!def) return;
+      const weight = Number(kpi.weight) || 0;
+      const ratio = weight ? (Number(kpi.score) || 0) / weight : 0;
+      const score = Math.max(0, Math.min(Number(def.maxScore) || 100, ratio * (Number(def.maxScore) || 100)));
+      scores[module][key] = Math.round(score * 100) / 100;
+    });
+  });
+  return scores;
+}
+
+function applyGaryOkrScoresToCommissionPlan(plan, dimensionsSource, period, options = {}) {
+  const normalizedPlan = normalizeCommissionPlan(plan);
+  if(!normalizedPlan) return null;
+  const hasInput = options.force || hasGaryCommissionOkrInput(dimensionsSource);
+  if(!hasInput) return normalizedPlan;
+  const quarterMonths = new Set(getQuarterMonths(period));
+  const scores = garyOkrCommissionScores(dimensionsSource, normalizedPlan);
+  normalizedPlan.months = normalizedPlan.months.map(row=>{
+    const stage = row.stage || commissionStageForMonth(row.month);
+    if(!quarterMonths.has(row.month) || isLegacyGaryCommissionStage(stage)) return row;
+    return {
+      ...row,
+      businessKpis: normalizeCommissionScoreSet({ ...(row.businessKpis || {}), ...scores.business }, normalizedPlan.businessKpiDefs),
+      leadershipKpis: normalizeCommissionScoreSet({ ...(row.leadershipKpis || {}), ...scores.leadership }, normalizedPlan.leadershipKpiDefs)
+    };
+  });
+  return normalizedPlan;
 }
 
 const TIM_Q1_FIXED_BONUS_COMMENT = "Q1历史发放：按照月固定1000发放。";
@@ -2702,6 +2788,7 @@ createApp({
       kpi.score = Math.max(0, Math.min(Number(kpi.weight)||0, Number(kpi.score)||0));
       const matchingTier = (kpi.tiers || []).find(tier=>Number(tier.points) === Number(kpi.score));
       kpi.selectedTier = matchingTier?.grade || null;
+      syncGaryOkrToCommissionPlan();
     }
 
     function setOkrCompletion(kr) {
@@ -2923,13 +3010,13 @@ createApp({
       return isMonthlyKpiTemplate.value
         ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
         : (compensationMode.value === 'quarterly_commission'
-          ? '季度业务提成按Customer、Business、Leadership三模块测算；Customer保留原客户提成，Business和Leadership用量化KPI记录经营动作和管理结果。'
+          ? '季度业务提成按Customer、Business、Leadership三模块测算；Business和Leadership由OKR评分自动同步到提成表。'
           : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。');
     });
     const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
       ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表；季度OKR用于成长目标复盘，不替代月度KPI。'
       : (compensationMode.value === 'quarterly_commission'
-        ? '给考评人的口径：Gary填写Q3/Q4季度KPI提成表；Customer录入客户提成数据，Business和Leadership录入量化得分后系统直接算提成结果。'
+        ? '给考评人的口径：Gary先填写OKR评分，再录入Customer业务数据，系统自动汇总提成结果。'
         : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。')
     );
     const workflowReviewTag = computed(()=> isMonthlyKpiTemplate.value ? '每月填写' : '季度末填写');
@@ -2978,7 +3065,7 @@ createApp({
     const assessmentModeCopy = computed(()=>{
       if(isMonthlyKpiTemplate.value) return '本岗位按月度KPI评分核算月度奖金；季度视图只用于查看趋势、成长阶段和下一步培养安排。';
       if(compensationMode.value === 'no_monthly_bonus') return '本岗位不做月度奖金发放；月度可记录进展，季度末用OKR复盘支持岗位发展、年终奖金或组织调整判断。';
-      if(compensationMode.value === 'quarterly_commission') return '本岗位不按固定月奖发放；Q3/Q4用Customer、Business、Leadership三模块计算季度KPI提成。';
+      if(compensationMode.value === 'quarterly_commission') return '本岗位不按固定月奖发放；Q3/Q4按新提成模型过渡。';
       if(compensationMode.value === 'monthly_accelerator') return '本岗位按月度等级发放加成奖金；季度OKR用于判断结构性突破、资源能力和下季度目标，不追溯扣回已发月度奖金。';
       return '月度奖金按当月结果发放；季度OKR用于复盘和下季度目标校准，不追溯扣回已发月度奖金。';
     });
@@ -3127,6 +3214,17 @@ createApp({
       monthlyKpiMonths.value.forEach(month=>autoSyncMonthlyKpiToBonus(month));
     }
 
+    function syncGaryOkrToCommissionPlan() {
+      if(canonicalName(meta.value.employeeName) !== 'Gary' || !commissionPlan.value) return false;
+      const nextPlan = applyGaryOkrScoresToCommissionPlan(commissionPlan.value, dimensions.value, meta.value.period);
+      if(!nextPlan) return false;
+      const before = JSON.stringify(normalizeCommissionPlan(commissionPlan.value));
+      const after = JSON.stringify(nextPlan);
+      if(before === after) return false;
+      commissionPlan.value = nextPlan;
+      return true;
+    }
+
     function applyActiveMonthlyKpiToBonus() {
       if(!isMonthlyKpiTemplate.value || !activeKpiMonth.value) return;
       pushUndoSnapshot(`同步 ${formatCommissionMonth(activeKpiMonth.value)} KPI到奖金`);
@@ -3225,6 +3323,7 @@ createApp({
       monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
       activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || currentQuarterLabel())[0];
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
+      syncGaryOkrToCommissionPlan();
     }
 
     function undoLastAction() {
@@ -3324,8 +3423,9 @@ createApp({
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
       comparePeriod.value = meta.value.period;
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
-      okrExpanded.value = isMonthlyKpiTemplate.value || Boolean(record.okrFilledCount);
+      okrExpanded.value = isMonthlyKpiTemplate.value || compensationMode.value === 'quarterly_commission' || Boolean(record.okrFilledCount);
       quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
+      syncGaryOkrToCommissionPlan();
       showToast('已载入员工记录');
     }
 
@@ -3442,6 +3542,9 @@ createApp({
       const matchesProfileTemplate = data.meta?.templateName === template.templateName;
       const canReplaceQuarterTemplate = !matchesProfileTemplate && !hasQuarterProgress(data);
       const needsKoriV1Upgrade = profile.name === 'Kori' && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
+      const needsGaryCommissionOkrUpgrade = profile.name === 'Gary'
+        && (template.dimensions || []).some(dim=>(dim.kpis || []).some(kpi=>kpi.commissionModule && kpi.commissionKey))
+        && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
       data.meta = {
         ...(data.meta || {}),
         employeeName: profile.name,
@@ -3449,7 +3552,7 @@ createApp({
         department: departmentForEmployee(profile.name)
       };
       data.department = departmentForEmployee(profile.name);
-      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade) {
+      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade) {
         data.meta.templateName = template.templateName;
         data.meta.templateVersion = `${quarterKeyFromPeriod(effectivePeriod)}-role${template.isPlaceholder ? '-placeholder' : ''}`;
         data.bonusBase = template.bonusBase;
@@ -3461,7 +3564,7 @@ createApp({
         data.dimensions = deepClone(template.dimensions);
         data.bonusItems = deepClone(template.bonusItems || []);
         data.quarterlyOkrs = deepClone(template.quarterlyOkrs || []);
-      } else if(needsKoriV1Upgrade) {
+      } else if(needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade) {
         data.dimensions = mergeTemplateDimensionsPreservingProgress(data.dimensions, template.dimensions);
         data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
         data.quarterlyOkrs = (data.quarterlyOkrs && data.quarterlyOkrs.length)
@@ -3541,6 +3644,7 @@ createApp({
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
       monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
       activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
+      syncGaryOkrToCommissionPlan();
     }
 
     function currentDepartment() {
@@ -3705,6 +3809,7 @@ createApp({
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
       quarterlyOkrExpanded.value = false;
+      syncGaryOkrToCommissionPlan();
       showToast(`已载入 ${profile.name} 的OKR模版`);
     }
 
@@ -3727,6 +3832,7 @@ createApp({
       quickEmployeeSelect.value = profile.name;
       okrExpanded.value = true;
       quarterlyOkrExpanded.value = false;
+      syncGaryOkrToCommissionPlan();
     }
 
     function enforceViewerScopeOnCurrentDraft() {
@@ -4147,6 +4253,7 @@ createApp({
         kpi.score = tier ? tier.points : 0;
       }
       autoSyncMonthlyKpiToBonus(activeKpiMonth.value);
+      syncGaryOkrToCommissionPlan();
     }
 
     function toggleDim(id) {
@@ -4165,6 +4272,7 @@ createApp({
     function getData() {
       saveActiveMonthlyKpiSnapshot();
       autoSyncAllMonthlyKpiBonuses();
+      syncGaryOkrToCommissionPlan();
       const department = currentDepartment();
       return { meta:{ ...meta.value, department }, department, bonusBase:bonusBase.value, bonusCurrency:bonusCurrency.value, compensationMode:compensationMode.value, compensationNote:compensationNote.value, monthlyBonuses:monthlyBonuses.value, gradeScale:normalizeGradeScale(gradeScale.value), dimensions:dimensions.value, bonusItems:bonusItems.value, monthlyKpiSnapshots:monthlyKpiSnapshots.value, activeKpiMonth:activeKpiMonth.value, quarterlyOkrs:quarterlyOkrs.value, commissionPlan:normalizeCommissionPlan(commissionPlan.value) };
     }
@@ -4185,8 +4293,10 @@ createApp({
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentMonthlyKpiState();
       normalizeCurrentDepartment();
+      syncGaryOkrToCommissionPlan();
       if(isOkrOnlyMode) okrExpanded.value = true;
       if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
+      if(compensationMode.value === 'quarterly_commission' && dimensions.value.length) okrExpanded.value = true;
       if(hasQuarterlyOkrInput(quarterlyOkrs.value)) quarterlyOkrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
       enforceViewerScopeOnCurrentDraft();
@@ -4244,6 +4354,7 @@ createApp({
             monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
             activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || meta.value.period || currentQuarterLabel())[0];
             quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
+            syncGaryOkrToCommissionPlan();
             showToast('导入成功');
           } else {
             showToast('文件格式不正确');
@@ -4817,6 +4928,7 @@ createApp({
             activeKpiMonth.value = getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
             normalizeCurrentMonthlyKpiState();
             quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
+            syncGaryOkrToCommissionPlan();
             showToast('模版导入成功');
             drawerOpen.value = false;
           } else {
