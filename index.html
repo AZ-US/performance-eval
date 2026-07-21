@@ -235,7 +235,7 @@ body {
 .commission-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .commission-control { display:flex; align-items:center; gap:6px; color:var(--text-light); font-size:13px; }
 .commission-control input { width:86px; border:1px solid #E2E8F0; border-radius:8px; padding:6px 9px; font-size:13px; background:white; outline:none; font-family:inherit; }
-.commission-table { min-width:1680px; }
+.commission-table { min-width:2600px; }
 .commission-table th { white-space:nowrap; }
 .commission-table .compact-number { min-width:74px; }
 .commission-derived { font-weight:800; white-space:nowrap; }
@@ -697,12 +697,16 @@ body {
       <div class="commission-panel" v-if="showCommissionPlan">
         <div class="bonus-stats">
           <div class="bonus-stat">
-            <div class="bonus-stat-label">提成测算合计</div>
+            <div class="bonus-stat-label">最终提成合计</div>
             <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.totalCommission)}}</div>
           </div>
           <div class="bonus-stat">
-            <div class="bonus-stat-label">已录入实际 / 预算箱量</div>
-            <div class="bonus-stat-value">{{commissionSummary.actualVolume}} / {{commissionSummary.budgetVolume}}</div>
+            <div class="bonus-stat-label">Customer计入 / 原模型</div>
+            <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.customerWeightedCommission)}} / {{formatMoney(commissionSummary.customerCommission)}}</div>
+          </div>
+          <div class="bonus-stat">
+            <div class="bonus-stat-label">Business / Leadership</div>
+            <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.businessCommission)}} / {{formatMoney(commissionSummary.leadershipCommission)}}</div>
           </div>
           <div class="bonus-stat">
             <div class="bonus-stat-label">已录入月份</div>
@@ -718,17 +722,22 @@ body {
             <input type="number" min="0" step="0.01" v-model.number="commissionPlan.marginTargetCny">
             <span>{{commissionPlan.marginCurrency}}</span>
           </label>
-          <label class="commission-control">年度预算
-            <input type="number" min="0" v-model.number="commissionPlan.budgetTotal">
-            <span>柜</span>
+          <label class="commission-control">Q1月均基准
+            <input type="number" min="0" step="0.01" v-model.number="commissionPlan.targetMonthlyBonus">
+            <span>{{commissionPlan.currency}}</span>
           </label>
-          <span class="commission-muted">公式：箱量完成比分数 x 毛利完成比分数 x 基础提成 x 客户等级系数</span>
+          <label class="commission-control">复核线
+            <input type="number" min="0" step="0.01" v-model.number="commissionPlan.reviewThreshold">
+            <span>{{commissionPlan.currency}}</span>
+          </label>
+          <span class="commission-muted">Business按0-120录入，Leadership按0-100录入；Business不再重复计算箱量和毛利。</span>
         </div>
         <div class="bonus-table-wrap">
           <table class="bonus-table commission-table">
             <thead>
               <tr>
                 <th>月份</th>
+                <th>阶段</th>
                 <th>预算箱量</th>
                 <th>实际箱量</th>
                 <th>箱量完成比</th>
@@ -740,7 +749,16 @@ body {
                 <th>单柜提成</th>
                 <th v-for="grade in commissionPlan.customerGrades" :key="'head-'+grade.grade">{{grade.grade}}档 x{{grade.multiplier}}</th>
                 <th>客户档合计</th>
-                <th>月度提成</th>
+                <th>Customer原模型</th>
+                <th>Customer计入</th>
+                <th v-for="def in commissionPlan.businessKpiDefs" :key="'business-head-'+def.key">{{def.label}}</th>
+                <th>Business得分</th>
+                <th>Business计入</th>
+                <th v-for="def in commissionPlan.leadershipKpiDefs" :key="'leadership-head-'+def.key">{{def.label}}</th>
+                <th>Leadership得分</th>
+                <th>Leadership计入</th>
+                <th>最终提成</th>
+                <th>状态</th>
                 <th>备注</th>
               </tr>
             </thead>
@@ -749,6 +767,7 @@ body {
                 <td class="commission-month-cell">
                   <span class="commission-month-label" :title="item.row.month">{{formatCommissionMonth(item.row.month)}}</span>
                 </td>
+                <td class="commission-derived">{{item.metrics.stage}}</td>
                 <td><input class="compact-number" type="number" min="0" v-model.number="item.row.budgetVolume"></td>
                 <td><input class="compact-number" type="number" min="0" v-model.number="item.row.actualVolume"></td>
                 <td class="commission-derived">{{formatPercent(item.metrics.volumeRate)}}</td>
@@ -765,7 +784,24 @@ body {
                   <span class="commission-derived">{{item.metrics.gradeVolumeTotal}}</span>
                   <span class="commission-warning" v-if="item.metrics.mismatch">与实际箱量不一致</span>
                 </td>
+                <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.customerCommission)}}</td>
+                <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.customerWeightedCommission)}}</td>
+                <td v-for="def in commissionPlan.businessKpiDefs" :key="item.row.month+'-business-'+def.key">
+                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.businessKpis[def.key]" :title="def.label + '，0-' + def.maxScore">
+                </td>
+                <td class="commission-derived">{{formatPercent(item.metrics.businessScore)}}</td>
+                <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.businessCommission)}}</td>
+                <td v-for="def in commissionPlan.leadershipKpiDefs" :key="item.row.month+'-leadership-'+def.key">
+                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.leadershipKpis[def.key]" :title="def.label + '，0-' + def.maxScore">
+                </td>
+                <td class="commission-derived">{{formatPercent(item.metrics.leadershipScore)}}</td>
+                <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.leadershipCommission)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.totalCommission)}}</td>
+                <td>
+                  <span class="commission-warning" v-if="item.metrics.needsReview">超过复核线</span>
+                  <span class="commission-muted" v-else-if="item.metrics.protectionApplied">Q3保护线</span>
+                  <span class="commission-muted" v-else>可计算</span>
+                </td>
                 <td class="bonus-note"><textarea v-model="item.row.note" placeholder="区域、客户等级、异常说明..."></textarea></td>
               </tr>
             </tbody>
@@ -1397,6 +1433,25 @@ const CUSTOMER_GRADE_MULTIPLIERS = [
   { grade:"C", multiplier:0.8 },
   { grade:"D", multiplier:0.6 }
 ];
+const GARY_Q3_Q4_STAGE_WEIGHTS = {
+  "Q3-2026": { customer:0.60, business:0.25, leadership:0.15 },
+  "Q4-2026": { customer:0.45, business:0.40, leadership:0.15 },
+  default: { customer:0.55, business:0.30, leadership:0.15 }
+};
+const GARY_BUSINESS_KPI_DEFS = [
+  { key:"pipelineCoverage", label:"Pipeline覆盖", weight:0.30, maxScore:120 },
+  { key:"keyCustomerProgress", label:"重点客户推进", weight:0.25, maxScore:120 },
+  { key:"newCustomerDevelopment", label:"新客户/新市场", weight:0.20, maxScore:120 },
+  { key:"routeStrategyExecution", label:"产品/航线策略", weight:0.15, maxScore:120 },
+  { key:"reviewQuality", label:"经营复盘质量", weight:0.10, maxScore:100 }
+];
+const GARY_LEADERSHIP_KPI_DEFS = [
+  { key:"talentImprovement", label:"员工培养提升", weight:0.35, maxScore:100 },
+  { key:"delegationBackup", label:"授权备份建设", weight:0.25, maxScore:100 },
+  { key:"issueClosure", label:"团队问题关闭", weight:0.20, maxScore:100 },
+  { key:"sopTraining", label:"培训/SOP沉淀", weight:0.10, maxScore:100 },
+  { key:"collaborationFeedback", label:"协作反馈", weight:0.10, maxScore:100 }
+];
 const GARY_COMMISSION_TREND_PEOPLE = [
   { key:"Gary", label:"Gary", color:"#2563EB" },
   { key:"Jasmine", label:"Jasmine（已离职）", color:"#F59E0B" }
@@ -1436,34 +1491,44 @@ const GARY_COMMISSION_MONTHLY_HISTORY = [
 ];
 
 function buildGary2026CommissionPlan() {
-  const budgetByMonth = [350,400,450,500,500,550,600,600,600,650,700,650];
-  const q1 = {
-    "2026-01": { actualVolume:288, profitPerContainerCny:2733.26, gradeVolumes:{ A:41, B:63, C:12, D:172 }, note:"美东173 + 美中115；柜均毛利按合并口径测算" },
-    "2026-02": { actualVolume:315, profitPerContainerCny:1984.88, gradeVolumes:{ A:41, B:44, C:4, D:226 }, note:"美东175 + 美中140；柜均毛利按合并口径测算" },
-    "2026-03": { actualVolume:216, profitPerContainerCny:2275.33, gradeVolumes:{ A:24, B:52, C:9, D:131 }, note:"美东117 + 美中99；柜均毛利按合并口径测算" }
+  const budgetByMonth = {
+    "2026-07": 600,
+    "2026-08": 600,
+    "2026-09": 600,
+    "2026-10": 650,
+    "2026-11": 700,
+    "2026-12": 650
   };
   return {
-    title: "Gary 2026季度业务提成测算",
+    modelVersion: "gary-q3q4-kpi-v1",
+    title: "Gary 2026 Q3/Q4季度KPI提成模型",
     currency: "USD",
     marginCurrency: "CNY",
     baseCommissionPerContainer: 8,
     marginTargetCny: 1750,
     marginTargetUsd: 250,
-    budgetTotal: 6550,
+    targetMonthlyBonus: 1643.20,
+    protectionRate: 0.85,
+    reviewThreshold: 2500,
+    budgetTotal: Object.values(budgetByMonth).reduce((sum,value)=>sum+value,0),
     companyBudgetTotal: 12200,
+    stageWeights: GARY_Q3_Q4_STAGE_WEIGHTS,
+    businessKpiDefs: GARY_BUSINESS_KPI_DEFS,
+    leadershipKpiDefs: GARY_LEADERSHIP_KPI_DEFS,
     scoringRules: COMMISSION_SCORE_RULES,
     customerGrades: CUSTOMER_GRADE_MULTIPLIERS,
-    note: "季度提成 = 客户档箱量 x 基础单柜提成 x 柜量完成比分数 x 毛利完成比分数 x 客户等级系数；客户等级系数用于鼓励开拓更高质量的新市场和新客户。",
-    months: budgetByMonth.map((budgetVolume, index) => {
-      const month = `2026-${String(index + 1).padStart(2, "0")}`;
-      const actual = q1[month] || {};
+    note: "最终提成 = Customer原模型提成 x 阶段权重 + Q1月均基准 x Business权重 x Business KPI得分 + Q1月均基准 x Leadership权重 x Leadership KPI得分。Business不再重复计算箱量和毛利；Customer原模型不设120%封顶，超过复核线仅提示复核。",
+    months: Object.entries(budgetByMonth).map(([month, budgetVolume]) => {
       return {
         month,
+        stage: month <= "2026-09" ? "Q3-2026" : "Q4-2026",
         budgetVolume,
-        actualVolume: actual.actualVolume || 0,
-        profitPerContainerCny: actual.profitPerContainerCny || 0,
-        gradeVolumes: actual.gradeVolumes || { A:0, B:0, C:0, D:0 },
-        note: actual.note || ""
+        actualVolume: 0,
+        profitPerContainerCny: 0,
+        gradeVolumes: { A:0, B:0, C:0, D:0 },
+        businessKpis: {},
+        leadershipKpis: {},
+        note: ""
       };
     })
   };
@@ -1502,11 +1567,11 @@ const PERSON_PROFILES = {
   },
   Gary: {
     name: "Gary",
-    templateName: "Gary Q2 业务控盘 OKR",
+    templateName: "Gary Q3/Q4 出口业务经理KPI",
     compensationMode: "quarterly_commission",
     bonusBase: 0,
     bonusCurrency: "USD",
-    compensationNote: "Gary不设月度奖金，按季度业务提成口径结算；提成按“箱量完成率分数 x 单柜毛利完成率分数 x 基础单柜提成 x 客户等级系数”计算。客户等级A/B/C/D分别按1.2/1.0/0.8/0.6调整，鼓励销售开拓高质量新市场和新客户。",
+    compensationNote: "Gary不设固定月度奖金，按Q3/Q4出口业务经理KPI提成模型结算。Customer继续沿用原客户提成公式且不做120%封顶；Business不再重复计算箱量和毛利，改为Pipeline、重点客户推进、新客户/新市场、航线策略和经营复盘；Leadership按员工培养、授权备份、问题关闭、SOP沉淀和协作反馈量化评分。",
     commissionPlan: buildGary2026CommissionPlan(),
     dimensions: [
       { id:"O1", name:"业务控盘能力", kpis:[
@@ -1747,6 +1812,65 @@ function buildPlaceholderQuarterProfile(profile, quarter) {
 
 prepareQuarterProfileTemplates();
 
+function commissionStageForMonth(month) {
+  const text = String(month || '').trim();
+  const match = text.match(/^(\d{4})-(\d{1,2})$/);
+  if(match) {
+    const year = match[1];
+    const monthNumber = Number(match[2]);
+    if(monthNumber >= 7 && monthNumber <= 9) return `Q3-${year}`;
+    if(monthNumber >= 10 && monthNumber <= 12) return `Q4-${year}`;
+    if(monthNumber >= 4 && monthNumber <= 6) return `Q2-${year}`;
+    return `Q1-${year}`;
+  }
+  return 'Q3-2026';
+}
+
+function normalizeCommissionKpiDefs(defs, fallback) {
+  const source = Array.isArray(defs) && defs.length ? defs : fallback;
+  return source.map(item=>({
+    key: String(item.key || '').trim(),
+    label: String(item.label || item.key || '').trim(),
+    weight: Math.max(0, Number(item.weight)||0),
+    maxScore: Math.max(100, Number(item.maxScore)||100)
+  })).filter(item=>item.key);
+}
+
+function normalizeCommissionScoreSet(scores, defs) {
+  const source = scores && typeof scores === 'object' ? scores : {};
+  const result = {};
+  defs.forEach(def=>{
+    const score = Number(source[def.key]);
+    result[def.key] = Number.isFinite(score) ? Math.min(def.maxScore, Math.max(0, score)) : 0;
+  });
+  return result;
+}
+
+function normalizeCommissionStageWeights(weights) {
+  const source = weights && typeof weights === 'object' ? weights : GARY_Q3_Q4_STAGE_WEIGHTS;
+  const normalized = {};
+  Object.entries(source).forEach(([stage, value])=>{
+    if(!value || typeof value !== 'object') return;
+    normalized[stage] = {
+      customer: Math.max(0, Number(value.customer)||0),
+      business: Math.max(0, Number(value.business)||0),
+      leadership: Math.max(0, Number(value.leadership)||0)
+    };
+  });
+  return Object.keys(normalized).length ? normalized : GARY_Q3_Q4_STAGE_WEIGHTS;
+}
+
+function commissionStageWeightFor(plan, stage) {
+  const weights = normalizeCommissionStageWeights(plan?.stageWeights);
+  return weights[stage] || weights.default || { customer:1, business:0, leadership:0 };
+}
+
+function weightedCommissionKpiScore(scores, defs) {
+  const normalizedScores = normalizeCommissionScoreSet(scores, defs);
+  const weightTotal = defs.reduce((sum, def)=>sum + (Number(def.weight)||0), 0) || 1;
+  return defs.reduce((sum, def)=>sum + ((Number(normalizedScores[def.key])||0) / 100) * (Number(def.weight)||0), 0) / weightTotal;
+}
+
 function currentQuarterLabel() {
   const now = new Date();
   const quarter = Math.floor(now.getMonth() / 3) + 1;
@@ -1824,35 +1948,77 @@ function normalizeCommissionPlan(plan) {
   const scoringRules = (Array.isArray(plan.scoringRules) && plan.scoringRules.length ? plan.scoringRules : COMMISSION_SCORE_RULES)
     .map(rule=>({ threshold:Number(rule.threshold)||0, score:Number(rule.score)||0 }))
     .sort((a,b)=>a.threshold - b.threshold);
+  const businessKpiDefs = normalizeCommissionKpiDefs(plan.businessKpiDefs, GARY_BUSINESS_KPI_DEFS);
+  const leadershipKpiDefs = normalizeCommissionKpiDefs(plan.leadershipKpiDefs, GARY_LEADERSHIP_KPI_DEFS);
+  const stageWeights = normalizeCommissionStageWeights(plan.stageWeights);
   const months = (Array.isArray(plan.months) ? plan.months : []).map((row, index)=>{
     const gradeVolumes = {};
     customerGrades.forEach(grade=>{
       gradeVolumes[grade.grade] = Math.max(0, Number(row.gradeVolumes?.[grade.grade]) || 0);
     });
+    const month = row.month || `M${index + 1}`;
     return {
-      month: row.month || `M${index + 1}`,
+      month,
+      stage: row.stage || commissionStageForMonth(month),
       budgetVolume: Math.max(0, Number(row.budgetVolume)||0),
       actualVolume: Math.max(0, Number(row.actualVolume)||0),
       profitPerContainerCny: Math.max(0, Number(row.profitPerContainerCny)||0),
       gradeVolumes,
+      businessKpis: normalizeCommissionScoreSet(row.businessKpis, businessKpiDefs),
+      leadershipKpis: normalizeCommissionScoreSet(row.leadershipKpis, leadershipKpiDefs),
       note: row.note || ''
     };
   });
   return {
+    modelVersion: plan.modelVersion || '',
     title: plan.title || '季度业务提成测算',
     currency: plan.currency || 'USD',
     marginCurrency: plan.marginCurrency || 'CNY',
     baseCommissionPerContainer: Math.max(0, Number(plan.baseCommissionPerContainer ?? 8) || 0),
     marginTargetCny: Math.max(0, Number(plan.marginTargetCny ?? 1750) || 0),
     marginTargetUsd: Math.max(0, Number(plan.marginTargetUsd ?? 250) || 0),
+    targetMonthlyBonus: Math.max(0, Number(plan.targetMonthlyBonus ?? 1643.20) || 0),
+    protectionRate: Math.max(0, Number(plan.protectionRate ?? 0.85) || 0),
+    reviewThreshold: Math.max(0, Number(plan.reviewThreshold ?? 2500) || 0),
     budgetTotal: Math.max(0, Number(plan.budgetTotal)||0),
     companyBudgetTotal: Math.max(0, Number(plan.companyBudgetTotal)||0),
     note: plan.note || '',
     customerGrades,
     scoringRules,
+    stageWeights,
+    businessKpiDefs,
+    leadershipKpiDefs,
     months
   };
 }
+
+function mergeCommissionPlanForTemplate(existingPlan, templatePlan) {
+  const template = normalizeCommissionPlan(templatePlan);
+  if(!template) return normalizeCommissionPlan(existingPlan);
+  const existing = normalizeCommissionPlan(existingPlan);
+  if(!existing || existing.modelVersion === template.modelVersion) return existing || template;
+  const existingByMonth = new Map(existing.months.map(row=>[row.month, row]));
+  const merged = deepClone(template);
+  merged.months = template.months.map(templateRow=>{
+    const old = existingByMonth.get(templateRow.month);
+    if(!old) return templateRow;
+    return {
+      ...templateRow,
+      budgetVolume: old.budgetVolume || templateRow.budgetVolume,
+      actualVolume: old.actualVolume || templateRow.actualVolume,
+      profitPerContainerCny: old.profitPerContainerCny || templateRow.profitPerContainerCny,
+      gradeVolumes: Object.keys(templateRow.gradeVolumes || {}).reduce((volumes, grade)=>{
+        volumes[grade] = old.gradeVolumes?.[grade] ?? templateRow.gradeVolumes?.[grade] ?? 0;
+        return volumes;
+      }, {}),
+      businessKpis: { ...(templateRow.businessKpis || {}), ...(old.businessKpis || {}) },
+      leadershipKpis: { ...(templateRow.leadershipKpis || {}), ...(old.leadershipKpis || {}) },
+      note: old.note || templateRow.note || ''
+    };
+  });
+  return normalizeCommissionPlan(merged);
+}
+
 function commissionGradeVolumeTotal(row, customerGrades = CUSTOMER_GRADE_MULTIPLIERS) {
   return (customerGrades || []).reduce((sum, grade)=>sum + (Number(row.gradeVolumes?.[grade.grade]) || 0), 0);
 }
@@ -1865,7 +2031,7 @@ function commissionScoreFromRate(rate, rules = COMMISSION_SCORE_RULES) {
 function commissionRowMetrics(plan, row) {
   const normalizedPlan = normalizeCommissionPlan(plan);
   if(!normalizedPlan || !row) {
-    return { gradeVolumeTotal:0, effectiveVolume:0, volumeRate:0, marginRate:0, volumeScore:0, marginScore:0, matrixRatio:0, perContainerCommission:0, gradeCommissions:{}, totalCommission:0, mismatch:false };
+    return { stage:'', stageWeight:{customer:1,business:0,leadership:0}, gradeVolumeTotal:0, effectiveVolume:0, volumeRate:0, marginRate:0, volumeScore:0, marginScore:0, matrixRatio:0, perContainerCommission:0, gradeCommissions:{}, customerCommission:0, customerWeightedCommission:0, businessScore:0, businessCommission:0, leadershipScore:0, leadershipCommission:0, rawTotalCommission:0, protectionFloor:0, protectionApplied:false, needsReview:false, totalCommission:0, mismatch:false };
   }
   const gradeVolumeTotal = commissionGradeVolumeTotal(row, normalizedPlan.customerGrades);
   const effectiveVolume = Number(row.actualVolume) || gradeVolumeTotal;
@@ -1876,13 +2042,27 @@ function commissionRowMetrics(plan, row) {
   const matrixRatio = volumeScore * marginScore;
   const perContainerCommission = normalizedPlan.baseCommissionPerContainer * matrixRatio;
   const gradeCommissions = {};
-  let totalCommission = 0;
+  let customerCommission = 0;
   normalizedPlan.customerGrades.forEach(grade=>{
     const amount = (Number(row.gradeVolumes?.[grade.grade]) || 0) * perContainerCommission * grade.multiplier;
     gradeCommissions[grade.grade] = amount;
-    totalCommission += amount;
+    customerCommission += amount;
   });
+  const stage = row.stage || commissionStageForMonth(row.month);
+  const stageWeight = commissionStageWeightFor(normalizedPlan, stage);
+  const businessScore = weightedCommissionKpiScore(row.businessKpis, normalizedPlan.businessKpiDefs);
+  const leadershipScore = weightedCommissionKpiScore(row.leadershipKpis, normalizedPlan.leadershipKpiDefs);
+  const customerWeightedCommission = customerCommission * stageWeight.customer;
+  const businessCommission = normalizedPlan.targetMonthlyBonus * stageWeight.business * businessScore;
+  const leadershipCommission = normalizedPlan.targetMonthlyBonus * stageWeight.leadership * leadershipScore;
+  const rawTotalCommission = customerWeightedCommission + businessCommission + leadershipCommission;
+  const protectionFloor = stage === 'Q3-2026' && businessScore >= 0.8 && leadershipScore >= 0.8
+    ? normalizedPlan.targetMonthlyBonus * normalizedPlan.protectionRate
+    : 0;
+  const totalCommission = Math.max(rawTotalCommission, protectionFloor);
   return {
+    stage,
+    stageWeight,
     gradeVolumeTotal,
     effectiveVolume,
     volumeRate,
@@ -1892,17 +2072,33 @@ function commissionRowMetrics(plan, row) {
     matrixRatio,
     perContainerCommission,
     gradeCommissions,
+    customerCommission,
+    customerWeightedCommission,
+    businessScore,
+    businessCommission,
+    leadershipScore,
+    leadershipCommission,
+    rawTotalCommission,
+    protectionFloor,
+    protectionApplied: totalCommission > rawTotalCommission,
+    needsReview: Boolean(normalizedPlan.reviewThreshold) && totalCommission > normalizedPlan.reviewThreshold,
     totalCommission,
     mismatch: Boolean(row.actualVolume) && Math.abs(Number(row.actualVolume) - gradeVolumeTotal) > 0.01
   };
 }
 function summarizeCommissionPlan(plan) {
   const normalizedPlan = normalizeCommissionPlan(plan);
-  if(!normalizedPlan) return { totalCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 };
+  if(!normalizedPlan) return { totalCommission:0, customerCommission:0, customerWeightedCommission:0, businessCommission:0, leadershipCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 };
   return normalizedPlan.months.reduce((summary, row)=>{
     const metrics = commissionRowMetrics(normalizedPlan, row);
-    const isFilled = Boolean(metrics.effectiveVolume || metrics.gradeVolumeTotal || Number(row.profitPerContainerCny));
+    const hasBusiness = Object.values(row.businessKpis || {}).some(value=>Number(value));
+    const hasLeadership = Object.values(row.leadershipKpis || {}).some(value=>Number(value));
+    const isFilled = Boolean(metrics.effectiveVolume || metrics.gradeVolumeTotal || Number(row.profitPerContainerCny) || hasBusiness || hasLeadership);
     summary.totalCommission += metrics.totalCommission;
+    summary.customerCommission += metrics.customerCommission;
+    summary.customerWeightedCommission += metrics.customerWeightedCommission;
+    summary.businessCommission += metrics.businessCommission;
+    summary.leadershipCommission += metrics.leadershipCommission;
     if(isFilled) {
       summary.budgetVolume += Number(row.budgetVolume)||0;
       summary.actualVolume += metrics.effectiveVolume;
@@ -1912,7 +2108,7 @@ function summarizeCommissionPlan(plan) {
     summary.monthCount += 1;
     summary.volumeRate = summary.budgetVolume ? summary.actualVolume / summary.budgetVolume : 0;
     return summary;
-  }, { totalCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 });
+  }, { totalCommission:0, customerCommission:0, customerWeightedCommission:0, businessCommission:0, leadershipCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 });
 }
 function formatPercent(value) {
   return `${((Number(value)||0) * 100).toFixed(1)}%`;
@@ -2714,13 +2910,13 @@ createApp({
       return isMonthlyKpiTemplate.value
         ? '月度KPI用于当月奖金发放、月度复盘和财务主管评价；季度OKR单独用于成长目标设定和季末复盘。'
         : (compensationMode.value === 'quarterly_commission'
-          ? '季度业务提成按下方箱量、毛利和客户等级公式测算；OKR用于业务控盘能力复盘和下季度动作校准。'
+          ? '季度业务提成按Customer、Business、Leadership三模块测算；Customer保留原客户提成，Business和Leadership用量化KPI记录经营动作和管理结果。'
           : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。');
     });
     const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
       ? '给考评人的口径：Kori每月填写月度KPI评分和奖金发放表；季度OKR用于成长目标复盘，不替代月度KPI。'
       : (compensationMode.value === 'quarterly_commission'
-        ? '给考评人的口径：Gary不填写月度奖金表；每月追踪箱量、柜均毛利和客户档，季度按业务提成公式结算。'
+        ? '给考评人的口径：Gary填写Q3/Q4季度KPI提成表；Customer录入客户提成数据，Business和Leadership录入量化得分后系统直接算提成结果。'
         : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。')
     );
     const workflowReviewTag = computed(()=> isMonthlyKpiTemplate.value ? '每月填写' : '季度末填写');
@@ -2769,7 +2965,7 @@ createApp({
     const assessmentModeCopy = computed(()=>{
       if(isMonthlyKpiTemplate.value) return '本岗位按月度KPI评分核算月度奖金；季度视图只用于查看趋势、成长阶段和下一步培养安排。';
       if(compensationMode.value === 'no_monthly_bonus') return '本岗位不做月度奖金发放；月度可记录进展，季度末用OKR复盘支持岗位发展、年终奖金或组织调整判断。';
-      if(compensationMode.value === 'quarterly_commission') return '本岗位不按月发奖金；月度用于追踪业务进度，季度根据业务指标完成度和提成规则结算。';
+      if(compensationMode.value === 'quarterly_commission') return '本岗位不按固定月奖发放；Q3/Q4用Customer、Business、Leadership三模块计算季度KPI提成。';
       if(compensationMode.value === 'monthly_accelerator') return '本岗位按月度等级发放加成奖金；季度OKR用于判断结构性突破、资源能力和下季度目标，不追溯扣回已发月度奖金。';
       return '月度奖金按当月结果发放；季度OKR用于复盘和下季度目标校准，不追溯扣回已发月度奖金。';
     });
@@ -3262,7 +3458,9 @@ createApp({
         data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
         data.quarterlyOkrs = normalizeQuarterlyOkrs((data.quarterlyOkrs && data.quarterlyOkrs.length) ? data.quarterlyOkrs : (template.quarterlyOkrs || []));
       }
-      data.commissionPlan = normalizeCommissionPlan(data.commissionPlan || template.commissionPlan || null);
+      data.commissionPlan = profile.name === 'Gary'
+        ? mergeCommissionPlanForTemplate(data.commissionPlan, template.commissionPlan)
+        : normalizeCommissionPlan(data.commissionPlan || template.commissionPlan || null);
       normalizeProfileMonthlyBonuses(data, profile, effectivePeriod);
       normalizeMonthlyKpiState(data, profile, effectivePeriod);
       return data;
@@ -4078,16 +4276,17 @@ createApp({
       if(exportCommissionPlan) {
         const summary = summarizeCommissionPlan(exportCommissionPlan);
         const commissionRowsForSheet = [
-          [`${meta.value.templateName} 季度业务提成测算`],
+          [`${meta.value.templateName} Q3/Q4 KPI提成测算`],
           [`被考核人: ${meta.value.employeeName}`, `部门: ${currentDept}`, `考核人: ${meta.value.evaluatorName}`, `期间: ${meta.value.period}`],
-          [`基础提成: ${exportCommissionPlan.currency} ${exportCommissionPlan.baseCommissionPerContainer}/柜`, `柜均毛利指标: ${exportCommissionPlan.marginCurrency} ${exportCommissionPlan.marginTargetCny}`, `测算提成合计: ${exportCommissionPlan.currency} ${formatMoney(summary.totalCommission)}`, `实际/预算: ${summary.actualVolume}/${summary.budgetVolume}`],
+          [`基础提成: ${exportCommissionPlan.currency} ${exportCommissionPlan.baseCommissionPerContainer}/柜`, `柜均毛利指标: ${exportCommissionPlan.marginCurrency} ${exportCommissionPlan.marginTargetCny}`, `Q1月均基准: ${exportCommissionPlan.currency} ${formatMoney(exportCommissionPlan.targetMonthlyBonus)}`, `最终提成合计: ${exportCommissionPlan.currency} ${formatMoney(summary.totalCommission)}`],
           [],
-          ['月份','预算箱量','实际箱量','箱量完成比','柜量分数','单柜毛利(CNY)','毛利完成比','毛利分数','矩阵比例','单柜提成', ...exportCommissionPlan.customerGrades.map(grade=>`${grade.grade}档 x${grade.multiplier}`), '客户档合计','月度提成','备注']
+          ['月份','阶段','预算箱量','实际箱量','箱量完成比','柜量分数','单柜毛利(CNY)','毛利完成比','毛利分数','矩阵比例','单柜提成', ...exportCommissionPlan.customerGrades.map(grade=>`${grade.grade}档 x${grade.multiplier}`), '客户档合计','Customer原模型','Customer计入', ...exportCommissionPlan.businessKpiDefs.map(def=>def.label), 'Business得分','Business计入', ...exportCommissionPlan.leadershipKpiDefs.map(def=>def.label), 'Leadership得分','Leadership计入','最终提成','状态','备注']
         ];
         exportCommissionPlan.months.forEach(row=>{
           const metrics = commissionRowMetrics(exportCommissionPlan, row);
           commissionRowsForSheet.push([
             formatCommissionMonth(row.month),
+            metrics.stage,
             row.budgetVolume,
             metrics.effectiveVolume,
             formatPercent(metrics.volumeRate),
@@ -4099,7 +4298,16 @@ createApp({
             `${exportCommissionPlan.currency} ${formatMoney(metrics.perContainerCommission)}`,
             ...exportCommissionPlan.customerGrades.map(grade=>row.gradeVolumes?.[grade.grade] || 0),
             metrics.gradeVolumeTotal,
+            `${exportCommissionPlan.currency} ${formatMoney(metrics.customerCommission)}`,
+            `${exportCommissionPlan.currency} ${formatMoney(metrics.customerWeightedCommission)}`,
+            ...exportCommissionPlan.businessKpiDefs.map(def=>row.businessKpis?.[def.key] || 0),
+            formatPercent(metrics.businessScore),
+            `${exportCommissionPlan.currency} ${formatMoney(metrics.businessCommission)}`,
+            ...exportCommissionPlan.leadershipKpiDefs.map(def=>row.leadershipKpis?.[def.key] || 0),
+            formatPercent(metrics.leadershipScore),
+            `${exportCommissionPlan.currency} ${formatMoney(metrics.leadershipCommission)}`,
             `${exportCommissionPlan.currency} ${formatMoney(metrics.totalCommission)}`,
+            metrics.needsReview ? '超过复核线' : (metrics.protectionApplied ? 'Q3保护线' : '可计算'),
             row.note || ''
           ]);
         });
@@ -4107,7 +4315,7 @@ createApp({
         commissionRowsForSheet.push(['计分规则', ...exportCommissionPlan.scoringRules.map(rule=>`≥${formatPercent(rule.threshold)}=${rule.score}`)]);
         commissionRowsForSheet.push(['说明', exportCommissionPlan.note || '']);
         const wsCommission = XLSX.utils.aoa_to_sheet(commissionRowsForSheet);
-        wsCommission['!cols'] = [{wch:10},{wch:10},{wch:10},{wch:12},{wch:10},{wch:14},{wch:12},{wch:10},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:14},{wch:32}];
+        wsCommission['!cols'] = commissionRowsForSheet[4].map((_, index)=>({ wch: index === commissionRowsForSheet[4].length - 1 ? 32 : 12 }));
         XLSX.utils.book_append_sheet(wb, wsCommission, '季度业务提成');
       }
 
@@ -4291,31 +4499,29 @@ createApp({
       const reportCommissionPlan = normalizeCommissionPlan(data.commissionPlan);
       const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan);
       const commissionHtml = !reportOkrOnly && reportCommissionPlan ? `
-        <h2>季度业务提成</h2>
+        <h2>Q3/Q4 KPI提成</h2>
         <div class="summary">
           <div>基础提成：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.baseCommissionPerContainer)}/柜</div>
           <div>柜均毛利指标：${escapeHtml(reportCommissionPlan.marginCurrency)} ${formatMoney(reportCommissionPlan.marginTargetCny)}</div>
-          <div>提成测算合计：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionSummary.totalCommission)}</div>
-          <div>实际/预算箱量：${reportCommissionSummary.actualVolume}/${reportCommissionSummary.budgetVolume}</div>
+          <div>Q1月均基准：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.targetMonthlyBonus)}</div>
+          <div>最终提成合计：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionSummary.totalCommission)}</div>
         </div>
         <table>
-          <thead><tr><th>月份</th><th>预算</th><th>实际</th><th>箱量完成比</th><th>柜量分数</th><th>单柜毛利</th><th>毛利完成比</th><th>毛利分数</th><th>矩阵比例</th><th>单柜提成</th>${reportCommissionPlan.customerGrades.map(grade=>`<th>${escapeHtml(grade.grade)}档 x${grade.multiplier}</th>`).join('')}<th>月度提成</th><th>备注</th></tr></thead>
+          <thead><tr><th>月份</th><th>阶段</th><th>Customer原模型</th><th>Customer计入</th><th>Business得分</th><th>Business计入</th><th>Leadership得分</th><th>Leadership计入</th><th>最终提成</th><th>状态</th><th>备注</th></tr></thead>
           <tbody>
             ${reportCommissionPlan.months.map(row=>{
               const metrics = commissionRowMetrics(reportCommissionPlan, row);
               return `<tr>
                 <td>${escapeHtml(formatCommissionMonth(row.month))}</td>
-                <td>${escapeHtml(row.budgetVolume)}</td>
-                <td>${escapeHtml(metrics.effectiveVolume)}</td>
-                <td>${escapeHtml(formatPercent(metrics.volumeRate))}</td>
-                <td>${escapeHtml(metrics.volumeScore.toFixed(2))}</td>
-                <td>${escapeHtml(formatMoney(row.profitPerContainerCny))}</td>
-                <td>${escapeHtml(formatPercent(metrics.marginRate))}</td>
-                <td>${escapeHtml(metrics.marginScore.toFixed(2))}</td>
-                <td>${escapeHtml(metrics.matrixRatio.toFixed(2))}</td>
-                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.perContainerCommission))}</td>
-                ${reportCommissionPlan.customerGrades.map(grade=>`<td>${escapeHtml(row.gradeVolumes?.[grade.grade] || 0)}</td>`).join('')}
+                <td>${escapeHtml(metrics.stage)}</td>
+                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.customerCommission))}</td>
+                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.customerWeightedCommission))}</td>
+                <td>${escapeHtml(formatPercent(metrics.businessScore))}</td>
+                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.businessCommission))}</td>
+                <td>${escapeHtml(formatPercent(metrics.leadershipScore))}</td>
+                <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.leadershipCommission))}</td>
                 <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.totalCommission))}</td>
+                <td>${escapeHtml(metrics.needsReview ? '超过复核线' : (metrics.protectionApplied ? 'Q3保护线' : '可计算'))}</td>
                 <td>${escapeHtml(row.note || '')}</td>
               </tr>`;
             }).join('')}
