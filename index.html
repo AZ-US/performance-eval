@@ -2001,24 +2001,30 @@ function mergeCommissionPlanForTemplate(existingPlan, templatePlan) {
   const template = normalizeCommissionPlan(templatePlan);
   if(!template) return normalizeCommissionPlan(existingPlan);
   const existing = normalizeCommissionPlan(existingPlan);
-  if(!existing || existing.modelVersion === template.modelVersion) return existing || template;
+  if(!existing) return template;
   const existingByMonth = new Map(existing.months.map(row=>[row.month, row]));
   const merged = deepClone(template);
   merged.months = template.months.map(templateRow=>{
     const old = existingByMonth.get(templateRow.month);
     if(!old) return templateRow;
+    const templateCustomerTotal = commissionGradeVolumeTotal(templateRow, template.customerGrades);
+    const templateHasLockedLegacyData = isLegacyGaryCommissionStage(templateRow.stage || commissionStageForMonth(templateRow.month))
+      && Boolean(templateRow.actualVolume || templateRow.profitPerContainerCny || templateCustomerTotal);
+    const mergedGradeVolumes = Object.keys(templateRow.gradeVolumes || {}).reduce((volumes, grade)=>{
+      volumes[grade] = templateHasLockedLegacyData
+        ? (templateRow.gradeVolumes?.[grade] ?? 0)
+        : (old.gradeVolumes?.[grade] ?? templateRow.gradeVolumes?.[grade] ?? 0);
+      return volumes;
+    }, {});
     return {
       ...templateRow,
       budgetVolume: old.budgetVolume || templateRow.budgetVolume,
-      actualVolume: old.actualVolume || templateRow.actualVolume,
-      profitPerContainerCny: old.profitPerContainerCny || templateRow.profitPerContainerCny,
-      gradeVolumes: Object.keys(templateRow.gradeVolumes || {}).reduce((volumes, grade)=>{
-        volumes[grade] = old.gradeVolumes?.[grade] ?? templateRow.gradeVolumes?.[grade] ?? 0;
-        return volumes;
-      }, {}),
+      actualVolume: templateHasLockedLegacyData ? templateRow.actualVolume : (old.actualVolume || templateRow.actualVolume),
+      profitPerContainerCny: templateHasLockedLegacyData ? templateRow.profitPerContainerCny : (old.profitPerContainerCny || templateRow.profitPerContainerCny),
+      gradeVolumes: mergedGradeVolumes,
       businessKpis: { ...(templateRow.businessKpis || {}), ...(old.businessKpis || {}) },
       leadershipKpis: { ...(templateRow.leadershipKpis || {}), ...(old.leadershipKpis || {}) },
-      note: old.note || templateRow.note || ''
+      note: templateHasLockedLegacyData ? (templateRow.note || old.note || '') : (old.note || templateRow.note || '')
     };
   });
   return normalizeCommissionPlan(merged);
