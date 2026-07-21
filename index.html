@@ -245,6 +245,30 @@ body {
 .commission-warning { color:#B45309; font-size:12px; font-weight:700; white-space:nowrap; }
 .commission-rules { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--text-light); }
 .commission-rule-pill { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:999px; padding:5px 9px; }
+.commission-trend-panel { border:1px solid #CBD5E1; border-radius:14px; padding:16px; background:rgba(248,250,252,0.74); display:flex; flex-direction:column; gap:14px; }
+.commission-trend-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.commission-trend-title { font-size:15px; font-weight:800; margin-bottom:4px; }
+.commission-trend-subtitle { font-size:12px; line-height:1.6; color:var(--text-light); max-width:660px; }
+.trend-toggle { display:inline-flex; gap:4px; padding:4px; border-radius:12px; border:1px solid #E2E8F0; background:white; }
+.trend-toggle button { border:none; background:transparent; border-radius:9px; padding:7px 12px; font-family:inherit; font-size:12px; font-weight:800; color:var(--text-light); cursor:pointer; }
+.trend-toggle button.active { background:#DBEAFE; color:#1D4ED8; }
+.commission-trend-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.trend-metric { border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; background:rgba(255,255,255,0.72); }
+.trend-metric-label { font-size:11px; color:var(--text-light); margin-bottom:4px; }
+.trend-metric-value { font-size:16px; font-weight:800; }
+.trend-chart-wrap { width:100%; overflow-x:auto; border:1px solid #E2E8F0; border-radius:12px; background:white; padding:10px; }
+.trend-chart { min-width:760px; width:100%; height:auto; display:block; }
+.trend-axis { stroke:#CBD5E1; stroke-width:1; }
+.trend-grid { stroke:#E2E8F0; stroke-width:1; }
+.trend-label { fill:#64748B; font-size:11px; font-weight:700; }
+.trend-line { fill:none; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+.trend-point { stroke:white; stroke-width:2; }
+.trend-legend { display:flex; gap:12px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--text-light); }
+.trend-legend-item { display:inline-flex; gap:6px; align-items:center; font-weight:800; }
+.trend-swatch { width:10px; height:10px; border-radius:999px; display:inline-block; }
+.trend-table { min-width:720px; }
+.trend-gap-positive { color:#059669; font-weight:800; }
+.trend-gap-negative { color:#DC2626; font-weight:800; }
 .bonus-score-summary { display:inline-flex; width:max-content; max-width:100%; margin-bottom:12px; padding:6px 10px; border-radius:999px; background:#FFFBEB; color:#92400E; font-size:13px; font-weight:800; }
 .monthly-kpi-switch { background:rgba(255,255,255,0.66); border:1px solid rgba(226,232,240,0.9); border-radius:14px; padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
 .monthly-kpi-switch-title { font-size:13px; color:var(--text-light); font-weight:800; margin-bottom:4px; }
@@ -372,6 +396,10 @@ body {
   .tier-group { grid-template-columns:repeat(2,1fr); }
   .summary-card { flex-direction:column; align-items:stretch; text-align:center; }
   .bonus-stats { grid-template-columns:1fr; }
+  .commission-trend-metrics { grid-template-columns:1fr; }
+  .commission-trend-panel { padding:14px; }
+  .trend-toggle { width:100%; }
+  .trend-toggle button { flex:1; }
   .workflow-grid, .records-grid { grid-template-columns:1fr; }
   .quick-nav-card { position:static; }
   .quick-employee-btn { min-width:100%; }
@@ -749,6 +777,64 @@ body {
           </span>
         </div>
         <div class="commission-muted">{{commissionPlan.note}}</div>
+        <div class="commission-trend-panel" v-if="showGaryCommissionTrends">
+          <div class="commission-trend-header">
+            <div>
+              <div class="commission-trend-title">历史已发 Commission 趋势</div>
+              <div class="commission-trend-subtitle">来自 payroll 中“合并奖金/提成/年终奖”栏，覆盖2025年1月至2026年7月；Gary 与已离职销售 Jasmine 做历史对比，仅用于趋势参考，不替代上方业务提成测算公式。</div>
+            </div>
+            <div class="trend-toggle" aria-label="Commission趋势视图">
+              <button type="button" :class="{active: commissionTrendView === 'monthly'}" @click="commissionTrendView = 'monthly'">月度</button>
+              <button type="button" :class="{active: commissionTrendView === 'quarterly'}" @click="commissionTrendView = 'quarterly'">季度</button>
+              <button type="button" :class="{active: commissionTrendView === 'annual'}" @click="commissionTrendView = 'annual'">年度</button>
+            </div>
+          </div>
+          <div class="commission-trend-metrics">
+            <div class="trend-metric" v-for="metric in commissionTrendMetrics" :key="metric.label">
+              <div class="trend-metric-label">{{metric.label}}</div>
+              <div class="trend-metric-value">{{metric.value}}</div>
+            </div>
+          </div>
+          <div class="trend-legend">
+            <span class="trend-legend-item" v-for="person in commissionTrendPeople" :key="person.key">
+              <span class="trend-swatch" :style="{background: person.color}"></span>{{person.label}}
+            </span>
+          </div>
+          <div class="trend-chart-wrap">
+            <svg class="trend-chart" viewBox="0 0 900 300" role="img" :aria-label="commissionTrendAriaLabel">
+              <line v-for="grid in commissionTrendChart.grid" :key="'grid-'+grid.value" class="trend-grid" :x1="commissionTrendChart.padding.left" :x2="commissionTrendChart.width - commissionTrendChart.padding.right" :y1="grid.y" :y2="grid.y"></line>
+              <text v-for="grid in commissionTrendChart.grid" :key="'grid-label-'+grid.value" class="trend-label" x="8" :y="grid.y + 4">{{formatMoneyShort(grid.value)}}</text>
+              <line class="trend-axis" :x1="commissionTrendChart.padding.left" :x2="commissionTrendChart.width - commissionTrendChart.padding.right" :y1="commissionTrendChart.axisY" :y2="commissionTrendChart.axisY"></line>
+              <g v-for="series in commissionTrendChart.series" :key="series.key">
+                <path class="trend-line" :d="series.path" :stroke="series.color"></path>
+                <circle v-for="point in series.points" :key="series.key+'-'+point.label" class="trend-point" :cx="point.x" :cy="point.y" r="4" :fill="series.color">
+                  <title>{{series.label}} {{point.label}}: USD {{formatMoney(point.value)}}</title>
+                </circle>
+              </g>
+              <text v-for="point in commissionTrendChart.labels" :key="'label-'+point.label" class="trend-label" :x="point.x" :y="commissionTrendChart.height - 12" text-anchor="middle">{{point.shortLabel}}</text>
+            </svg>
+          </div>
+          <div class="bonus-table-wrap">
+            <table class="bonus-table trend-table">
+              <thead>
+                <tr>
+                  <th>期间</th>
+                  <th>Gary</th>
+                  <th>Jasmine（已离职）</th>
+                  <th>Gary差额</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in commissionTrendRows" :key="'trend-row-'+row.period">
+                  <td>{{row.label}}</td>
+                  <td>USD {{formatMoney(row.Gary)}}</td>
+                  <td>USD {{formatMoney(row.Jasmine)}}</td>
+                  <td :class="row.gap >= 0 ? 'trend-gap-positive' : 'trend-gap-negative'">{{formatSignedMoney(row.gap)}}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <div class="bonus-stats" v-if="showMonthlyBonusTable">
         <div class="bonus-stat">
@@ -1311,6 +1397,31 @@ const CUSTOMER_GRADE_MULTIPLIERS = [
   { grade:"C", multiplier:0.8 },
   { grade:"D", multiplier:0.6 }
 ];
+const GARY_COMMISSION_TREND_PEOPLE = [
+  { key:"Gary", label:"Gary", color:"#2563EB" },
+  { key:"Jasmine", label:"Jasmine（已离职）", color:"#F59E0B" }
+];
+const GARY_COMMISSION_MONTHLY_HISTORY = [
+  { period:"2025-01", Gary:4956.04, Jasmine:3428 },
+  { period:"2025-02", Gary:4259.50, Jasmine:3480 },
+  { period:"2025-03", Gary:4259.50, Jasmine:1588 },
+  { period:"2025-04", Gary:2837.75, Jasmine:0 },
+  { period:"2025-05", Gary:1521, Jasmine:0 },
+  { period:"2025-06", Gary:5253.02, Jasmine:10326.88 },
+  { period:"2025-07", Gary:5253.02, Jasmine:0 },
+  { period:"2025-08", Gary:2685.92, Jasmine:2621.70 },
+  { period:"2025-09", Gary:2685.92, Jasmine:2621.70 },
+  { period:"2025-10", Gary:1830.84, Jasmine:0 },
+  { period:"2025-11", Gary:2306.98, Jasmine:0 },
+  { period:"2025-12", Gary:4613.96, Jasmine:5192.50 },
+  { period:"2026-01", Gary:0, Jasmine:0 },
+  { period:"2026-02", Gary:4217.47, Jasmine:8873.79 },
+  { period:"2026-03", Gary:1000, Jasmine:0 },
+  { period:"2026-04", Gary:0, Jasmine:0 },
+  { period:"2026-05", Gary:3434.94, Jasmine:0 },
+  { period:"2026-06", Gary:0, Jasmine:0 },
+  { period:"2026-07", Gary:4929.60, Jasmine:0 }
+];
 
 function buildGary2026CommissionPlan() {
   const budgetByMonth = [350,400,450,500,500,550,600,600,600,650,700,650];
@@ -1797,6 +1908,24 @@ function formatPercent(value) {
 function formatMoney(value) {
   return (Number(value)||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
+function roundMoney(value) {
+  return Math.round((Number(value)||0) * 100) / 100;
+}
+function formatMoneyShort(value) {
+  const number = Number(value) || 0;
+  const abs = Math.abs(number);
+  if(abs >= 1000) {
+    const scaled = number / 1000;
+    const digits = abs >= 10000 ? 0 : 1;
+    return `$${scaled.toFixed(digits)}k`;
+  }
+  return `$${number.toFixed(0)}`;
+}
+function formatSignedMoney(value) {
+  const number = roundMoney(value);
+  const sign = number >= 0 ? '+' : '-';
+  return `${sign}USD ${formatMoney(Math.abs(number))}`;
+}
 function formatCommissionMonth(value) {
   const text = String(value || '').trim();
   const match = text.match(/(?:^|\D)(\d{1,2})$/);
@@ -1804,6 +1933,92 @@ function formatCommissionMonth(value) {
   const dateMatch = text.match(/^(\d{4})-(\d{1,2})$/);
   if(dateMatch) return `${Number(dateMatch[2])}月`;
   return text || '-';
+}
+function commissionHistoryPeriodKey(period, view) {
+  const text = String(period || '').trim();
+  if(view === 'annual') return text.slice(0, 4);
+  if(view === 'quarterly') {
+    const month = Number(text.slice(5, 7)) || 1;
+    return `${text.slice(0, 4)}-Q${Math.floor((month - 1) / 3) + 1}`;
+  }
+  return text;
+}
+function aggregateCommissionHistory(view = 'monthly') {
+  const people = GARY_COMMISSION_TREND_PEOPLE.map(person=>person.key);
+  const groups = new Map();
+  GARY_COMMISSION_MONTHLY_HISTORY.forEach(row=>{
+    const period = commissionHistoryPeriodKey(row.period, view);
+    const current = groups.get(period) || people.reduce((item, key)=>({ ...item, [key]:0 }), { period });
+    people.forEach(key=>{
+      current[key] = roundMoney((current[key] || 0) + (Number(row[key]) || 0));
+    });
+    groups.set(period, current);
+  });
+  return [...groups.values()].sort((a,b)=>a.period.localeCompare(b.period));
+}
+function formatTrendPeriodLabel(period) {
+  const text = String(period || '').trim();
+  const month = text.match(/^(\d{4})-(\d{2})$/);
+  if(month) return `${month[1]}年${Number(month[2])}月`;
+  const quarter = text.match(/^(\d{4})-Q([1-4])$/i);
+  if(quarter) return `${quarter[1]}年Q${quarter[2]}`;
+  if(text === '2026') return '2026年YTD';
+  return text ? `${text}年` : '-';
+}
+function formatTrendShortLabel(period, view) {
+  const text = String(period || '').trim();
+  const month = text.match(/^(\d{4})-(\d{2})$/);
+  if(month) return `${month[1].slice(2)}/${Number(month[2])}`;
+  const quarter = text.match(/^(\d{4})-Q([1-4])$/i);
+  if(quarter) return `${quarter[1].slice(2)}Q${quarter[2]}`;
+  return view === 'annual' && text === '2026' ? '2026YTD' : text;
+}
+function niceChartMax(value) {
+  const number = Number(value) || 0;
+  if(number <= 0) return 1000;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(number)));
+  const scaled = number / magnitude;
+  const niceScaled = scaled <= 1 ? 1 : scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10;
+  return niceScaled * magnitude;
+}
+function buildCommissionTrendChartData(rows, view) {
+  const width = 900;
+  const height = 300;
+  const padding = { left:58, right:26, top:18, bottom:50 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxValue = niceChartMax(Math.max(0, ...rows.flatMap(row=>GARY_COMMISSION_TREND_PEOPLE.map(person=>Number(row[person.key]) || 0))));
+  const axisY = height - padding.bottom;
+  const xFor = index => padding.left + (rows.length <= 1 ? plotWidth / 2 : (plotWidth * index / (rows.length - 1)));
+  const yFor = value => axisY - ((Number(value) || 0) / maxValue * plotHeight);
+  const series = GARY_COMMISSION_TREND_PEOPLE.map(person=>{
+    const points = rows.map((row, index)=>({
+      label: formatTrendPeriodLabel(row.period),
+      shortLabel: formatTrendShortLabel(row.period, view),
+      value: Number(row[person.key]) || 0,
+      x: xFor(index),
+      y: yFor(row[person.key])
+    }));
+    return {
+      ...person,
+      points,
+      path: points.map((point, index)=>`${index ? 'L' : 'M'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ')
+    };
+  });
+  const labelStep = rows.length > 12 ? 2 : 1;
+  const labels = rows
+    .map((row, index)=>({
+      label: row.period,
+      shortLabel: formatTrendShortLabel(row.period, view),
+      x: xFor(index),
+      visible: index % labelStep === 0 || index === rows.length - 1
+    }))
+    .filter(label=>label.visible);
+  const grid = [0, 0.25, 0.5, 0.75, 1].map(ratio=>({
+    value: maxValue * (1 - ratio),
+    y: padding.top + plotHeight * ratio
+  }));
+  return { width, height, padding, axisY, maxValue, grid, labels, series };
 }
 function escapeHtml(value) {
   return String(value ?? '')
@@ -1979,6 +2194,7 @@ createApp({
     const bonusItems = ref(normalizeBonusItems(initial.bonusItems));
     const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
     const commissionPlan = ref(normalizeCommissionPlan(initial.commissionPlan));
+    const commissionTrendView = ref('monthly');
     const monthlyKpiSnapshots = ref(initial.monthlyKpiSnapshots || {});
     const activeKpiMonth = ref(initial.activeKpiMonth || getQuarterMonths(initial.meta?.period || currentQuarterLabel())[0]);
     const collapsedDims = ref({});
@@ -2339,6 +2555,31 @@ createApp({
       }));
     });
     const commissionSummary = computed(()=>summarizeCommissionPlan(commissionPlan.value));
+    const commissionTrendPeople = GARY_COMMISSION_TREND_PEOPLE;
+    const showGaryCommissionTrends = computed(()=> {
+      if(isOkrOnlyMode) return false;
+      const name = canonicalName(meta.value.employeeName);
+      const text = `${meta.value.templateName || ''} ${commissionPlan.value?.title || ''}`;
+      return name === 'Gary' || /Gary/i.test(text);
+    });
+    const commissionTrendRows = computed(()=> aggregateCommissionHistory(commissionTrendView.value).map(row=>({
+      ...row,
+      label: formatTrendPeriodLabel(row.period),
+      gap: roundMoney((Number(row.Gary) || 0) - (Number(row.Jasmine) || 0))
+    })));
+    const commissionTrendChart = computed(()=>buildCommissionTrendChartData(commissionTrendRows.value, commissionTrendView.value));
+    const commissionTrendAriaLabel = computed(()=>`Gary 与 Jasmine commission ${commissionTrendView.value} 趋势图`);
+    const commissionTrendMetrics = computed(()=> {
+      const annualRows = aggregateCommissionHistory('annual');
+      const row2025 = annualRows.find(row=>row.period === '2025') || {};
+      const row2026 = annualRows.find(row=>row.period === '2026') || {};
+      return [
+        { label:"Gary 2025全年", value:`USD ${formatMoney(row2025.Gary)}` },
+        { label:"Jasmine 2025全年", value:`USD ${formatMoney(row2025.Jasmine)}` },
+        { label:"Gary 2026 YTD（至7月）", value:`USD ${formatMoney(row2026.Gary)}` },
+        { label:"Jasmine 2026 YTD（至7月）", value:`USD ${formatMoney(row2026.Jasmine)}` }
+      ];
+    });
 
     const finalGrade = computed(()=>{
       const pct = totalWeight.value ? (totalScore.value / totalWeight.value * 100) : 0;
@@ -4371,6 +4612,8 @@ createApp({
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
       showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
+      commissionTrendView, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
+      commissionTrendAriaLabel, commissionTrendMetrics, formatMoneyShort, formatSignedMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
       isMonthlyKpiTemplate, submissionSubtitle, performancePanelTitle, performancePanelNote, performanceToggleLabel,
