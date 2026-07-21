@@ -787,18 +787,19 @@ body {
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.customerCommission)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.customerWeightedCommission)}}</td>
                 <td v-for="def in commissionPlan.businessKpiDefs" :key="item.row.month+'-business-'+def.key">
-                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.businessKpis[def.key]" :title="def.label + '，0-' + def.maxScore">
+                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.businessKpis[def.key]" :disabled="item.metrics.legacyModel" :title="def.label + '，0-' + def.maxScore">
                 </td>
                 <td class="commission-derived">{{formatPercent(item.metrics.businessScore)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.businessCommission)}}</td>
                 <td v-for="def in commissionPlan.leadershipKpiDefs" :key="item.row.month+'-leadership-'+def.key">
-                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.leadershipKpis[def.key]" :title="def.label + '，0-' + def.maxScore">
+                  <input class="compact-number" type="number" min="0" :max="def.maxScore" step="1" v-model.number="item.row.leadershipKpis[def.key]" :disabled="item.metrics.legacyModel" :title="def.label + '，0-' + def.maxScore">
                 </td>
                 <td class="commission-derived">{{formatPercent(item.metrics.leadershipScore)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.leadershipCommission)}}</td>
                 <td class="commission-derived">{{commissionPlan.currency}} {{formatMoney(item.metrics.totalCommission)}}</td>
                 <td>
-                  <span class="commission-warning" v-if="item.metrics.needsReview">超过复核线</span>
+                  <span class="commission-muted" v-if="item.metrics.legacyModel">原模型</span>
+                  <span class="commission-warning" v-else-if="item.metrics.needsReview">超过复核线</span>
                   <span class="commission-muted" v-else-if="item.metrics.protectionApplied">Q3保护线</span>
                   <span class="commission-muted" v-else>可计算</span>
                 </td>
@@ -1491,17 +1492,15 @@ const GARY_COMMISSION_MONTHLY_HISTORY = [
 ];
 
 function buildGary2026CommissionPlan() {
-  const budgetByMonth = {
-    "2026-07": 600,
-    "2026-08": 600,
-    "2026-09": 600,
-    "2026-10": 650,
-    "2026-11": 700,
-    "2026-12": 650
+  const budgetByMonth = [350,400,450,500,500,550,600,600,600,650,700,650];
+  const q1 = {
+    "2026-01": { actualVolume:288, profitPerContainerCny:2733.26, gradeVolumes:{ A:41, B:63, C:12, D:172 }, note:"美东173 + 美中115；柜均毛利按合并口径测算" },
+    "2026-02": { actualVolume:315, profitPerContainerCny:1984.88, gradeVolumes:{ A:41, B:44, C:4, D:226 }, note:"美东175 + 美中140；柜均毛利按合并口径测算" },
+    "2026-03": { actualVolume:216, profitPerContainerCny:2275.33, gradeVolumes:{ A:24, B:52, C:9, D:131 }, note:"美东117 + 美中99；柜均毛利按合并口径测算" }
   };
   return {
-    modelVersion: "gary-q3q4-kpi-v1",
-    title: "Gary 2026 Q3/Q4季度KPI提成模型",
+    modelVersion: "gary-2026-hybrid-q1q2-legacy-q3q4-kpi-v2",
+    title: "Gary 2026季度业务提成/KPI模型",
     currency: "USD",
     marginCurrency: "CNY",
     baseCommissionPerContainer: 8,
@@ -1510,25 +1509,27 @@ function buildGary2026CommissionPlan() {
     targetMonthlyBonus: 1643.20,
     protectionRate: 0.85,
     reviewThreshold: 2500,
-    budgetTotal: Object.values(budgetByMonth).reduce((sum,value)=>sum+value,0),
+    budgetTotal: budgetByMonth.reduce((sum,value)=>sum+value,0),
     companyBudgetTotal: 12200,
     stageWeights: GARY_Q3_Q4_STAGE_WEIGHTS,
     businessKpiDefs: GARY_BUSINESS_KPI_DEFS,
     leadershipKpiDefs: GARY_LEADERSHIP_KPI_DEFS,
     scoringRules: COMMISSION_SCORE_RULES,
     customerGrades: CUSTOMER_GRADE_MULTIPLIERS,
-    note: "最终提成 = Customer原模型提成 x 阶段权重 + Q1月均基准 x Business权重 x Business KPI得分 + Q1月均基准 x Leadership权重 x Leadership KPI得分。Business不再重复计算箱量和毛利；Customer原模型不设120%封顶，超过复核线仅提示复核。",
-    months: Object.entries(budgetByMonth).map(([month, budgetVolume]) => {
+    note: "Q1/Q2继续沿用原客户提成模型和原数据结果；Q3/Q4最终提成 = Customer原模型提成 x 阶段权重 + Q1月均基准 x Business权重 x Business KPI得分 + Q1月均基准 x Leadership权重 x Leadership KPI得分。Business不再重复计算箱量和毛利；Customer原模型不设120%封顶，超过复核线仅提示复核。",
+    months: budgetByMonth.map((budgetVolume, index) => {
+      const month = `2026-${String(index + 1).padStart(2, "0")}`;
+      const actual = q1[month] || {};
       return {
         month,
-        stage: month <= "2026-09" ? "Q3-2026" : "Q4-2026",
+        stage: commissionStageForMonth(month),
         budgetVolume,
-        actualVolume: 0,
-        profitPerContainerCny: 0,
-        gradeVolumes: { A:0, B:0, C:0, D:0 },
+        actualVolume: actual.actualVolume || 0,
+        profitPerContainerCny: actual.profitPerContainerCny || 0,
+        gradeVolumes: actual.gradeVolumes || { A:0, B:0, C:0, D:0 },
         businessKpis: {},
         leadershipKpis: {},
-        note: ""
+        note: actual.note || ""
       };
     })
   };
@@ -1865,6 +1866,10 @@ function commissionStageWeightFor(plan, stage) {
   return weights[stage] || weights.default || { customer:1, business:0, leadership:0 };
 }
 
+function isLegacyGaryCommissionStage(stage) {
+  return /^Q[12]-\d{4}$/i.test(String(stage || ''));
+}
+
 function weightedCommissionKpiScore(scores, defs) {
   const normalizedScores = normalizeCommissionScoreSet(scores, defs);
   const weightTotal = defs.reduce((sum, def)=>sum + (Number(def.weight)||0), 0) || 1;
@@ -2031,7 +2036,7 @@ function commissionScoreFromRate(rate, rules = COMMISSION_SCORE_RULES) {
 function commissionRowMetrics(plan, row) {
   const normalizedPlan = normalizeCommissionPlan(plan);
   if(!normalizedPlan || !row) {
-    return { stage:'', stageWeight:{customer:1,business:0,leadership:0}, gradeVolumeTotal:0, effectiveVolume:0, volumeRate:0, marginRate:0, volumeScore:0, marginScore:0, matrixRatio:0, perContainerCommission:0, gradeCommissions:{}, customerCommission:0, customerWeightedCommission:0, businessScore:0, businessCommission:0, leadershipScore:0, leadershipCommission:0, rawTotalCommission:0, protectionFloor:0, protectionApplied:false, needsReview:false, totalCommission:0, mismatch:false };
+    return { stage:'', legacyModel:false, stageWeight:{customer:1,business:0,leadership:0}, gradeVolumeTotal:0, effectiveVolume:0, volumeRate:0, marginRate:0, volumeScore:0, marginScore:0, matrixRatio:0, perContainerCommission:0, gradeCommissions:{}, customerCommission:0, customerWeightedCommission:0, businessScore:0, businessCommission:0, leadershipScore:0, leadershipCommission:0, rawTotalCommission:0, protectionFloor:0, protectionApplied:false, needsReview:false, totalCommission:0, mismatch:false };
   }
   const gradeVolumeTotal = commissionGradeVolumeTotal(row, normalizedPlan.customerGrades);
   const effectiveVolume = Number(row.actualVolume) || gradeVolumeTotal;
@@ -2049,19 +2054,21 @@ function commissionRowMetrics(plan, row) {
     customerCommission += amount;
   });
   const stage = row.stage || commissionStageForMonth(row.month);
-  const stageWeight = commissionStageWeightFor(normalizedPlan, stage);
+  const legacyModel = isLegacyGaryCommissionStage(stage);
+  const stageWeight = legacyModel ? { customer:1, business:0, leadership:0 } : commissionStageWeightFor(normalizedPlan, stage);
   const businessScore = weightedCommissionKpiScore(row.businessKpis, normalizedPlan.businessKpiDefs);
   const leadershipScore = weightedCommissionKpiScore(row.leadershipKpis, normalizedPlan.leadershipKpiDefs);
   const customerWeightedCommission = customerCommission * stageWeight.customer;
   const businessCommission = normalizedPlan.targetMonthlyBonus * stageWeight.business * businessScore;
   const leadershipCommission = normalizedPlan.targetMonthlyBonus * stageWeight.leadership * leadershipScore;
   const rawTotalCommission = customerWeightedCommission + businessCommission + leadershipCommission;
-  const protectionFloor = stage === 'Q3-2026' && businessScore >= 0.8 && leadershipScore >= 0.8
+  const protectionFloor = !legacyModel && stage === 'Q3-2026' && businessScore >= 0.8 && leadershipScore >= 0.8
     ? normalizedPlan.targetMonthlyBonus * normalizedPlan.protectionRate
     : 0;
   const totalCommission = Math.max(rawTotalCommission, protectionFloor);
   return {
     stage,
+    legacyModel,
     stageWeight,
     gradeVolumeTotal,
     effectiveVolume,
@@ -2081,7 +2088,7 @@ function commissionRowMetrics(plan, row) {
     rawTotalCommission,
     protectionFloor,
     protectionApplied: totalCommission > rawTotalCommission,
-    needsReview: Boolean(normalizedPlan.reviewThreshold) && totalCommission > normalizedPlan.reviewThreshold,
+    needsReview: !legacyModel && Boolean(normalizedPlan.reviewThreshold) && totalCommission > normalizedPlan.reviewThreshold,
     totalCommission,
     mismatch: Boolean(row.actualVolume) && Math.abs(Number(row.actualVolume) - gradeVolumeTotal) > 0.01
   };
@@ -4307,7 +4314,7 @@ createApp({
             formatPercent(metrics.leadershipScore),
             `${exportCommissionPlan.currency} ${formatMoney(metrics.leadershipCommission)}`,
             `${exportCommissionPlan.currency} ${formatMoney(metrics.totalCommission)}`,
-            metrics.needsReview ? '超过复核线' : (metrics.protectionApplied ? 'Q3保护线' : '可计算'),
+            metrics.legacyModel ? '原模型' : (metrics.needsReview ? '超过复核线' : (metrics.protectionApplied ? 'Q3保护线' : '可计算')),
             row.note || ''
           ]);
         });
@@ -4521,7 +4528,7 @@ createApp({
                 <td>${escapeHtml(formatPercent(metrics.leadershipScore))}</td>
                 <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.leadershipCommission))}</td>
                 <td>${escapeHtml(reportCommissionPlan.currency)} ${escapeHtml(formatMoney(metrics.totalCommission))}</td>
-                <td>${escapeHtml(metrics.needsReview ? '超过复核线' : (metrics.protectionApplied ? 'Q3保护线' : '可计算'))}</td>
+                <td>${escapeHtml(metrics.legacyModel ? '原模型' : (metrics.needsReview ? '超过复核线' : (metrics.protectionApplied ? 'Q3保护线' : '可计算')))}</td>
                 <td>${escapeHtml(row.note || '')}</td>
               </tr>`;
             }).join('')}
