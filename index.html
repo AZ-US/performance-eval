@@ -781,7 +781,7 @@ body {
           <div class="commission-trend-header">
             <div>
               <div class="commission-trend-title">历史已发 Commission 趋势</div>
-              <div class="commission-trend-subtitle">来自 payroll 中“合并奖金/提成/年终奖”栏，覆盖2025年1月至2026年7月；Gary 与已离职销售 Jasmine 做历史对比，仅用于趋势参考，不替代上方业务提成测算公式。</div>
+              <div class="commission-trend-subtitle">来自 payroll 中“合并奖金/提成/年终奖”栏，覆盖2024年1月至2026年7月；Gary 与已离职销售 Jasmine 做历史对比，仅用于趋势参考，不替代上方业务提成测算公式。</div>
             </div>
             <div class="trend-toggle" aria-label="Commission趋势视图">
               <button type="button" :class="{active: commissionTrendView === 'monthly'}" @click="commissionTrendView = 'monthly'">月度</button>
@@ -1402,6 +1402,18 @@ const GARY_COMMISSION_TREND_PEOPLE = [
   { key:"Jasmine", label:"Jasmine（已离职）", color:"#F59E0B" }
 ];
 const GARY_COMMISSION_MONTHLY_HISTORY = [
+  { period:"2024-01", Gary:0, Jasmine:0 },
+  { period:"2024-02", Gary:0, Jasmine:0 },
+  { period:"2024-03", Gary:0, Jasmine:0 },
+  { period:"2024-04", Gary:0, Jasmine:0 },
+  { period:"2024-05", Gary:0, Jasmine:0 },
+  { period:"2024-06", Gary:0, Jasmine:2526.28 },
+  { period:"2024-07", Gary:1325.57, Jasmine:0 },
+  { period:"2024-08", Gary:0, Jasmine:0 },
+  { period:"2024-09", Gary:5041.45, Jasmine:1842 },
+  { period:"2024-10", Gary:4130, Jasmine:1842 },
+  { period:"2024-11", Gary:3218.72, Jasmine:0 },
+  { period:"2024-12", Gary:3318.79, Jasmine:2516 },
   { period:"2025-01", Gary:4956.04, Jasmine:3428 },
   { period:"2025-02", Gary:4259.50, Jasmine:3480 },
   { period:"2025-03", Gary:4259.50, Jasmine:1588 },
@@ -2005,7 +2017,7 @@ function buildCommissionTrendChartData(rows, view) {
       path: points.map((point, index)=>`${index ? 'L' : 'M'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ')
     };
   });
-  const labelStep = rows.length > 12 ? 2 : 1;
+  const labelStep = rows.length > 24 ? 3 : (rows.length > 12 ? 2 : 1);
   const labels = rows
     .map((row, index)=>({
       label: row.period,
@@ -2571,14 +2583,13 @@ createApp({
     const commissionTrendAriaLabel = computed(()=>`Gary 与 Jasmine commission ${commissionTrendView.value} 趋势图`);
     const commissionTrendMetrics = computed(()=> {
       const annualRows = aggregateCommissionHistory('annual');
-      const row2025 = annualRows.find(row=>row.period === '2025') || {};
-      const row2026 = annualRows.find(row=>row.period === '2026') || {};
-      return [
-        { label:"Gary 2025全年", value:`USD ${formatMoney(row2025.Gary)}` },
-        { label:"Jasmine 2025全年", value:`USD ${formatMoney(row2025.Jasmine)}` },
-        { label:"Gary 2026 YTD（至7月）", value:`USD ${formatMoney(row2026.Gary)}` },
-        { label:"Jasmine 2026 YTD（至7月）", value:`USD ${formatMoney(row2026.Jasmine)}` }
-      ];
+      return annualRows.flatMap(row=>{
+        const suffix = row.period === '2026' ? 'YTD（至7月）' : '全年';
+        return [
+          { label:`Gary ${row.period}${suffix}`, value:`USD ${formatMoney(row.Gary)}` },
+          { label:`Jasmine ${row.period}${suffix}`, value:`USD ${formatMoney(row.Jasmine)}` }
+        ];
+      });
     });
 
     const finalGrade = computed(()=>{
