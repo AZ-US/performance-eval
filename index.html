@@ -247,8 +247,10 @@ body {
 .commission-rule-pill { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:999px; padding:5px 9px; }
 .commission-trend-panel { border:1px solid #CBD5E1; border-radius:14px; padding:16px; background:rgba(248,250,252,0.74); display:flex; flex-direction:column; gap:14px; }
 .commission-trend-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.commission-trend-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
 .commission-trend-title { font-size:15px; font-weight:800; margin-bottom:4px; }
 .commission-trend-subtitle { font-size:12px; line-height:1.6; color:var(--text-light); max-width:660px; }
+.commission-trend-body { display:flex; flex-direction:column; gap:14px; }
 .trend-toggle { display:inline-flex; gap:4px; padding:4px; border-radius:12px; border:1px solid #E2E8F0; background:white; }
 .trend-toggle button { border:none; background:transparent; border-radius:9px; padding:7px 12px; font-family:inherit; font-size:12px; font-weight:800; color:var(--text-light); cursor:pointer; }
 .trend-toggle button.active { background:#DBEAFE; color:#1D4ED8; }
@@ -812,56 +814,61 @@ body {
               <div class="commission-trend-title">历史已发 Commission 趋势</div>
               <div class="commission-trend-subtitle">来自 payroll 中“合并奖金/提成/年终奖”栏，覆盖2024年1月至2026年7月；Gary 与已离职销售 Jasmine 做历史对比，仅用于趋势参考，不替代上方业务提成测算公式。</div>
             </div>
-            <div class="trend-toggle" aria-label="Commission趋势视图">
-              <button type="button" :class="{active: commissionTrendView === 'monthly'}" @click="commissionTrendView = 'monthly'">月度</button>
-              <button type="button" :class="{active: commissionTrendView === 'quarterly'}" @click="commissionTrendView = 'quarterly'">季度</button>
-              <button type="button" :class="{active: commissionTrendView === 'annual'}" @click="commissionTrendView = 'annual'">年度</button>
+            <div class="commission-trend-actions">
+              <div class="trend-toggle" v-if="commissionTrendExpanded" aria-label="Commission趋势视图">
+                <button type="button" :class="{active: commissionTrendView === 'monthly'}" @click="commissionTrendView = 'monthly'">月度</button>
+                <button type="button" :class="{active: commissionTrendView === 'quarterly'}" @click="commissionTrendView = 'quarterly'">季度</button>
+                <button type="button" :class="{active: commissionTrendView === 'annual'}" @click="commissionTrendView = 'annual'">年度</button>
+              </div>
+              <button type="button" class="btn btn-outline" @click="commissionTrendExpanded=!commissionTrendExpanded">{{commissionTrendExpanded ? '收起趋势' : '展开趋势'}}</button>
             </div>
           </div>
-          <div class="commission-trend-metrics">
-            <div class="trend-metric" v-for="metric in commissionTrendMetrics" :key="metric.label">
-              <div class="trend-metric-label">{{metric.label}}</div>
-              <div class="trend-metric-value">{{metric.value}}</div>
+          <div class="commission-trend-body" v-show="commissionTrendExpanded">
+            <div class="commission-trend-metrics">
+              <div class="trend-metric" v-for="metric in commissionTrendMetrics" :key="metric.label">
+                <div class="trend-metric-label">{{metric.label}}</div>
+                <div class="trend-metric-value">{{metric.value}}</div>
+              </div>
             </div>
-          </div>
-          <div class="trend-legend">
-            <span class="trend-legend-item" v-for="person in commissionTrendPeople" :key="person.key">
-              <span class="trend-swatch" :style="{background: person.color}"></span>{{person.label}}
-            </span>
-          </div>
-          <div class="trend-chart-wrap">
-            <svg class="trend-chart" viewBox="0 0 900 300" role="img" :aria-label="commissionTrendAriaLabel">
-              <line v-for="grid in commissionTrendChart.grid" :key="'grid-'+grid.value" class="trend-grid" :x1="commissionTrendChart.padding.left" :x2="commissionTrendChart.width - commissionTrendChart.padding.right" :y1="grid.y" :y2="grid.y"></line>
-              <text v-for="grid in commissionTrendChart.grid" :key="'grid-label-'+grid.value" class="trend-label" x="8" :y="grid.y + 4">{{formatMoneyShort(grid.value)}}</text>
-              <line class="trend-axis" :x1="commissionTrendChart.padding.left" :x2="commissionTrendChart.width - commissionTrendChart.padding.right" :y1="commissionTrendChart.axisY" :y2="commissionTrendChart.axisY"></line>
-              <g v-for="series in commissionTrendChart.series" :key="series.key">
-                <path class="trend-line" :d="series.path" :stroke="series.color"></path>
-                <circle v-for="point in series.points" :key="series.key+'-'+point.label" class="trend-point" :cx="point.x" :cy="point.y" r="4" :fill="series.color">
-                  <title>{{series.label}} {{point.label}}: USD {{formatMoney(point.value)}}</title>
-                </circle>
-              </g>
-              <text v-for="point in commissionTrendChart.labels" :key="'label-'+point.label" class="trend-label" :x="point.x" :y="commissionTrendChart.height - 12" text-anchor="middle">{{point.shortLabel}}</text>
-            </svg>
-          </div>
-          <div class="bonus-table-wrap">
-            <table class="bonus-table trend-table">
-              <thead>
-                <tr>
-                  <th>期间</th>
-                  <th>Gary</th>
-                  <th>Jasmine（已离职）</th>
-                  <th>Gary差额</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in commissionTrendRows" :key="'trend-row-'+row.period">
-                  <td>{{row.label}}</td>
-                  <td>USD {{formatMoney(row.Gary)}}</td>
-                  <td>USD {{formatMoney(row.Jasmine)}}</td>
-                  <td :class="row.gap >= 0 ? 'trend-gap-positive' : 'trend-gap-negative'">{{formatSignedMoney(row.gap)}}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="trend-legend">
+              <span class="trend-legend-item" v-for="person in commissionTrendPeople" :key="person.key">
+                <span class="trend-swatch" :style="{background: person.color}"></span>{{person.label}}
+              </span>
+            </div>
+            <div class="trend-chart-wrap">
+              <svg class="trend-chart" viewBox="0 0 900 300" role="img" :aria-label="commissionTrendAriaLabel">
+                <line v-for="grid in commissionTrendChart.grid" :key="'grid-'+grid.value" class="trend-grid" :x1="commissionTrendChart.padding.left" :x2="commissionTrendChart.width - commissionTrendChart.padding.right" :y1="grid.y" :y2="grid.y"></line>
+                <text v-for="grid in commissionTrendChart.grid" :key="'grid-label-'+grid.value" class="trend-label" x="8" :y="grid.y + 4">{{formatMoneyShort(grid.value)}}</text>
+                <line class="trend-axis" :x1="commissionTrendChart.padding.left" :x2="commissionTrendChart.width - commissionTrendChart.padding.right" :y1="commissionTrendChart.axisY" :y2="commissionTrendChart.axisY"></line>
+                <g v-for="series in commissionTrendChart.series" :key="series.key">
+                  <path class="trend-line" :d="series.path" :stroke="series.color"></path>
+                  <circle v-for="point in series.points" :key="series.key+'-'+point.label" class="trend-point" :cx="point.x" :cy="point.y" r="4" :fill="series.color">
+                    <title>{{series.label}} {{point.label}}: USD {{formatMoney(point.value)}}</title>
+                  </circle>
+                </g>
+                <text v-for="point in commissionTrendChart.labels" :key="'label-'+point.label" class="trend-label" :x="point.x" :y="commissionTrendChart.height - 12" text-anchor="middle">{{point.shortLabel}}</text>
+              </svg>
+            </div>
+            <div class="bonus-table-wrap">
+              <table class="bonus-table trend-table">
+                <thead>
+                  <tr>
+                    <th>期间</th>
+                    <th>Gary</th>
+                    <th>Jasmine（已离职）</th>
+                    <th>Gary差额</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in commissionTrendRows" :key="'trend-row-'+row.period">
+                    <td>{{row.label}}</td>
+                    <td>USD {{formatMoney(row.Gary)}}</td>
+                    <td>USD {{formatMoney(row.Jasmine)}}</td>
+                    <td :class="row.gap >= 0 ? 'trend-gap-positive' : 'trend-gap-negative'">{{formatSignedMoney(row.gap)}}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -2502,6 +2509,7 @@ createApp({
     const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
     const commissionPlan = ref(normalizeCommissionPlan(initial.commissionPlan));
     const commissionTrendView = ref('monthly');
+    const commissionTrendExpanded = ref(false);
     const monthlyKpiSnapshots = ref(initial.monthlyKpiSnapshots || {});
     const activeKpiMonth = ref(initial.activeKpiMonth || getQuarterMonths(initial.meta?.period || currentQuarterLabel())[0]);
     const collapsedDims = ref({});
@@ -4954,7 +4962,7 @@ createApp({
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
       showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
-      commissionTrendView, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
+      commissionTrendView, commissionTrendExpanded, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
       commissionTrendAriaLabel, commissionTrendMetrics, formatMoneyShort, formatSignedMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
       compensationModeLabel, compensationModeClass, monthlyModeLabel, quarterModeLabel, assessmentModeCopy,
