@@ -803,8 +803,8 @@ body {
           </table>
         </div>
         <div class="commission-rules">
-          <span class="commission-rule-pill" v-for="rule in commissionPlan.scoringRules" :key="rule.threshold">
-            ≥{{formatPercent(rule.threshold)}} = {{rule.score}}
+          <span class="commission-rule-pill" v-for="(rule, index) in commissionPlan.scoringRules" :key="rule.threshold">
+            {{commissionScoreRuleLabel(rule, index, commissionPlan.scoringRules)}}
           </span>
         </div>
         <div class="commission-muted">{{commissionPlan.note}}</div>
@@ -2145,10 +2145,24 @@ function commissionGradeVolumeTotal(row, customerGrades = CUSTOMER_GRADE_MULTIPL
   return (customerGrades || []).reduce((sum, grade)=>sum + (Number(row.gradeVolumes?.[grade.grade]) || 0), 0);
 }
 function commissionScoreFromRate(rate, rules = COMMISSION_SCORE_RULES) {
-  const ratio = Number(rate) || 0;
+  const ratio = Math.max(0, Number(rate) || 0);
   return [...(rules || COMMISSION_SCORE_RULES)]
     .sort((a,b)=>Number(a.threshold) - Number(b.threshold))
-    .reduce((score, rule)=>ratio >= Number(rule.threshold) ? Number(rule.score) : score, 0);
+    .reduce((score, rule, index)=> {
+      const threshold = Number(rule.threshold) || 0;
+      const matches = index === 0 ? ratio >= threshold : ratio > threshold;
+      return matches ? Number(rule.score) : score;
+    }, 0);
+}
+
+function commissionScoreRuleLabel(rule, index, rules = COMMISSION_SCORE_RULES) {
+  const sortedRules = [...(rules || COMMISSION_SCORE_RULES)].sort((a,b)=>Number(a.threshold) - Number(b.threshold));
+  const current = sortedRules[index] || rule;
+  const next = sortedRules[index + 1];
+  const score = Number(current.score);
+  if(index === 0 && next) return `≤${formatPercent(next.threshold)} = ${score}`;
+  if(next) return `>${formatPercent(current.threshold)} 至 ≤${formatPercent(next.threshold)} = ${score}`;
+  return `>${formatPercent(current.threshold)} = ${score}`;
 }
 function commissionRowMetrics(plan, row) {
   const normalizedPlan = normalizeCommissionPlan(plan);
@@ -4462,7 +4476,7 @@ createApp({
           ]);
         });
         commissionRowsForSheet.push([]);
-        commissionRowsForSheet.push(['计分规则', ...exportCommissionPlan.scoringRules.map(rule=>`≥${formatPercent(rule.threshold)}=${rule.score}`)]);
+        commissionRowsForSheet.push(['计分规则', ...exportCommissionPlan.scoringRules.map((rule, index)=>commissionScoreRuleLabel(rule, index, exportCommissionPlan.scoringRules))]);
         commissionRowsForSheet.push(['说明', exportCommissionPlan.note || '']);
         const wsCommission = XLSX.utils.aoa_to_sheet(commissionRowsForSheet);
         wsCommission['!cols'] = commissionRowsForSheet[4].map((_, index)=>({ wch: index === commissionRowsForSheet[4].length - 1 ? 32 : 12 }));
@@ -4979,7 +4993,7 @@ createApp({
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
-      showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth,
+      showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatCommissionMonth, commissionScoreRuleLabel,
       commissionTrendView, commissionTrendExpanded, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
       commissionTrendAriaLabel, commissionTrendMetrics, formatMoneyShort, formatSignedMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
