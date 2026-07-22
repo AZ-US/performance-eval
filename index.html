@@ -1460,21 +1460,39 @@ function garyCommissionKpi(id, name, weight, module, key, target, sDesc, aDesc, 
     commissionKey: key
   };
 }
-function buildGaryQ3Q4Dimensions() {
+function garyDistributedWeights(total, ratios) {
+  const base = ratios.map(ratio=>Math.floor(total * ratio));
+  let remainder = total - base.reduce((sum, value)=>sum + value, 0);
+  const fractions = ratios
+    .map((ratio, index)=>({ index, fraction: total * ratio - Math.floor(total * ratio) }))
+    .sort((a,b)=>b.fraction - a.fraction);
+  fractions.forEach(item=>{
+    if(remainder <= 0) return;
+    base[item.index] += 1;
+    remainder -= 1;
+  });
+  return base;
+}
+function buildGaryQ3Q4Dimensions(weights = { customer:60, business:25, leadership:15 }) {
+  const businessWeights = garyDistributedWeights(weights.business, [0.30, 0.25, 0.20, 0.15, 0.10]);
+  const leadershipWeights = garyDistributedWeights(weights.leadership, [0.35, 0.25, 0.20, 0.10, 0.10]);
   return [
+    { id:"CUS", name:"Customer客户贡献", kpis:[
+      profileKpi("C1","客户贡献结果", weights.customer, "根据下方季度业务提成表录入客户箱量、单柜毛利和客户等级；系统按Customer权重计入最终提成。","客户贡献明显超预期，客户结构健康","客户贡献达到季度目标","客户贡献部分达成","客户贡献未达成")
+    ]},
     { id:"BIZ", name:"Business经营动作", kpis:[
-      garyCommissionKpi("B1","Pipeline覆盖",18,"business","pipelineCoverage","季度滚动Pipeline覆盖目标；以客户清单、预计箱量/利润、阶段状态和周度更新记录为证据。","覆盖≥120%，结构清楚且持续更新","覆盖≥100%，主要机会清楚","覆盖80%-99%，更新或质量不稳定","覆盖不足或缺少有效Pipeline"),
-      garyCommissionKpi("B2","重点客户推进",15,"business","keyCustomerProgress","围绕Top客户形成季度推进计划，记录拜访、报价、方案、异常协调和出货改善结果。","≥3个重点客户有明确进展和证据","2个以上重点客户有实质推进","有推进但结果不清或证据不足","缺少重点客户推进动作"),
-      garyCommissionKpi("B3","新客户/新市场开发",12,"business","newCustomerDevelopment","推进新客户、新区域或新产品机会，记录线索、报价、试单、转化和下一步动作。","形成可复制新机会并有落地结果","有有效新机会和明确跟进","有线索但转化弱","无有效新增动作"),
-      garyCommissionKpi("B4","产品/航线策略执行",9,"business","routeStrategyExecution","围绕航线、价格、舱位、客户结构形成策略动作，并沉淀复盘。","策略落地且对业务有明显帮助","完成主要策略动作","有想法但落地不足","缺少策略动作"),
-      garyCommissionKpi("B5","经营复盘质量",6,"business","reviewQuality","按月/季度复盘目标差异、客户结构、机会清单和下阶段动作，复盘需要可追踪。","复盘有数据、有判断、有动作","复盘完整且可跟进","复盘偏描述，行动弱","缺少有效复盘")
+      garyCommissionKpi("B1","Pipeline覆盖",businessWeights[0],"business","pipelineCoverage","季度滚动Pipeline覆盖目标；以客户清单、预计箱量/利润、阶段状态和周度更新记录为证据。","覆盖≥120%，结构清楚且持续更新","覆盖≥100%，主要机会清楚","覆盖80%-99%，更新或质量不稳定","覆盖不足或缺少有效Pipeline"),
+      garyCommissionKpi("B2","重点客户推进",businessWeights[1],"business","keyCustomerProgress","围绕Top客户形成季度推进计划，记录拜访、报价、方案、异常协调和出货改善结果。","≥3个重点客户有明确进展和证据","2个以上重点客户有实质推进","有推进但结果不清或证据不足","缺少重点客户推进动作"),
+      garyCommissionKpi("B3","新客户/新市场开发",businessWeights[2],"business","newCustomerDevelopment","推进新客户、新区域或新产品机会，记录线索、报价、试单、转化和下一步动作。","形成可复制新机会并有落地结果","有有效新机会和明确跟进","有线索但转化弱","无有效新增动作"),
+      garyCommissionKpi("B4","产品/航线策略执行",businessWeights[3],"business","routeStrategyExecution","围绕航线、价格、舱位、客户结构形成策略动作，并沉淀复盘。","策略落地且对业务有明显帮助","完成主要策略动作","有想法但落地不足","缺少策略动作"),
+      garyCommissionKpi("B5","经营复盘质量",businessWeights[4],"business","reviewQuality","按月/季度复盘目标差异、客户结构、机会清单和下阶段动作，复盘需要可追踪。","复盘有数据、有判断、有动作","复盘完整且可跟进","复盘偏描述，行动弱","缺少有效复盘")
     ]},
     { id:"LEAD", name:"Leadership团队管理", kpis:[
-      garyCommissionKpi("L1","员工培养提升",14,"leadership","talentImprovement","明确团队成员培养目标，记录带教、能力提升、独立承接事项和阶段反馈。","培养目标清晰且有可验证提升","有持续培养和反馈","培养动作零散","缺少培养安排"),
-      garyCommissionKpi("L2","授权备份建设",10,"leadership","delegationBackup","建立关键客户、航线、报价、异常处理的备份机制，降低关键事项对单人的依赖。","备份机制稳定且可独立承接","主要事项有备份安排","备份不稳定或覆盖不足","关键事项仍高度依赖个人"),
-      garyCommissionKpi("L3","团队问题关闭",8,"leadership","issueClosure","建立问题清单和责任人，按期关闭客户、流程、协作和人员执行问题。","重点问题按期关闭并复盘","主要问题能持续推进","有清单但关闭不足","问题长期悬置"),
-      garyCommissionKpi("L4","培训/SOP沉淀",4,"leadership","sopTraining","沉淀客户开发、报价、航线策略、异常处理或交接SOP，并组织必要培训。","形成可复用材料并完成培训","有材料且开始使用","材料零散","无有效沉淀"),
-      garyCommissionKpi("L5","协作反馈",4,"leadership","collaborationFeedback","与操作、财务、客服、海外/分公司协作顺畅，关键事项反馈及时。","协作反馈稳定正向","主要协作顺畅","偶有延迟或信息不清","协作问题影响结果")
+      garyCommissionKpi("L1","员工培养提升",leadershipWeights[0],"leadership","talentImprovement","明确团队成员培养目标，记录带教、能力提升、独立承接事项和阶段反馈。","培养目标清晰且有可验证提升","有持续培养和反馈","培养动作零散","缺少培养安排"),
+      garyCommissionKpi("L2","授权备份建设",leadershipWeights[1],"leadership","delegationBackup","建立关键客户、航线、报价、异常处理的备份机制，降低关键事项对单人的依赖。","备份机制稳定且可独立承接","主要事项有备份安排","备份不稳定或覆盖不足","关键事项仍高度依赖个人"),
+      garyCommissionKpi("L3","团队问题关闭",leadershipWeights[2],"leadership","issueClosure","建立问题清单和责任人，按期关闭客户、流程、协作和人员执行问题。","重点问题按期关闭并复盘","主要问题能持续推进","有清单但关闭不足","问题长期悬置"),
+      garyCommissionKpi("L4","培训/SOP沉淀",leadershipWeights[3],"leadership","sopTraining","沉淀客户开发、报价、航线策略、异常处理或交接SOP，并组织必要培训。","形成可复用材料并完成培训","有材料且开始使用","材料零散","无有效沉淀"),
+      garyCommissionKpi("L5","协作反馈",leadershipWeights[4],"leadership","collaborationFeedback","与操作、财务、客服、海外/分公司协作顺畅，关键事项反馈及时。","协作反馈稳定正向","主要协作顺畅","偶有延迟或信息不清","协作问题影响结果")
     ]}
   ];
 }
@@ -1600,8 +1618,8 @@ const PERSON_PROFILES = {
       Q4: "Gary Q4 出口业务经理OKR+提成"
     },
     quarterTemplates: {
-      Q3: { dimensions: buildGaryQ3Q4Dimensions(), compensationNote: GARY_TRANSITION_COMPENSATION_NOTE },
-      Q4: { dimensions: buildGaryQ3Q4Dimensions(), compensationNote: GARY_TRANSITION_COMPENSATION_NOTE }
+      Q3: { dimensions: buildGaryQ3Q4Dimensions({ customer:60, business:25, leadership:15 }), compensationNote: GARY_TRANSITION_COMPENSATION_NOTE },
+      Q4: { dimensions: buildGaryQ3Q4Dimensions({ customer:45, business:40, leadership:15 }), compensationNote: GARY_TRANSITION_COMPENSATION_NOTE }
     },
     compensationMode: "quarterly_commission",
     bonusBase: 0,
@@ -2814,7 +2832,7 @@ createApp({
           return {
             ...kpi,
             selectedTier: existing.selectedTier || null,
-            score: Number(existing.score)||0,
+            score: Math.max(0, Math.min(Number(kpi.weight)||0, Number(existing.score)||0)),
             comment: existing.comment || ''
           };
         })
