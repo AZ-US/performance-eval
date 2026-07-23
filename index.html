@@ -159,7 +159,7 @@ body {
 .tier-btn.selected.tier-A { border-color:var(--a-color); background:#EFF6FF; }
 .tier-btn.selected.tier-B { border-color:var(--b-color); background:#FFFBEB; }
 .tier-btn.selected.tier-C { border-color:var(--c-color); background:#FEF2F2; }
-.tier-grade { font-size:18px; font-weight:800; margin-bottom:4px; }
+.tier-grade { font-size:16px; font-weight:800; margin-bottom:4px; line-height:1.2; min-height:20px; }
 .tier-S .tier-grade { color:var(--s-color); }
 .tier-A .tier-grade { color:var(--a-color); }
 .tier-B .tier-grade { color:var(--b-color); }
@@ -1117,7 +1117,7 @@ body {
                  class="tier-btn"
                  :class="['tier-'+tier.grade, {selected: kpi.selectedTier===tier.grade}]"
                  @click="selectTier(kpi, tier.grade)">
-              <div class="tier-grade">{{tier.grade}}</div>
+              <div class="tier-grade">{{tierLabel(tier)}}</div>
               <div class="tier-points">{{formatScore(tier.points)}}</div>
               <div class="tier-desc">{{tier.description}}</div>
             </div>
@@ -1571,6 +1571,7 @@ function timQuarterKpi(quarter, id, name, weight, target, sDesc, aDesc, bDesc, c
     maxScore: roundScore(weightValue * 1.1),
     tiers: TIM_COMPLETION_STATUS_RULES.map(rule => ({
       grade: rule.grade,
+      label: rule.label,
       points: roundScore(weightValue * rule.coefficient),
       description: `${rule.label} · 系数${formatCoefficient(rule.coefficient)}｜${rule.description}`
     })),
@@ -3026,6 +3027,17 @@ createApp({
 
     function kpiScoreStep(kpi) {
       return Number(kpi.scoreStep) || 1;
+    }
+
+    function tierLabel(tier) {
+      return tier?.label || tier?.grade || '';
+    }
+
+    function selectedTierLabel(kpi) {
+      const selected = String(kpi?.selectedTier || '').trim();
+      if(!selected) return '未评';
+      const tier = (kpi?.tiers || []).find(item=>item.grade === selected || item.label === selected);
+      return tierLabel(tier) || selected;
     }
 
     function hasQuarterlyOkrInput(items) {
@@ -4758,7 +4770,7 @@ createApp({
       ];
       for(const dim of dimensions.value) {
         for(const kpi of dim.kpis) {
-          rows.push([dim.id+' '+dim.name, kpi.id, kpi.name, kpi.weight, kpi.target||'', kpi.selectedTier||'未评', kpi.score, kpi.comment||'']);
+          rows.push([dim.id+' '+dim.name, kpi.id, kpi.name, kpi.weight, kpi.target||'', selectedTierLabel(kpi), kpi.score, kpi.comment||'']);
         }
       }
       if(bonusItems.value.length) {
@@ -5041,7 +5053,7 @@ createApp({
                 <td>${escapeHtml(kpi.name)}</td>
                 <td>${escapeHtml(kpi.weight)}</td>
                 <td>${escapeHtml(kpi.target || '')}</td>
-                <td>${escapeHtml(kpi.selectedTier || '未评')}</td>
+                <td>${escapeHtml(selectedTierLabel(kpi))}</td>
                 <td>${escapeHtml(kpi.score || 0)}</td>
                 <td>${escapeHtml(kpi.comment || '')}</td>
               </tr>`).join('')}
@@ -5294,7 +5306,7 @@ createApp({
       copyPublicLink, copyAmyAdminLink, copyAgnesFinanceLink, copyChrisXuLink, copyOkrGroupLink, exportSubmissionPackage, exportEmployeePdf, formatDateTime,
       undoLastAction,
       dimScore, dimWeight, dimPercent, dimColor, dimGradient, departmentClass,
-      bonusItemScore, syncBonusItemScore, addBonusItem, removeBonusItem, kpiMaxScore, kpiScoreStep, setKpiScore, setOkrCompletion,
+      bonusItemScore, syncBonusItemScore, addBonusItem, removeBonusItem, kpiMaxScore, kpiScoreStep, tierLabel, selectedTierLabel, setKpiScore, setOkrCompletion,
       selectTier, toggleDim, showToast,
       exportJSON, triggerImport, importJSON,
       exportExcel, printPage, resetAll,
