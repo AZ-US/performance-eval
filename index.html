@@ -1590,18 +1590,12 @@ function buildTimQ3Q4Dimensions(quarter) {
         "缺少复盘，或无法说明对经营结果的协同作用")
     ]},
     { id:"O2", name:"重点航线与业务资源成果", kpis:[
-      timQuarterKpi(quarter, "KR1", "完成3-5项重点航线/资源任务", 18,
-        `完成3-5项真正影响业务的${quarter}重点航线或资源任务；每项需明确目标航线、业务场景、资源问题、推进动作和结果。`,
-        "完成5项以上且对成交、舱位、价格或时效有明显帮助",
-        "完成3-5项有效资源任务，证据完整",
-        "完成1-2项或结果不够稳定，证据不完整",
-        "未形成有效资源任务结果"),
-      timQuarterKpi(quarter, "KR2", "资源成果验证与复用", 12,
-        "重点资源成果需要经过实际询价、订舱、出运或团队使用验证，避免只停留在信息收集。",
-        "资源成果可复用，并已被销售/操作实际采用",
-        "主要成果经过业务验证，可以继续使用",
-        "有资源信息但验证不足或使用场景不清",
-        "资源不可用，或没有实际验证")
+      timQuarterKpi(quarter, "KR1", "重点航线与业务资源成果", 30,
+        `完成3-5项真正影响业务的${quarter}重点航线或资源任务；每项需明确目标航线、业务场景、资源问题、推进动作、结果，并经过实际询价、订舱、出运或团队使用验证。`,
+        "完成5项以上高质量资源成果，已被销售/操作实际采用，并对成交、舱位、价格或时效有明显帮助",
+        "完成3-5项有效资源成果，证据完整，且经过业务或团队使用验证",
+        "完成主要资源任务，但数量、质量、验证或复用效果存在一定缺口",
+        "有实质推进但成果未完全落地，或主要停留在信息收集和初步验证")
     ]},
     { id:"O3", name:"船公司商务成果", kpis:[
       timQuarterKpi(quarter, "KR1", "取得可验证商务成果", 20,
@@ -1612,18 +1606,12 @@ function buildTimQ3Q4Dimensions(quarter) {
         "没有可验证商务成果")
     ]},
     { id:"O4", name:"团队管理与重点事项闭环", kpis:[
-      timQuarterKpi(quarter, "KR1", "重点升级与重大卡点关闭", 10,
-        `${quarter}重点升级事项、重大业务卡点需有记录、责任人、处理节点和关闭结果；重点事项关闭率不低于90%。`,
-        "关闭率≥95%，且有复盘和预防动作",
-        "关闭率≥90%，记录和结果完整",
-        "关闭率70%-89%，或记录不够完整",
-        "关闭率低于70%，或重点事项长期悬置"),
-      timQuarterKpi(quarter, "KR2", "重复性管理问题改进", 5,
-        "对重复性报价、资源、沟通、异常升级问题形成改进动作，必要时沉淀为规则、清单或SOP。",
-        "形成2项以上可复用改进并推动团队使用",
-        "至少形成1项有效改进动作",
-        "有发现问题但改进动作不清",
-        "重复问题没有被识别或处理")
+      timQuarterKpi(quarter, "KR1", "团队管理与重点事项闭环", 15,
+        `${quarter}重点升级事项、重大业务卡点和重复性管理问题需有记录、责任人、处理节点、关闭结果和必要复盘；重点事项关闭率不低于90%，重复问题需形成规则、清单或SOP等改进动作。`,
+        "重点事项关闭率≥95%，重复问题形成可复用改进，并推动团队使用",
+        "重点事项关闭率≥90%，记录完整，至少形成1项有效管理改进",
+        "重点事项大部分推进，但关闭率、记录完整性或重复问题改进存在缺口",
+        "有实质推进但闭环不足，或部分重点事项仍长期悬置")
     ]},
     { id:"O5", name:"战略专项与能力建设", kpis:[
       timQuarterKpi(quarter, "KR1", "完成1-2项战略专项并验证可用性", 20,
@@ -3058,13 +3046,32 @@ createApp({
     }
 
     function mergeTemplateDimensionsPreservingProgress(existingDimensions, templateDimensions) {
-      const existingKpis = (Array.isArray(existingDimensions) ? existingDimensions : []).flatMap(dim=>dim.kpis || []);
+      const existingDims = Array.isArray(existingDimensions) ? existingDimensions : [];
+      const existingKpis = existingDims.flatMap(dim=>dim.kpis || []);
       const byName = new Map(existingKpis.map(kpi=>[kpi.name, kpi]));
+      const dimsById = new Map(existingDims.map(dim=>[dim.id, dim]));
       return deepClone(templateDimensions || []).map(dim=>({
         ...dim,
         kpis: (dim.kpis || []).map(kpi=>{
           const existing = byName.get(kpi.name);
-          if(!existing) return kpi;
+          if(!existing) {
+            const existingDim = dimsById.get(dim.id);
+            const oldKpis = existingDim?.kpis || [];
+            if((dim.kpis || []).length === 1 && oldKpis.length > 1) {
+              const aggregateScore = oldKpis.reduce((sum,item)=>sum + (Number(item.score)||0), 0);
+              const aggregateComment = oldKpis
+                .map(item=>String(item.comment || '').trim())
+                .filter(Boolean)
+                .join('；');
+              return {
+                ...kpi,
+                selectedTier: null,
+                score: roundScore(Math.max(0, Math.min(kpiMaxScore(kpi), aggregateScore))),
+                comment: aggregateComment
+              };
+            }
+            return kpi;
+          }
           return {
             ...kpi,
             selectedTier: existing.selectedTier || null,
