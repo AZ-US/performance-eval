@@ -1076,7 +1076,7 @@ body {
             <span class="kpi-name">{{kpi.name}}</span>
             <span class="kpi-weight-badge">满分 {{kpi.weight}} 分</span>
           </div>
-          <div class="kpi-desc" v-if="kpi.target">关键结果 / 证据口径: {{kpi.target}}</div>
+          <div class="kpi-desc" v-if="kpi.target">{{kpi.targetLabel || '关键结果 / 证据口径'}}: {{kpi.target}}</div>
           <div class="tier-group">
             <div v-for="tier in kpi.tiers" :key="tier.grade"
                  class="tier-btn"
@@ -1496,6 +1496,69 @@ function buildGaryQ3Q4Dimensions(weights = { customer:60, business:25, leadershi
     ]}
   ];
 }
+const TIM_Q3_Q4_COMPENSATION_NOTE = "Tim Q3/Q4按季度OKR结果进行复盘，月度保留跟进记录；重点看航线资源、船公司商务成果、重点事项闭环和战略专项的实际可用结果。";
+function timQuarterKpi(quarter, id, name, weight, target, sDesc, aDesc, bDesc, cDesc) {
+  return {
+    ...profileKpi(id, name, weight, target, sDesc, aDesc, bDesc, cDesc),
+    targetLabel: `${quarter}季度目标 / 验收标准`
+  };
+}
+function buildTimQ3Q4Dimensions(quarter) {
+  return [
+    { id:"O1", name:"经营结果联动", kpis:[
+      timQuarterKpi(quarter, "KR1", "季度经营结果协同复盘", 15,
+        `使用财务/OMS既有${quarter}季度数据作为结果依据，Tim仅承担协同责任；每月完成1次经营支持复盘，说明资源支持、价格变化、异常影响和改进动作。`,
+        "复盘完整，有数据、有判断、有改进动作，并能说明对业务结果的支持",
+        "按月完成复盘，能说明主要支持动作和影响",
+        "有复盘但内容偏描述，缺少结果判断或改进动作",
+        "缺少复盘，或无法说明对经营结果的协同作用")
+    ]},
+    { id:"O2", name:"重点航线与业务资源成果", kpis:[
+      timQuarterKpi(quarter, "KR1", "完成3-5项重点航线/资源任务", 18,
+        `完成3-5项真正影响业务的${quarter}重点航线或资源任务；每项需明确目标航线、业务场景、资源问题、推进动作和结果。`,
+        "完成5项以上且对成交、舱位、价格或时效有明显帮助",
+        "完成3-5项有效资源任务，证据完整",
+        "完成1-2项或结果不够稳定，证据不完整",
+        "未形成有效资源任务结果"),
+      timQuarterKpi(quarter, "KR2", "资源成果验证与复用", 12,
+        "重点资源成果需要经过实际询价、订舱、出运或团队使用验证，避免只停留在信息收集。",
+        "资源成果可复用，并已被销售/操作实际采用",
+        "主要成果经过业务验证，可以继续使用",
+        "有资源信息但验证不足或使用场景不清",
+        "资源不可用，或没有实际验证")
+    ]},
+    { id:"O3", name:"船公司商务成果", kpis:[
+      timQuarterKpi(quarter, "KR1", "取得可验证商务成果", 20,
+        `推进船公司/供应商商务条件优化；${quarter}至少取得3项可验证成果，包括专项价、合约、舱位额度、账期、免箱期、新资源等。`,
+        "取得4项以上高价值商务成果，且对业务有直接帮助",
+        "取得至少3项可验证商务成果，证据完整",
+        "取得1-2项成果，或成果价值/证据不足",
+        "没有可验证商务成果")
+    ]},
+    { id:"O4", name:"团队管理与重点事项闭环", kpis:[
+      timQuarterKpi(quarter, "KR1", "重点升级与重大卡点关闭", 10,
+        `${quarter}重点升级事项、重大业务卡点需有记录、责任人、处理节点和关闭结果；重点事项关闭率不低于90%。`,
+        "关闭率≥95%，且有复盘和预防动作",
+        "关闭率≥90%，记录和结果完整",
+        "关闭率70%-89%，或记录不够完整",
+        "关闭率低于70%，或重点事项长期悬置"),
+      timQuarterKpi(quarter, "KR2", "重复性管理问题改进", 5,
+        "对重复性报价、资源、沟通、异常升级问题形成改进动作，必要时沉淀为规则、清单或SOP。",
+        "形成2项以上可复用改进并推动团队使用",
+        "至少形成1项有效改进动作",
+        "有发现问题但改进动作不清",
+        "重复问题没有被识别或处理")
+    ]},
+    { id:"O5", name:"战略专项与能力建设", kpis:[
+      timQuarterKpi(quarter, "KR1", "完成1-2项战略专项并验证可用性", 20,
+        `每季度推进1-2项长期能力建设或战略专项，必须验证可用性；例如新资源测试、航线数据库、报价规则沉淀、供应商评估模型或重点市场资源方案。`,
+        "完成2项以上专项，成果经过验证并可持续使用",
+        "完成至少1项专项，且已通过业务或团队使用验证",
+        "专项有推进但未充分验证或落地不完整",
+        "没有形成可用专项成果")
+    ]}
+  ];
+}
 const GARY_COMMISSION_TREND_PEOPLE = [
   { key:"Gary", label:"Gary", color:"#2563EB" },
   { key:"Jasmine", label:"Jasmine（已离职）", color:"#F59E0B" }
@@ -1782,6 +1845,15 @@ const PERSON_PROFILES = {
   Tim: {
     name: "Tim",
     templateName: "Tim 2026 Q2 订舱与航线突破 OKR",
+    detailedQuarters: ["Q3","Q4"],
+    quarterTemplateNames: {
+      Q3: "Tim Q3 航线经理OKR",
+      Q4: "Tim Q4 航线经理OKR"
+    },
+    quarterTemplates: {
+      Q3: { dimensions: buildTimQ3Q4Dimensions("Q3"), compensationNote: TIM_Q3_Q4_COMPENSATION_NOTE },
+      Q4: { dimensions: buildTimQ3Q4Dimensions("Q4"), compensationNote: TIM_Q3_Q4_COMPENSATION_NOTE }
+    },
     compensationMode: "monthly_accelerator",
     bonusBase: 1000,
     bonusCurrency: "USD",
@@ -3579,11 +3651,16 @@ createApp({
       const effectivePeriod = period || data.meta?.period || currentQuarterLabel();
       const template = profileQuarterTemplate(profile, effectivePeriod);
       if(!template) return data;
+      const effectiveQuarterKey = quarterKeyFromPeriod(effectivePeriod);
       const matchesProfileTemplate = data.meta?.templateName === template.templateName;
       const canReplaceQuarterTemplate = !matchesProfileTemplate && !hasQuarterProgress(data);
       const needsKoriV1Upgrade = profile.name === 'Kori' && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
       const needsGaryCommissionOkrUpgrade = profile.name === 'Gary'
         && (template.dimensions || []).some(dim=>(dim.kpis || []).some(kpi=>kpi.commissionModule && kpi.commissionKey))
+        && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
+      const needsTimQuarterOkrUpgrade = profile.name === 'Tim'
+        && ["Q3","Q4"].includes(effectiveQuarterKey)
+        && !template.isPlaceholder
         && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
       data.meta = {
         ...(data.meta || {}),
@@ -3592,9 +3669,9 @@ createApp({
         department: departmentForEmployee(profile.name)
       };
       data.department = departmentForEmployee(profile.name);
-      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade) {
+      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade) {
         data.meta.templateName = template.templateName;
-        data.meta.templateVersion = `${quarterKeyFromPeriod(effectivePeriod)}-role${template.isPlaceholder ? '-placeholder' : ''}`;
+        data.meta.templateVersion = `${effectiveQuarterKey}-role${template.isPlaceholder ? '-placeholder' : ''}`;
         data.bonusBase = template.bonusBase;
         data.bonusCurrency = template.bonusCurrency;
         data.compensationMode = template.compensationMode;
@@ -3604,7 +3681,7 @@ createApp({
         data.dimensions = deepClone(template.dimensions);
         data.bonusItems = deepClone(template.bonusItems || []);
         data.quarterlyOkrs = deepClone(template.quarterlyOkrs || []);
-      } else if(needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade) {
+      } else if(needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade) {
         data.dimensions = mergeTemplateDimensionsPreservingProgress(data.dimensions, template.dimensions);
         data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
         data.quarterlyOkrs = (data.quarterlyOkrs && data.quarterlyOkrs.length)
@@ -4490,7 +4567,7 @@ createApp({
         [`${meta.value.templateName} ${performanceTitle}`],
         [`被考核人: ${meta.value.employeeName}`, `部门: ${currentDept}`, `考核人: ${meta.value.evaluatorName}`, `季度: ${meta.value.period}`],
         [],
-        ['目标','KR编号','关键结果','权重(分)','证据口径','完成档位','得分','完成说明/证据']
+        ['目标','KR编号','关键结果','权重(分)','目标/验收标准/证据口径','完成档位','得分','完成说明/证据']
       ];
       for(const dim of dimensions.value) {
         for(const kpi of dim.kpis) {
@@ -4753,7 +4830,7 @@ createApp({
       const performanceHtml = (data.dimensions || []).map(dim=>`
         <h3>${escapeHtml(dim.id)} ${escapeHtml(dim.name)}</h3>
         <table>
-          <thead><tr><th>KR</th><th>关键结果</th><th>权重</th><th>证据口径</th><th>档位</th><th>得分</th><th>说明</th></tr></thead>
+          <thead><tr><th>KR</th><th>关键结果</th><th>权重</th><th>目标/验收标准/证据口径</th><th>档位</th><th>得分</th><th>说明</th></tr></thead>
           <tbody>
             ${(dim.kpis || []).map(kpi=>`
               <tr>
