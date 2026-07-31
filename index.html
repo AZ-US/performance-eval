@@ -2576,6 +2576,90 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+const BUILTIN_RECORD_SAVED_AT = {
+  koriQ2: '2026-07-28T17:27:00-07:00'
+};
+function resetKpiProgressForBuiltin(dimensions) {
+  return deepClone(dimensions || []).map(dim=>({
+    ...dim,
+    kpis: (dim.kpis || []).map(kpi=>({
+      ...kpi,
+      selectedTier:null,
+      score:0,
+      comment:''
+    }))
+  }));
+}
+function buildKoriQ2ImportedData() {
+  const profile = PERSON_PROFILES.Kori;
+  const template = profile.quarters?.Q2 || profile;
+  const bonusItems = deepClone(template.bonusItems || []);
+  const scoredDimensions = resetKpiProgressForBuiltin(template.dimensions);
+  const scores = {
+    FI: { KR1:['S',5], KR2:['A',8] },
+    AP: { KR1:['A',8], KR2:['S',5], KR3:['A',4], KR4:['B',6], KR5:['A',4], KR6:['S',5], KR7:['A',4] },
+    AR: { KR1:['B',6] },
+    RP: { KR1:['A',8], KR2:['B',6] },
+    GE: { KR1:['B',6] }
+  };
+  scoredDimensions.forEach(dim=>{
+    (dim.kpis || []).forEach(kpi=>{
+      const result = scores[dim.id]?.[kpi.id];
+      if(!result) return;
+      kpi.selectedTier = result[0];
+      kpi.score = result[1];
+      kpi.comment = '';
+    });
+  });
+  const blankDimensions = resetKpiProgressForBuiltin(template.dimensions);
+  const blankBonusItems = deepClone(bonusItems).map(item=>({ ...item, quantity:0, score:0, comment:item.comment || '' }));
+  return {
+    meta: {
+      ...deepClone(DEFAULT_TEMPLATE.meta),
+      templateName: template.templateName,
+      templateVersion: 'Q2-imported-pdf',
+      employeeName: 'Kori',
+      evaluatorName: '',
+      period: '2026-Q2',
+      department: '财务部'
+    },
+    department: '财务部',
+    bonusBase: 500,
+    bonusCurrency: 'USD',
+    compensationMode: 'monthly_bonus',
+    compensationNote: template.compensationNote,
+    monthlyBonuses: ['2026-04','2026-05','2026-06'].map(month=>({
+      month,
+      grade:'A',
+      base:500,
+      paid:500,
+      comment:''
+    })),
+    gradeScale: normalizeGradeScale(DEFAULT_TEMPLATE.gradeScale),
+    dimensions: scoredDimensions,
+    bonusItems: blankBonusItems,
+    monthlyKpiSnapshots: {
+      '2026-04': { dimensions: blankDimensions, bonusItems: blankBonusItems },
+      '2026-05': { dimensions: resetKpiProgressForBuiltin(template.dimensions), bonusItems: deepClone(blankBonusItems) },
+      '2026-06': { dimensions: scoredDimensions, bonusItems: deepClone(blankBonusItems) }
+    },
+    activeKpiMonth: '2026-06',
+    quarterlyOkrs: deepClone(template.quarterlyOkrs || []),
+    quarterlyBonusPlan: null,
+    commissionPlan: null
+  };
+}
+function builtinRecords() {
+  const koriRecord = buildRecordFromData(buildKoriQ2ImportedData());
+  return [{
+    ...koriRecord,
+    id: 'Kori__2026-Q2',
+    savedAt: BUILTIN_RECORD_SAVED_AT.koriQ2,
+    source: 'builtin_pdf_import',
+    importedFrom: 'Kori_2026-Q2_绩效考核.pdf'
+  }];
+}
+
 const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
 const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
@@ -3221,6 +3305,14 @@ createApp({
       return Boolean(record && viewerCanAccessEmployee(record.employeeName, record.data));
     }
     const visibleRecords = computed(()=> records.value.filter(record=>viewerCanAccessRecord(record)));
+    function focusLatestVisibleRecordPeriodIfNeeded() {
+      if(urlPeriod) return;
+      const currentPeriodHasRecords = visibleRecords.value.some(record=>record.period === comparePeriod.value);
+      if(currentPeriodHasRecords) return;
+      const latestPeriodWithRecords = [...new Set(visibleRecords.value.map(record=>record.period).filter(Boolean))]
+        .sort((a,b)=>periodSortValue(b) - periodSortValue(a))[0];
+      if(latestPeriodWithRecords) comparePeriod.value = latestPeriodWithRecords;
+    }
     const assessmentPeriodOptions = computed(()=> {
       const base = buildAssessmentPeriodOptions(meta.value.period || comparePeriod.value || currentQuarterLabel());
       const extra = [
@@ -4610,6 +4702,7 @@ createApp({
       if(compensationMode.value === 'quarterly_commission' && dimensions.value.length) okrExpanded.value = true;
       if(hasQuarterlyOkrInput(quarterlyOkrs.value)) quarterlyOkrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
+      focusLatestVisibleRecordPeriodIfNeeded();
       enforceViewerScopeOnCurrentDraft();
       persistRecords();
       if(cloudEndpoint.value.trim()) syncCloudRecords(true);
@@ -5330,13 +5423,25 @@ function loadInitialData(storageKey) {
 
 function loadRecords(storageKey) {
   const saved = localStorage.getItem(storageKey);
-  if(!saved) return [];
+  const builtins = builtinRecords();
+  const merge = (records) => {
+    const merged = new Map();
+    (Array.isArray(records) ? records : []).forEach(record=>{
+      if(!record || !record.data || isEmployeeRuleRecord(record) || isHiddenEmployeeName(record.employeeName)) return;
+      const existing = merged.get(record.id);
+      const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
+      const incomingTime = record.savedAt ? Date.parse(record.savedAt) : 0;
+      if(!existing || incomingTime >= existingTime) merged.set(record.id, record);
+    });
+    return [...merged.values()];
+  };
+  if(!saved) return merge(builtins);
   try {
     const records = JSON.parse(saved);
-    return Array.isArray(records) ? records.filter(record=>record && record.data && !isEmployeeRuleRecord(record) && !isHiddenEmployeeName(record.employeeName)) : [];
+    return merge([...builtins, ...(Array.isArray(records) ? records : [])]);
   } catch {
     localStorage.removeItem(storageKey);
-    return [];
+    return merge(builtins);
   }
 }
 
