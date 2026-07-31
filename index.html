@@ -3815,8 +3815,7 @@ createApp({
       });
     }
 
-    function autoLoadInitialVisibleRecord() {
-      if(initialCloudRecordLoaded) return false;
+    function loadBestVisibleRecordForCurrentView() {
       const targetPeriod = urlPeriod || comparePeriod.value || meta.value.period;
       const currentName = canonicalName(meta.value.employeeName);
       const candidates = visibleRecords.value.filter(record=>!targetPeriod || record.period === targetPeriod);
@@ -3824,9 +3823,15 @@ createApp({
         ? candidates.find(record=>canonicalName(record.employeeName) === currentName)
         : null;
       const candidate = preferred || candidates[0] || visibleRecords.value[0];
-      if(!candidate) return false;
-      if(currentDraftInputQuality() > evaluationInputQuality(candidate)) return false;
+      if(!candidate || currentDraftInputQuality() > evaluationInputQuality(candidate)) return null;
       loadRecord(candidate);
+      return candidate;
+    }
+
+    function autoLoadInitialVisibleRecord() {
+      if(initialCloudRecordLoaded) return false;
+      const candidate = loadBestVisibleRecordForCurrentView();
+      if(!candidate) return false;
       initialCloudRecordLoaded = true;
       cloudStatus.value = `已载入 ${candidate.employeeName} ${candidate.period}，可直接查看或继续编辑`;
       return true;
@@ -4608,6 +4613,7 @@ createApp({
     async function syncCloudRecords(silent = false, options = {}) {
       silent = silent === true;
       const allowPeriodAutoSwitch = options.allowPeriodAutoSwitch !== false;
+      const shouldLoadCurrentRecord = options.initial === true || (!silent && options.loadCurrentRecord !== false);
       const endpoint = cloudEndpoint.value.trim();
       if(!endpoint) {
         if(!silent) showToast('请先配置云端提交地址');
@@ -4629,7 +4635,9 @@ createApp({
           normalizeCurrentMonthlyBonuses();
           normalizeCurrentMonthlyKpiState();
         }
+        const loadedRecord = shouldLoadCurrentRecord ? loadBestVisibleRecordForCurrentView() : null;
         cloudStatus.value = `已同步 ${incoming.length} 条记录，当前查看 ${comparePeriod.value}`;
+        if(loadedRecord) cloudStatus.value = `已同步 ${incoming.length} 条记录，已载入 ${loadedRecord.employeeName} ${loadedRecord.period}`;
         if(!silent) showToast(`云端记录已同步，当前查看 ${comparePeriod.value}`);
       } catch {
         if(!silent) {
