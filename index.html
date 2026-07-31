@@ -2683,12 +2683,33 @@ function recordHasDetailedEvaluationInput(record) {
   return hasCurrentKpiInput || hasMonthlySnapshotInput || hasBonusItemInput || hasQuarterlyOkrInput;
 }
 
+function evaluationInputQuality(record) {
+  const data = record?.data || {};
+  const kpiCount = (dimensions) => (Array.isArray(dimensions) ? dimensions : [])
+    .flatMap(dim=>dim.kpis || [])
+    .filter(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim()).length;
+  const snapshotKpiCount = Object.values(data.monthlyKpiSnapshots || {})
+    .reduce((sum, snapshot)=>sum + kpiCount(snapshot?.dimensions), 0);
+  const monthlyCount = (Array.isArray(data.monthlyBonuses) ? data.monthlyBonuses : [])
+    .filter(row=>String(row.grade || '').trim() || String(row.comment || '').trim() || Number(row.paid)).length;
+  const bonusCount = (Array.isArray(data.bonusItems) ? data.bonusItems : [])
+    .filter(item=>Number(item.quantity) || Number(item.score) || String(item.comment || '').trim()).length;
+  const okrCount = (Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [])
+    .flatMap(objective=>objective.krs || [])
+    .filter(kr=>String(kr.actual || '').trim() || Number(kr.completion) || String(kr.comment || '').trim()).length;
+  return kpiCount(data.dimensions) * 1000 + snapshotKpiCount * 100 + monthlyCount * 10 + bonusCount * 2 + okrCount;
+}
+
+function recordHasAnyEvaluationInput(record) {
+  return evaluationInputQuality(record) > 0;
+}
+
 function shouldReplaceRecord(existing, incoming) {
   if(!existing) return true;
   const existingIsBuiltin = isBuiltinImportedRecord(existing);
   const incomingIsBuiltin = isBuiltinImportedRecord(incoming);
-  if(existingIsBuiltin && !incomingIsBuiltin && recordHasDetailedEvaluationInput(existing) && !recordHasDetailedEvaluationInput(incoming)) return false;
-  if(incomingIsBuiltin && !existingIsBuiltin && recordHasDetailedEvaluationInput(incoming) && !recordHasDetailedEvaluationInput(existing)) return true;
+  if(existingIsBuiltin && !incomingIsBuiltin && recordHasDetailedEvaluationInput(existing) && !recordHasAnyEvaluationInput(incoming)) return false;
+  if(incomingIsBuiltin && !existingIsBuiltin && recordHasDetailedEvaluationInput(incoming) && !recordHasAnyEvaluationInput(existing)) return true;
   const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
   const incomingTime = incoming?.savedAt ? Date.parse(incoming.savedAt) : 0;
   return incomingTime >= existingTime;
@@ -2919,6 +2940,7 @@ createApp({
     const cloudEndpoint = ref(initialCloudEndpoint);
     if(rawUrlCloudEndpoint || rawSavedCloudEndpoint !== initialCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, initialCloudEndpoint);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
+    let initialCloudRecordLoaded = false;
     function buildSharedUrl(includeAdmin = false) {
       const endpoint = cloudEndpoint.value.trim();
       const url = new URL(publicUrl);
@@ -3779,6 +3801,35 @@ createApp({
         .filter(record=>!isScopedViewer.value || viewerCanAccessRecord(record));
       records.value = normalizeRecordList([...(records.value || []), ...incomingRecords]);
       persistRecords();
+    }
+
+    function currentDraftInputQuality() {
+      return evaluationInputQuality({
+        data: {
+          dimensions: dimensions.value,
+          monthlyKpiSnapshots: monthlyKpiSnapshots.value,
+          monthlyBonuses: monthlyBonuses.value,
+          bonusItems: bonusItems.value,
+          quarterlyOkrs: quarterlyOkrs.value
+        }
+      });
+    }
+
+    function autoLoadInitialVisibleRecord() {
+      if(initialCloudRecordLoaded) return false;
+      const targetPeriod = urlPeriod || comparePeriod.value || meta.value.period;
+      const currentName = canonicalName(meta.value.employeeName);
+      const candidates = visibleRecords.value.filter(record=>!targetPeriod || record.period === targetPeriod);
+      const preferred = currentName
+        ? candidates.find(record=>canonicalName(record.employeeName) === currentName)
+        : null;
+      const candidate = preferred || candidates[0] || visibleRecords.value[0];
+      if(!candidate) return false;
+      if(currentDraftInputQuality() > evaluationInputQuality(candidate)) return false;
+      loadRecord(candidate);
+      initialCloudRecordLoaded = true;
+      cloudStatus.value = `已载入 ${candidate.employeeName} ${candidate.period}，可直接查看或继续编辑`;
+      return true;
     }
 
     function saveCurrentRecord() {
@@ -4724,7 +4775,7 @@ createApp({
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
     });
-    onMounted(()=>{
+    onMounted(async ()=>{
       normalizeCurrentDraftPeriod();
       normalizeCurrentProfileTemplate();
       normalizeCurrentMonthlyBonuses();
@@ -4739,7 +4790,8 @@ createApp({
       focusLatestVisibleRecordPeriodIfNeeded();
       enforceViewerScopeOnCurrentDraft();
       persistRecords();
-      if(cloudEndpoint.value.trim()) syncCloudRecords(true);
+      if(cloudEndpoint.value.trim()) await syncCloudRecords(true, { initial:true, allowPeriodAutoSwitch:false });
+      autoLoadInitialVisibleRecord();
       if(isAdminMode.value && cloudEndpoint.value.trim()) {
         cloudSyncTimer = setInterval(()=>{
           if(document.hidden) return;
