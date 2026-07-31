@@ -2660,6 +2660,40 @@ function builtinRecords() {
   }];
 }
 
+function isBuiltinImportedRecord(record) {
+  return Boolean(record && (record.source === 'builtin_pdf_import' || record.importedFrom));
+}
+
+function dimensionsHaveEvaluationInput(dimensions) {
+  return (Array.isArray(dimensions) ? dimensions : [])
+    .flatMap(dim=>dim.kpis || [])
+    .some(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim());
+}
+
+function recordHasDetailedEvaluationInput(record) {
+  const data = record?.data || {};
+  const hasCurrentKpiInput = dimensionsHaveEvaluationInput(data.dimensions);
+  const hasMonthlySnapshotInput = Object.values(data.monthlyKpiSnapshots || {})
+    .some(snapshot=>dimensionsHaveEvaluationInput(snapshot?.dimensions));
+  const hasBonusItemInput = (Array.isArray(data.bonusItems) ? data.bonusItems : [])
+    .some(item=>Number(item.quantity) || Number(item.score));
+  const hasQuarterlyOkrInput = (Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [])
+    .flatMap(objective=>objective.krs || [])
+    .some(kr=>String(kr.actual || '').trim() || Number(kr.completion));
+  return hasCurrentKpiInput || hasMonthlySnapshotInput || hasBonusItemInput || hasQuarterlyOkrInput;
+}
+
+function shouldReplaceRecord(existing, incoming) {
+  if(!existing) return true;
+  const existingIsBuiltin = isBuiltinImportedRecord(existing);
+  const incomingIsBuiltin = isBuiltinImportedRecord(incoming);
+  if(existingIsBuiltin && !incomingIsBuiltin && recordHasDetailedEvaluationInput(existing) && !recordHasDetailedEvaluationInput(incoming)) return false;
+  if(incomingIsBuiltin && !existingIsBuiltin && recordHasDetailedEvaluationInput(incoming) && !recordHasDetailedEvaluationInput(existing)) return true;
+  const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
+  const incomingTime = incoming?.savedAt ? Date.parse(incoming.savedAt) : 0;
+  return incomingTime >= existingTime;
+}
+
 const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
 const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
@@ -4071,7 +4105,9 @@ createApp({
       const rebuilt = buildRecordFromData(data);
       return {
         ...rebuilt,
-        savedAt: record.savedAt || new Date().toISOString()
+        savedAt: record.savedAt || new Date().toISOString(),
+        source: record.source || rebuilt.source || '',
+        importedFrom: record.importedFrom || rebuilt.importedFrom || ''
       };
     }
 
@@ -4087,9 +4123,7 @@ createApp({
         if(record && record.data && !isHiddenEmployeeName(record.employeeName)) {
           const normalized = normalizeRecordForLibrary(record);
           const existing = merged.get(normalized.id);
-          const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
-          const incomingTime = normalized.savedAt ? Date.parse(normalized.savedAt) : 0;
-          if(!existing || incomingTime >= existingTime) merged.set(normalized.id, normalized);
+          if(shouldReplaceRecord(existing, normalized)) merged.set(normalized.id, normalized);
         }
       });
       return sortRecords([...merged.values()]);
@@ -5429,9 +5463,7 @@ function loadRecords(storageKey) {
     (Array.isArray(records) ? records : []).forEach(record=>{
       if(!record || !record.data || isEmployeeRuleRecord(record) || isHiddenEmployeeName(record.employeeName)) return;
       const existing = merged.get(record.id);
-      const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
-      const incomingTime = record.savedAt ? Date.parse(record.savedAt) : 0;
-      if(!existing || incomingTime >= existingTime) merged.set(record.id, record);
+      if(shouldReplaceRecord(existing, record)) merged.set(record.id, record);
     });
     return [...merged.values()];
   };
