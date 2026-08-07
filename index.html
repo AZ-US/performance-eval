@@ -232,6 +232,12 @@ body {
 .bonus-note { min-width:220px; }
 .compensation-note { background:rgba(239,246,255,0.72); border:1px solid #BFDBFE; color:#1E3A8A; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.65; margin-bottom:14px; }
 .commission-panel { display:flex; flex-direction:column; gap:14px; margin-bottom:16px; }
+.commission-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:10px 12px; border:1px solid #CBD5E1; border-radius:12px; background:rgba(248,250,252,0.74); }
+.commission-panel-title { font-size:15px; font-weight:800; margin-bottom:3px; }
+.commission-panel-subtitle { color:var(--text-light); font-size:12px; line-height:1.5; }
+.commission-panel-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.commission-panel-total { color:var(--text-light); font-size:12px; }
+.commission-panel-total strong { color:var(--text); font-size:16px; margin-left:4px; }
 .commission-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .commission-control { display:flex; align-items:center; gap:6px; color:var(--text-light); font-size:13px; }
 .commission-control input { width:86px; border:1px solid #E2E8F0; border-radius:8px; padding:6px 9px; font-size:13px; background:white; outline:none; font-family:inherit; }
@@ -735,11 +741,18 @@ body {
         </div>
       </div>
       <div class="commission-panel" v-if="showCommissionPlan">
-        <div class="bonus-stats">
-          <div class="bonus-stat">
-            <div class="bonus-stat-label">最终提成合计</div>
-            <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.totalCommission)}}</div>
+        <div class="commission-panel-header">
+          <div>
+            <div class="commission-panel-title">季度业务提成</div>
+            <div class="commission-panel-subtitle">Customer、Business、Leadership结果汇总；详细计算表可展开查看。</div>
           </div>
+          <div class="commission-panel-actions">
+            <div class="commission-panel-total">最终提成合计<strong>{{commissionPlan.currency}} {{formatMoney(commissionSummary.totalCommission)}}</strong></div>
+            <button type="button" class="btn btn-outline" @click="commissionExpanded=!commissionExpanded">{{commissionExpanded ? '收起季度业务提成' : '展开季度业务提成'}}</button>
+          </div>
+        </div>
+        <div v-show="commissionExpanded">
+        <div class="bonus-stats">
           <div class="bonus-stat">
             <div class="bonus-stat-label">Customer计入 / 原模型</div>
             <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.customerWeightedCommission)}} / {{formatMoney(commissionSummary.customerCommission)}}</div>
@@ -908,6 +921,7 @@ body {
               </table>
             </div>
           </div>
+        </div>
         </div>
       </div>
       <div class="bonus-stats" v-if="showMonthlyBonusTable">
@@ -2884,6 +2898,7 @@ createApp({
     const quarterlyOkrs = ref(normalizeQuarterlyOkrs(initial.quarterlyOkrs));
     const quarterlyBonusPlan = ref(normalizeQuarterlyBonusPlan(initial.quarterlyBonusPlan));
     const commissionPlan = ref(normalizeCommissionPlan(initial.commissionPlan));
+    const commissionExpanded = ref(false);
     const commissionTrendView = ref('monthly');
     const commissionTrendExpanded = ref(false);
     const monthlyKpiSnapshots = ref(initial.monthlyKpiSnapshots || {});
@@ -5479,7 +5494,7 @@ createApp({
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
-      showCommissionPlan, commissionRows, commissionSummary, formatPercent, formatMoney, formatScore, formatCoefficient, formatCommissionMonth, commissionScoreRuleLabel,
+      showCommissionPlan, commissionExpanded, commissionRows, commissionSummary, formatPercent, formatMoney, formatScore, formatCoefficient, formatCommissionMonth, commissionScoreRuleLabel,
       commissionTrendView, commissionTrendExpanded, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
       commissionTrendAriaLabel, commissionTrendMetrics, formatMoneyShort, formatSignedMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
