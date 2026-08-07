@@ -320,6 +320,16 @@ body {
 .workflow-copy { font-size:13px; color:var(--text-light); line-height:1.65; }
 .records-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
 .records-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.records-card { padding:18px 22px; margin-bottom:18px; }
+.records-card-header { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; padding-bottom:14px; border-bottom:1px solid rgba(226,232,240,0.9); }
+.records-card-title-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.records-card-subtitle { font-size:12px; color:var(--text-light); line-height:1.55; margin-top:4px; }
+.records-card-summary { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border:1px solid #E2E8F0; border-radius:999px; background:#F8FAFC; color:#475569; font-size:11px; font-weight:800; white-space:nowrap; }
+.records-card-body { padding-top:14px; }
+.records-section-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:14px 0 8px; padding:0 2px 8px; border-bottom:1px solid #E2E8F0; }
+.records-section-title { font-size:14px; font-weight:800; color:var(--text); }
+.records-section-note { font-size:12px; color:var(--text-light); margin-top:3px; line-height:1.5; }
+.records-section-badge { display:inline-flex; align-items:center; padding:4px 8px; border-radius:999px; background:#F1F5F9; color:#475569; font-size:11px; font-weight:800; white-space:nowrap; }
 .records-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:13px; color:var(--text-light); }
 .records-filters input, .records-filters select { border:1px solid #E2E8F0; border-radius:8px; padding:7px 10px; font-size:13px; background:white; outline:none; font-family:inherit; }
 .records-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
@@ -412,6 +422,11 @@ body {
   .trend-toggle { width:100%; }
   .trend-toggle button { flex:1; }
   .workflow-grid, .records-grid { grid-template-columns:1fr; }
+  .records-card { padding:14px; }
+  .records-card-header { align-items:flex-start; }
+  .records-card-header .records-actions { width:100%; }
+  .records-card-header .records-actions .btn { flex:1; }
+  .records-section-heading { align-items:flex-start; flex-direction:column; gap:6px; }
   .quick-nav-card { position:static; }
   .quick-employee-btn { min-width:0; flex-basis:calc(50% - 3px); }
   .dim-bar-label { width:70px; font-size:12px; }
@@ -979,18 +994,20 @@ body {
 
     <!-- Employee Records -->
     <section class="records-card" id="employee-results" v-if="isAdminMode && adminToolsOpen">
-      <div class="records-toolbar">
+      <div class="records-card-header">
         <div>
-          <div class="section-title">员工记录库与横向比较</div>
-          <div class="section-subtitle">保存当前员工考评后，可在同一浏览器中比较不同员工，也可以导入/导出记录库做汇总。公网静态版没有后台数据库，跨电脑汇总需要导入记录库JSON。</div>
+          <div class="records-card-title-row">
+            <div class="section-title">员工记录库与横向比较</div>
+            <span class="records-card-summary">{{records.length}} 条记录 · {{employeeNames.length}} 人</span>
+          </div>
+          <div class="records-card-subtitle">集中查看季度横向比较、个人纵向追踪和记录操作。</div>
         </div>
         <div class="records-actions">
           <button class="btn btn-primary" @click="saveCurrentRecord">保存当前员工</button>
-          <button class="btn btn-outline" @click="exportRecordLibrary">导出记录库</button>
-          <button class="btn btn-outline" @click="triggerRecordImport">导入记录库</button>
-          <input type="file" ref="recordInput" class="hidden-input" accept=".json" @change="importRecordLibrary">
+          <button class="btn btn-outline" @click="recordsExpanded=!recordsExpanded" :aria-expanded="recordsExpanded" aria-controls="records-library-body">{{recordsExpanded ? '收起记录库' : '展开记录库'}}</button>
         </div>
       </div>
+      <div class="records-card-body" v-show="recordsExpanded" id="records-library-body">
       <div class="records-grid">
         <div class="record-stat">
           <div class="record-stat-label">已保存记录</div>
@@ -1015,13 +1032,23 @@ body {
         <select v-model="comparePeriod">
           <option v-for="period in assessmentPeriodOptions" :key="period" :value="period">{{period}}</option>
         </select>
-        <span>个人追踪</span>
+        <span>个人纵向追踪</span>
         <select v-model="selectedEmployee">
           <option value="">选择员工</option>
           <option v-for="name in employeeNames" :key="name" :value="name">{{name}}</option>
         </select>
+        <button class="btn btn-outline" @click="exportRecordLibrary">导出记录库</button>
+        <button class="btn btn-outline" @click="triggerRecordImport">导入记录库</button>
+        <input type="file" ref="recordInput" class="hidden-input" accept=".json" @change="importRecordLibrary">
       </div>
 
+      <div class="records-section-heading">
+        <div>
+          <div class="records-section-title">横向比较 · {{comparePeriod}}</div>
+          <div class="records-section-note">只显示所选期间的员工记录；切换上方期间可进行同周期比较。</div>
+        </div>
+        <span class="records-section-badge">{{comparisonRecords.length}} 人</span>
+      </div>
       <div class="record-table-wrap">
         <table class="record-table">
           <thead>
@@ -1057,11 +1084,18 @@ body {
             </tr>
           </tbody>
           <tbody v-else>
-            <tr><td :colspan="isOkrOnlyMode ? 8 : 10" class="empty-state">当前期间还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
+            <tr><td :colspan="isOkrOnlyMode ? 8 : 10" class="empty-state">{{comparePeriod}} 当前还没有员工记录。填写员工姓名后点击“保存当前员工”。</td></tr>
           </tbody>
         </table>
       </div>
 
+      <div class="records-section-heading">
+        <div>
+          <div class="records-section-title">个人纵向追踪 · {{selectedEmployee || '未选择员工'}}</div>
+          <div class="records-section-note">显示该员工全部已保存期间；这里的期间可能与上方横向比较期间不同。</div>
+        </div>
+        <span class="records-section-badge">{{timelineRecords.length}} 个期间</span>
+      </div>
       <div class="record-table-wrap">
         <table class="record-table">
           <thead>
@@ -1094,6 +1128,7 @@ body {
             <tr><td :colspan="isOkrOnlyMode ? 7 : 8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
           </tbody>
         </table>
+      </div>
       </div>
     </section>
 
@@ -2907,6 +2942,7 @@ createApp({
     const drawerOpen = ref(false);
     const okrExpanded = ref(false);
     const quarterlyOkrExpanded = ref(false);
+    const recordsExpanded = ref(false);
     const saveTime = ref('');
     const toastMsg = ref('');
     const toastVisible = ref(false);
@@ -5487,7 +5523,7 @@ createApp({
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
-      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, saveTime, toastMsg, toastVisible, canUndo,
+      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, recordsExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
       baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, showQuarterlyBonusPlan, quarterlyBonusSummary, quarterlyOkrCompletion,
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
