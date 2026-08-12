@@ -2917,6 +2917,13 @@ createApp({
     const urlPeriod = normalizePeriodParam(urlParams.get('period') || urlParams.get('quarter'));
     const initial = loadInitialData(STORAGE_KEY);
     if(urlPeriod) initial.meta = { ...(initial.meta || DEFAULT_TEMPLATE.meta), period:urlPeriod };
+    // 共享链接不带固定季度，跨季度后应进入当前季度；历史数据通过季度下拉查看。
+    // 这样 Agnes 浏览器里残留的 Q2 草稿不会把新一季度的 Kori 评分页带回 Q2。
+    const storedInitialPeriod = normalizePeriodParam(initial.meta?.period);
+    const currentSystemPeriod = currentQuarterLabel();
+    if(!urlPeriod && storedInitialPeriod && periodSortValue(storedInitialPeriod) < periodSortValue(currentSystemPeriod)) {
+      initial.meta = { ...(initial.meta || DEFAULT_TEMPLATE.meta), period:currentSystemPeriod };
+    }
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
     }
@@ -3417,6 +3424,10 @@ createApp({
     const visibleRecords = computed(()=> records.value.filter(record=>viewerCanAccessRecord(record)));
     function focusLatestVisibleRecordPeriodIfNeeded() {
       if(urlPeriod) return;
+      // 新季度开始时，即使云端只有旧季度记录，也要保持当前季度可填写。
+      // 否则 Agnes 进入财务链接会被自动带回上一季度，导致 7 月评分落不到 Q3。
+      const currentPeriod = normalizePeriodParam(comparePeriod.value || meta.value.period || currentQuarterLabel());
+      if(currentPeriod === currentQuarterLabel()) return;
       const currentPeriodHasRecords = visibleRecords.value.some(record=>record.period === comparePeriod.value);
       if(currentPeriodHasRecords) return;
       const latestPeriodWithRecords = [...new Set(visibleRecords.value.map(record=>record.period).filter(Boolean))]
@@ -3876,7 +3887,8 @@ createApp({
       const preferred = currentName
         ? candidates.find(record=>canonicalName(record.employeeName) === currentName)
         : null;
-      const candidate = preferred || candidates[0] || visibleRecords.value[0];
+      // 有明确季度时只允许载入该季度，不能用上一季度记录兜底。
+      const candidate = preferred || candidates[0];
       if(!candidate || currentDraftInputQuality() > evaluationInputQuality(candidate)) return null;
       loadRecord(candidate);
       return candidate;
@@ -4401,7 +4413,10 @@ createApp({
         showToast(`${viewerScopeLabel.value} 无权查看该员工`);
         return;
       }
-      const record = latestRecordForEmployee(name);
+      const targetPeriod = normalizePeriodParam(comparePeriod.value || meta.value.period || currentQuarterLabel());
+      const record = visibleRecords.value
+        .filter(item=>canonicalName(item.employeeName) === canonicalName(name) && (!targetPeriod || item.period === targetPeriod))
+        .sort((a,b)=>new Date(b.savedAt) - new Date(a.savedAt))[0] || null;
       quickEmployeeSelect.value = name;
       const profile = profileForEmployee(name);
       if(record) {
@@ -4683,7 +4698,9 @@ createApp({
         const currentPeriodHasRecords = visibleRecords.value.some(record=>record.period === comparePeriod.value);
         const latestPeriodWithRecords = [...new Set(visibleRecords.value.map(record=>record.period).filter(Boolean))]
           .sort((a,b)=>periodSortValue(b) - periodSortValue(a))[0];
-        if(allowPeriodAutoSwitch && !urlPeriod && !currentPeriodHasRecords && latestPeriodWithRecords) {
+        const currentPeriod = normalizePeriodParam(comparePeriod.value || meta.value.period || currentQuarterLabel());
+        const isCurrentSystemQuarter = currentPeriod === currentQuarterLabel();
+        if(allowPeriodAutoSwitch && !urlPeriod && !isCurrentSystemQuarter && !currentPeriodHasRecords && latestPeriodWithRecords) {
           comparePeriod.value = latestPeriodWithRecords;
           meta.value = { ...meta.value, period:latestPeriodWithRecords };
           normalizeCurrentMonthlyBonuses();
