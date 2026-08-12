@@ -2722,6 +2722,22 @@ function dimensionsHaveEvaluationInput(dimensions) {
     .some(kpi=>kpi.selectedTier || Number(kpi.score) || String(kpi.comment || '').trim());
 }
 
+function commissionPlanInputQuality(plan) {
+  const normalized = normalizeCommissionPlan(plan);
+  if(!normalized) return 0;
+  return normalized.months.reduce((quality, row)=>{
+    const hasInput = Boolean(
+      Number(row.actualVolume) ||
+      Number(row.profitPerContainerCny) ||
+      Object.values(row.gradeVolumes || {}).some(value=>Number(value)) ||
+      Object.values(row.businessKpis || {}).some(value=>Number(value)) ||
+      Object.values(row.leadershipKpis || {}).some(value=>Number(value)) ||
+      String(row.note || '').trim()
+    );
+    return quality + (hasInput ? 1 : 0);
+  }, 0);
+}
+
 function recordHasDetailedEvaluationInput(record) {
   const data = record?.data || {};
   const hasCurrentKpiInput = dimensionsHaveEvaluationInput(data.dimensions);
@@ -2732,7 +2748,8 @@ function recordHasDetailedEvaluationInput(record) {
   const hasQuarterlyOkrInput = (Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [])
     .flatMap(objective=>objective.krs || [])
     .some(kr=>String(kr.actual || '').trim() || Number(kr.completion));
-  return hasCurrentKpiInput || hasMonthlySnapshotInput || hasBonusItemInput || hasQuarterlyOkrInput;
+  const hasCommissionInput = commissionPlanInputQuality(data.commissionPlan) > 0;
+  return hasCurrentKpiInput || hasMonthlySnapshotInput || hasBonusItemInput || hasQuarterlyOkrInput || hasCommissionInput;
 }
 
 function evaluationInputQuality(record) {
@@ -2749,7 +2766,8 @@ function evaluationInputQuality(record) {
   const okrCount = (Array.isArray(data.quarterlyOkrs) ? data.quarterlyOkrs : [])
     .flatMap(objective=>objective.krs || [])
     .filter(kr=>String(kr.actual || '').trim() || Number(kr.completion) || String(kr.comment || '').trim()).length;
-  return kpiCount(data.dimensions) * 1000 + snapshotKpiCount * 100 + monthlyCount * 10 + bonusCount * 2 + okrCount;
+  const commissionCount = commissionPlanInputQuality(data.commissionPlan);
+  return commissionCount * 1000 + kpiCount(data.dimensions) * 1000 + snapshotKpiCount * 100 + monthlyCount * 10 + bonusCount * 2 + okrCount;
 }
 
 function recordHasAnyEvaluationInput(record) {
@@ -2760,6 +2778,10 @@ function shouldReplaceRecord(existing, incoming) {
   if(!existing) return true;
   const existingIsBuiltin = isBuiltinImportedRecord(existing);
   const incomingIsBuiltin = isBuiltinImportedRecord(incoming);
+  const existingCommissionQuality = commissionPlanInputQuality(existing.data?.commissionPlan);
+  const incomingCommissionQuality = commissionPlanInputQuality(incoming.data?.commissionPlan);
+  // Gary 的提成表可能是唯一填写内容。不要用更少月份的云端旧记录覆盖本地完整记录。
+  if(existingCommissionQuality > incomingCommissionQuality && existingCommissionQuality > 0) return false;
   if(existingIsBuiltin && !incomingIsBuiltin && recordHasDetailedEvaluationInput(existing) && !recordHasAnyEvaluationInput(incoming)) return false;
   if(incomingIsBuiltin && !existingIsBuiltin && recordHasDetailedEvaluationInput(incoming) && !recordHasAnyEvaluationInput(existing)) return true;
   const existingTime = existing?.savedAt ? Date.parse(existing.savedAt) : 0;
@@ -3875,7 +3897,8 @@ createApp({
           monthlyKpiSnapshots: monthlyKpiSnapshots.value,
           monthlyBonuses: monthlyBonuses.value,
           bonusItems: bonusItems.value,
-          quarterlyOkrs: quarterlyOkrs.value
+          quarterlyOkrs: quarterlyOkrs.value,
+          commissionPlan: commissionPlan.value
         }
       });
     }
