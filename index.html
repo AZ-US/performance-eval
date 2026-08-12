@@ -212,6 +212,8 @@ body {
 .section-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
 .section-title { font-size:18px; font-weight:800; margin-bottom:6px; }
 .section-subtitle { font-size:13px; color:var(--text-light); line-height:1.6; max-width:680px; }
+.bonus-section-actions { display:flex; align-items:flex-start; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+.bonus-section-actions .bonus-controls { justify-content:flex-end; }
 .bonus-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; color:var(--text-light); }
 .bonus-controls input { border:1px solid #E2E8F0; border-radius:8px; padding:6px 10px; font-size:13px; background:white; outline:none; font-family:inherit; }
 .bonus-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
@@ -691,8 +693,11 @@ body {
           <div class="section-title">月度评估记录</div>
           <div class="section-subtitle">保留已保存的月度评价、等级和备注。</div>
         </div>
+        <button class="btn btn-outline" @click="monthlyEvaluationExpanded=!monthlyEvaluationExpanded" :aria-expanded="monthlyEvaluationExpanded">
+          {{monthlyEvaluationExpanded ? '收起月度评估' : '展开月度评估'}}
+        </button>
       </div>
-      <div class="bonus-table-wrap">
+      <div class="bonus-table-wrap" v-show="monthlyEvaluationExpanded">
         <table class="bonus-table">
           <thead>
             <tr>
@@ -719,17 +724,23 @@ body {
           <div class="section-title">{{compensationTitle}}</div>
           <div class="section-subtitle">{{compensationSubtitle}}</div>
         </div>
-        <div class="bonus-controls" v-if="showMonthlyBonusTable">
-          <span>月奖金基准</span>
-          <input type="number" v-model.number="bonusBase" style="width:96px">
-          <input v-model="bonusCurrency" style="width:64px">
-          <button class="btn btn-outline" @click="applyBaseToMonths">应用基准</button>
-          <button class="btn btn-outline" @click="fillPaidFromDue">应发填入实发</button>
-          <button class="btn btn-outline" @click="syncBonusMonths">同步季度月份</button>
+        <div class="bonus-section-actions">
+          <div class="bonus-controls" v-if="monthlyBonusExpanded && showMonthlyBonusTable">
+            <span>月奖金基准</span>
+            <input type="number" v-model.number="bonusBase" style="width:96px">
+            <input v-model="bonusCurrency" style="width:64px">
+            <button class="btn btn-outline" @click="applyBaseToMonths">应用基准</button>
+            <button class="btn btn-outline" @click="fillPaidFromDue">应发填入实发</button>
+            <button class="btn btn-outline" @click="syncBonusMonths">同步季度月份</button>
+          </div>
+          <button class="btn btn-outline" @click="monthlyBonusExpanded=!monthlyBonusExpanded" :aria-expanded="monthlyBonusExpanded">
+            {{monthlyBonusExpanded ? '收起月度奖金' : '展开月度奖金'}}
+          </button>
         </div>
       </div>
-      <div class="compensation-note">{{compensationNote}}</div>
-      <div class="quarterly-bonus-panel" v-if="showQuarterlyBonusPlan">
+      <div v-show="monthlyBonusExpanded">
+        <div class="compensation-note">{{compensationNote}}</div>
+        <div class="quarterly-bonus-panel" v-if="showQuarterlyBonusPlan">
         <div class="bonus-stats">
           <div class="bonus-stat">
             <div class="bonus-stat-label">季度奖金基准</div>
@@ -763,8 +774,8 @@ body {
         <div class="commission-rules">
           <span v-for="segment in quarterlyBonusPlan.segments" :key="segment.label">{{segment.label}}</span>
         </div>
-      </div>
-      <div class="commission-panel" v-if="showCommissionPlan">
+        </div>
+        <div class="commission-panel" v-if="showCommissionPlan">
         <div class="commission-panel-header">
           <div>
             <div class="commission-panel-title">季度业务提成</div>
@@ -961,8 +972,8 @@ body {
           </div>
         </div>
         </div>
-      </div>
-      <div class="bonus-stats" v-if="showMonthlyBonusTable">
+        </div>
+        <div class="bonus-stats" v-if="showMonthlyBonusTable">
         <div class="bonus-stat">
           <div class="bonus-stat-label">奖金应发合计</div>
           <div class="bonus-stat-value">{{bonusCurrency}} {{monthlyDueTotal}}</div>
@@ -975,8 +986,8 @@ body {
           <div class="bonus-stat-label">已评月份</div>
           <div class="bonus-stat-value">{{ratedMonthCount}} / {{monthlyBonuses.length}}</div>
         </div>
-      </div>
-      <div class="bonus-table-wrap" v-if="showMonthlyBonusTable">
+        </div>
+        <div class="bonus-table-wrap" v-if="showMonthlyBonusTable">
         <table class="bonus-table">
           <thead>
             <tr>
@@ -1151,7 +1162,7 @@ body {
             <tr><td :colspan="isOkrOnlyMode ? 7 : 8" class="empty-state">选择员工后，这里会显示该员工跨期间的纵向追踪。</td></tr>
           </tbody>
         </table>
-      </div>
+        </div>
       </div>
     </section>
 
@@ -1220,9 +1231,14 @@ body {
           <div class="section-title">加分项</div>
           <div class="section-subtitle">加分项计入总分，不占用100分基础权重。适用于历史欠款催回等额外贡献。</div>
         </div>
-        <button class="btn btn-outline" @click="addBonusItem">添加加分项</button>
+        <div class="bonus-section-actions">
+          <button class="btn btn-outline" @click="bonusItemsExpanded=!bonusItemsExpanded" :aria-expanded="bonusItemsExpanded">
+            {{bonusItemsExpanded ? '收起加分项' : '展开加分项'}}
+          </button>
+          <button class="btn btn-outline" @click="addBonusItem">添加加分项</button>
+        </div>
       </div>
-      <div class="bonus-table-wrap">
+      <div class="bonus-table-wrap" v-show="bonusItemsExpanded">
         <table class="bonus-table">
           <thead>
             <tr>
@@ -2995,6 +3011,9 @@ createApp({
     const commissionExpanded = ref(false);
     const commissionTrendView = ref('monthly');
     const commissionTrendExpanded = ref(false);
+    const monthlyBonusExpanded = ref(false);
+    const monthlyEvaluationExpanded = ref(false);
+    const bonusItemsExpanded = ref(false);
     const monthlyKpiSnapshots = ref(initial.monthlyKpiSnapshots || {});
     const activeKpiMonth = ref(initial.activeKpiMonth || getQuarterMonths(initial.meta?.period || currentQuarterLabel())[0]);
     const collapsedDims = ref({});
@@ -3859,7 +3878,10 @@ createApp({
         selectedEmployee: selectedEmployee.value,
         quickEmployeeSelect: quickEmployeeSelect.value,
         okrExpanded: okrExpanded.value,
-        quarterlyOkrExpanded: quarterlyOkrExpanded.value
+        quarterlyOkrExpanded: quarterlyOkrExpanded.value,
+        monthlyBonusExpanded: monthlyBonusExpanded.value,
+        monthlyEvaluationExpanded: monthlyEvaluationExpanded.value,
+        bonusItemsExpanded: bonusItemsExpanded.value
       });
       if(undoStack.value.length > 20) undoStack.value.pop();
     }
@@ -3902,6 +3924,9 @@ createApp({
       quickEmployeeSelect.value = snapshot.quickEmployeeSelect;
       okrExpanded.value = snapshot.okrExpanded;
       quarterlyOkrExpanded.value = snapshot.quarterlyOkrExpanded || false;
+      monthlyBonusExpanded.value = snapshot.monthlyBonusExpanded || false;
+      monthlyEvaluationExpanded.value = snapshot.monthlyEvaluationExpanded || false;
+      bonusItemsExpanded.value = snapshot.bonusItemsExpanded || false;
       persistRecords();
       persistEmployeeRenameMap();
       persistEmployeeHiddenNames();
@@ -4018,11 +4043,9 @@ createApp({
       commissionPlan.value = normalizeCommissionPlan(data.commissionPlan);
       monthlyKpiSnapshots.value = data.monthlyKpiSnapshots || {};
       activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(meta.value.period || currentQuarterLabel())[0];
-      quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
       comparePeriod.value = meta.value.period;
       selectedEmployee.value = meta.value.employeeName || selectedEmployee.value;
-      okrExpanded.value = isMonthlyKpiTemplate.value || compensationMode.value === 'quarterly_commission' || Boolean(record.okrFilledCount);
-      quarterlyOkrExpanded.value = hasQuarterlyOkrInput(quarterlyOkrs.value);
+      collapseDimensionModules();
       syncGaryOkrToCommissionPlan();
       showToast('已载入员工记录');
     }
@@ -4418,8 +4441,9 @@ createApp({
       activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || currentQuarterLabel())[0];
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
-      okrExpanded.value = true;
+      okrExpanded.value = false;
       quarterlyOkrExpanded.value = false;
+      collapseDimensionModules();
       syncGaryOkrToCommissionPlan();
       showToast(`已载入 ${profile.name} 的OKR模版`);
     }
@@ -4442,8 +4466,9 @@ createApp({
       activeKpiMonth.value = data.activeKpiMonth || getQuarterMonths(data.meta?.period || currentQuarterLabel())[0];
       selectedEmployee.value = profile.name;
       quickEmployeeSelect.value = profile.name;
-      okrExpanded.value = true;
+      okrExpanded.value = false;
       quarterlyOkrExpanded.value = false;
+      collapseDimensionModules();
       syncGaryOkrToCommissionPlan();
     }
 
@@ -4899,6 +4924,24 @@ createApp({
       collapsedDims.value[id] = !collapsedDims.value[id];
     }
 
+    function collapseDimensionModules() {
+      const next = {};
+      (dimensions.value || []).forEach(dim=>{ next[dim.id] = true; });
+      collapsedDims.value = next;
+    }
+
+    function collapseAllDetailModules() {
+      okrExpanded.value = false;
+      quarterlyOkrExpanded.value = false;
+      monthlyBonusExpanded.value = false;
+      monthlyEvaluationExpanded.value = false;
+      bonusItemsExpanded.value = false;
+      commissionExpanded.value = false;
+      commissionTrendExpanded.value = false;
+      recordsExpanded.value = false;
+      collapseDimensionModules();
+    }
+
     function showToast(msg) {
       toastMsg.value = msg;
       toastVisible.value = true;
@@ -4933,16 +4976,13 @@ createApp({
       normalizeCurrentMonthlyKpiState();
       normalizeCurrentDepartment();
       syncGaryOkrToCommissionPlan();
-      if(isOkrOnlyMode) okrExpanded.value = true;
-      if(isMonthlyKpiTemplate.value) okrExpanded.value = true;
-      if(compensationMode.value === 'quarterly_commission' && dimensions.value.length) okrExpanded.value = true;
-      if(hasQuarterlyOkrInput(quarterlyOkrs.value)) quarterlyOkrExpanded.value = true;
       records.value = normalizeRecordList(records.value);
       focusLatestVisibleRecordPeriodIfNeeded();
       enforceViewerScopeOnCurrentDraft();
       persistRecords();
       if(cloudEndpoint.value.trim()) await syncCloudRecords(true, { initial:true, allowPeriodAutoSwitch:false });
       autoLoadInitialVisibleRecord();
+      collapseAllDetailModules();
       if(isAdminMode.value && cloudEndpoint.value.trim()) {
         cloudSyncTimer = setInterval(()=>{
           if(document.hidden) return;
@@ -5625,7 +5665,7 @@ createApp({
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards,
-      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, recordsExpanded, saveTime, toastMsg, toastVisible, canUndo,
+      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, recordsExpanded, monthlyBonusExpanded, monthlyEvaluationExpanded, bonusItemsExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
       baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, showQuarterlyBonusPlan, quarterlyBonusSummary, quarterlyOkrCompletion,
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
