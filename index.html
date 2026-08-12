@@ -817,10 +817,6 @@ body {
             <input type="number" min="0" step="0.01" v-model.number="commissionPlan.marginTargetCny">
             <span>{{commissionPlan.marginCurrency}}</span>
           </label>
-          <label class="commission-control">Q1月均基准
-            <input type="number" min="0" step="0.01" v-model.number="commissionPlan.targetMonthlyBonus">
-            <span>{{commissionPlan.currency}}</span>
-          </label>
           <label class="commission-control">复核线
             <input type="number" min="0" step="0.01" v-model.number="commissionPlan.reviewThreshold">
             <span>{{commissionPlan.currency}}</span>
@@ -5047,7 +5043,7 @@ createApp({
         const commissionRowsForSheet = [
           [`${meta.value.templateName} Q3/Q4 KPI提成测算`],
           [`被考核人: ${meta.value.employeeName}`, `部门: ${currentDept}`, `考核人: ${meta.value.evaluatorName}`, `期间: ${meta.value.period}`],
-          [`基础提成: ${exportCommissionPlan.currency} ${exportCommissionPlan.baseCommissionPerContainer}/柜`, `柜均毛利指标: ${exportCommissionPlan.marginCurrency} ${exportCommissionPlan.marginTargetCny}`, `Q1月均基准: ${exportCommissionPlan.currency} ${formatMoney(exportCommissionPlan.targetMonthlyBonus)}`, `最终提成合计: ${exportCommissionPlan.currency} ${formatMoney(summary.totalCommission)}`],
+          [`基础提成: ${exportCommissionPlan.currency} ${exportCommissionPlan.baseCommissionPerContainer}/柜`, `柜均毛利指标: ${exportCommissionPlan.marginCurrency} ${exportCommissionPlan.marginTargetCny}`, `最终提成合计: ${exportCommissionPlan.currency} ${formatMoney(summary.totalCommission)}`],
           [],
           ['月份','阶段','预算箱量','实际箱量','箱量完成比','柜量分数','单柜毛利(CNY)','毛利完成比','毛利分数','矩阵比例','单柜提成', ...exportCommissionPlan.customerGrades.map(grade=>`${grade.grade}档 x${grade.multiplier}`), '客户档合计','Customer原模型','Customer计入', ...exportCommissionPlan.businessKpiDefs.map(def=>def.label), 'Business得分','Business计入', ...exportCommissionPlan.leadershipKpiDefs.map(def=>def.label), 'Leadership得分','Leadership计入','最终提成','状态','备注']
         ];
@@ -5280,7 +5276,6 @@ createApp({
         <div class="summary">
           <div>基础提成：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.baseCommissionPerContainer)}/柜</div>
           <div>柜均毛利指标：${escapeHtml(reportCommissionPlan.marginCurrency)} ${formatMoney(reportCommissionPlan.marginTargetCny)}</div>
-          <div>Q1月均基准：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.targetMonthlyBonus)}</div>
           <div>最终提成合计：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionSummary.totalCommission)}</div>
         </div>
         <table>
