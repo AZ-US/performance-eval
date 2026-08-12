@@ -238,6 +238,13 @@ body {
 .commission-panel-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .commission-panel-total { color:var(--text-light); font-size:12px; }
 .commission-panel-total strong { color:var(--text); font-size:16px; margin-left:4px; }
+.commission-quarter-summary { display:grid; grid-template-columns:minmax(150px,1.1fr) repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; padding:12px; border:1px solid #BFDBFE; border-radius:12px; background:linear-gradient(90deg,rgba(239,246,255,0.9),rgba(248,250,252,0.82)); }
+.commission-quarter-summary-title { display:flex; flex-direction:column; justify-content:center; gap:3px; color:#1E3A8A; font-weight:800; }
+.commission-quarter-summary-title small { color:#64748B; font-size:11px; font-weight:600; }
+.commission-quarter-summary-item { padding:9px 11px; border-left:1px solid rgba(191,219,254,0.9); }
+.commission-quarter-summary-label { color:#64748B; font-size:11px; margin-bottom:4px; }
+.commission-quarter-summary-value { color:#0F172A; font-size:17px; font-weight:800; white-space:nowrap; }
+.commission-quarter-summary-value strong { color:#1D4ED8; }
 .commission-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .commission-control { display:flex; align-items:center; gap:6px; color:var(--text-light); font-size:13px; }
 .commission-control input { width:86px; border:1px solid #E2E8F0; border-radius:8px; padding:6px 9px; font-size:13px; background:white; outline:none; font-family:inherit; }
@@ -417,6 +424,8 @@ body {
   .tier-group { grid-template-columns:repeat(2,1fr); }
   .summary-card { flex-direction:column; align-items:stretch; text-align:center; }
   .bonus-stats { grid-template-columns:1fr; }
+  .commission-quarter-summary { grid-template-columns:1fr; }
+  .commission-quarter-summary-item { border-left:none; border-top:1px solid rgba(191,219,254,0.9); }
   .commission-trend-metrics { grid-template-columns:1fr; }
   .commission-trend-panel { padding:14px; }
   .trend-toggle { width:100%; }
@@ -779,6 +788,24 @@ body {
           <div class="bonus-stat">
             <div class="bonus-stat-label">已录入月份</div>
             <div class="bonus-stat-value">{{commissionSummary.filledMonthCount}} / {{commissionSummary.monthCount}}</div>
+          </div>
+        </div>
+        <div class="commission-quarter-summary">
+          <div class="commission-quarter-summary-title">
+            <span>{{meta.period || '当前季度'}}结算总数</span>
+            <small>按季度支付 commission</small>
+          </div>
+          <div class="commission-quarter-summary-item">
+            <div class="commission-quarter-summary-label">Customer计入</div>
+            <div class="commission-quarter-summary-value">{{commissionPlan.currency}} <strong>{{formatMoney(commissionQuarterSummary.customerWeightedCommission)}}</strong></div>
+          </div>
+          <div class="commission-quarter-summary-item">
+            <div class="commission-quarter-summary-label">Customer原模型</div>
+            <div class="commission-quarter-summary-value">{{commissionPlan.currency}} {{formatMoney(commissionQuarterSummary.customerCommission)}}</div>
+          </div>
+          <div class="commission-quarter-summary-item">
+            <div class="commission-quarter-summary-label">季度最终提成</div>
+            <div class="commission-quarter-summary-value">{{commissionPlan.currency}} <strong>{{formatMoney(commissionQuarterSummary.totalCommission)}}</strong></div>
           </div>
         </div>
         <div class="commission-controls">
@@ -2468,10 +2495,12 @@ function commissionRowMetrics(plan, row) {
     mismatch: Boolean(row.actualVolume) && Math.abs(Number(row.actualVolume) - gradeVolumeTotal) > 0.01
   };
 }
-function summarizeCommissionPlan(plan) {
+function summarizeCommissionPlan(plan, period = '') {
   const normalizedPlan = normalizeCommissionPlan(plan);
   if(!normalizedPlan) return { totalCommission:0, customerCommission:0, customerWeightedCommission:0, businessCommission:0, leadershipCommission:0, budgetVolume:0, actualVolume:0, gradeVolumeTotal:0, filledMonthCount:0, monthCount:0, volumeRate:0 };
-  return normalizedPlan.months.reduce((summary, row)=>{
+  const targetMonths = period ? new Set(getQuarterMonths(period)) : null;
+  const months = targetMonths ? normalizedPlan.months.filter(row=>targetMonths.has(row.month)) : normalizedPlan.months;
+  return months.reduce((summary, row)=>{
     const metrics = commissionRowMetrics(normalizedPlan, row);
     const hasBusiness = Object.values(row.businessKpis || {}).some(value=>Number(value));
     const hasLeadership = Object.values(row.leadershipKpis || {}).some(value=>Number(value));
@@ -3369,6 +3398,7 @@ createApp({
       }));
     });
     const commissionSummary = computed(()=>summarizeCommissionPlan(commissionPlan.value));
+    const commissionQuarterSummary = computed(()=>summarizeCommissionPlan(commissionPlan.value, meta.value.period));
     const commissionTrendPeople = GARY_COMMISSION_TREND_PEOPLE;
     const showGaryCommissionTrends = computed(()=> {
       if(isOkrOnlyMode) return false;
@@ -5571,7 +5601,7 @@ createApp({
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
-      showCommissionPlan, commissionExpanded, commissionRows, commissionSummary, formatPercent, formatMoney, formatScore, formatCoefficient, formatCommissionMonth, commissionScoreRuleLabel,
+      showCommissionPlan, commissionExpanded, commissionRows, commissionSummary, commissionQuarterSummary, formatPercent, formatMoney, formatScore, formatCoefficient, formatCommissionMonth, commissionScoreRuleLabel,
       commissionTrendView, commissionTrendExpanded, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
       commissionTrendAriaLabel, commissionTrendMetrics, formatMoneyShort, formatSignedMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
