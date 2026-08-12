@@ -559,7 +559,7 @@ body {
           <div class="quick-employee-dept">{{card.department}}</div>
           <div class="quick-employee-meta">{{card.periodLabel}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
           <div class="quick-employee-actions">
-            <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName)">PDF</button>
+            <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName, comparePeriod)">PDF</button>
             <button class="quick-employee-mini"
                     v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
                     @click.stop="renameEmployeeRecords(card.employeeName)">编辑</button>
@@ -1101,7 +1101,7 @@ body {
               <td>{{formatDateTime(record.savedAt)}}</td>
               <td class="record-actions-cell">
                 <button class="btn btn-outline" @click="loadRecord(record)">载入</button>
-                <button class="btn btn-outline" @click="exportEmployeePdf(record.employeeName)">PDF</button>
+                <button class="btn btn-outline" @click="exportEmployeePdf(record.employeeName, record.period)">PDF</button>
                 <button class="btn btn-danger" @click="deleteRecord(record.id)">删除</button>
               </td>
             </tr>
@@ -5201,12 +5201,15 @@ createApp({
       showToast('Excel 已导出');
     }
 
-    function exportEmployeePdf(name) {
+    function exportEmployeePdf(name, period = '') {
       if(!viewerCanAccessEmployee(name)) {
         showToast(`${viewerScopeLabel.value} 无权导出该员工`);
         return;
       }
-      const record = latestRecordForEmployee(name);
+      const targetPeriod = normalizePeriodParam(period || comparePeriod.value || meta.value.period || '');
+      const record = visibleRecords.value
+        .filter(item=>item.employeeName === name && (!targetPeriod || item.period === targetPeriod))
+        .sort((a,b)=>new Date(b.savedAt) - new Date(a.savedAt))[0] || null;
       const profile = profileForEmployee(name);
       let data;
       let savedAt = '';
@@ -5214,6 +5217,10 @@ createApp({
         data = deepClone(record.data);
         savedAt = record.savedAt;
       } else if(profile) {
+        if(targetPeriod && targetPeriod !== normalizePeriodParam(meta.value.period || '')) {
+          showToast(`${name} 暂无 ${targetPeriod} 记录`);
+          return;
+        }
         data = buildProfileData(profile);
       } else {
         showToast('未找到该员工记录');
@@ -5270,14 +5277,21 @@ createApp({
       const reportOkrOnly = isOkrOnlyMode;
       const showMonthly = !reportOkrOnly && !['no_monthly_bonus','quarterly_commission','quarterly_bonus'].includes(data.compensationMode);
       const title = `${data.meta?.employeeName || '员工'}_${data.meta?.period || ''}_绩效考核`;
+      const reportPeriod = normalizePeriodParam(data.meta?.period || '');
+      const reportQuarter = reportPeriod.match(/^\d{4}-Q([1-4])$/i);
+      const reportQuarterLabel = reportQuarter ? `Q${reportQuarter[1]}` : '季度';
+      const reportTemplateName = String(data.meta?.templateName || '绩效考核报告').replace(/Q3\/Q4/i, reportQuarterLabel);
       const isMonthlyKpiReport = /月度\s*KPI|KPI考核/i.test(data.meta?.templateName || '');
       const performanceTitle = isMonthlyKpiReport ? '月度KPI' : '季度OKR';
       const reportQuarterlyBonusPlan = normalizeQuarterlyBonusPlan(data.quarterlyBonusPlan);
       const reportQuarterlyBonusSummary = summarizeQuarterlyBonusPlan(reportQuarterlyBonusPlan, summary.quarterScore, summary.quarterWeight);
       const reportCommissionPlan = normalizeCommissionPlan(data.commissionPlan);
-      const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan);
+      const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan, reportPeriod);
+      const reportCommissionMonths = reportCommissionPlan && reportPeriod
+        ? reportCommissionPlan.months.filter(row=>getQuarterMonths(reportPeriod).includes(row.month))
+        : (reportCommissionPlan?.months || []);
       const commissionHtml = !reportOkrOnly && reportCommissionPlan ? `
-        <h2>Q3/Q4 KPI提成</h2>
+        <h2>${escapeHtml(reportQuarterLabel)} KPI提成</h2>
         <div class="summary">
           <div>基础提成：${escapeHtml(reportCommissionPlan.currency)} ${formatMoney(reportCommissionPlan.baseCommissionPerContainer)}/柜</div>
           <div>柜均毛利指标：${escapeHtml(reportCommissionPlan.marginCurrency)} ${formatMoney(reportCommissionPlan.marginTargetCny)}</div>
@@ -5286,7 +5300,7 @@ createApp({
         <table>
           <thead><tr><th>月份</th><th>阶段</th><th>Customer原模型</th><th>Customer计入</th><th>Business得分</th><th>Business计入</th><th>Leadership得分</th><th>Leadership计入</th><th>最终提成</th><th>状态</th><th>备注</th></tr></thead>
           <tbody>
-            ${reportCommissionPlan.months.map(row=>{
+            ${reportCommissionMonths.map(row=>{
               const metrics = commissionRowMetrics(reportCommissionPlan, row);
               return `<tr>
                 <td>${escapeHtml(formatCommissionMonth(row.month))}</td>
@@ -5442,7 +5456,7 @@ createApp({
 </style>
 </head>
 <body>
-  <h1>${escapeHtml(data.meta?.templateName || '绩效考核报告')}</h1>
+  <h1>${escapeHtml(reportTemplateName)}</h1>
   <div class="meta">
     <div><strong>员工：</strong>${escapeHtml(data.meta?.employeeName || '')}</div>
     <div><strong>部门：</strong>${escapeHtml(data.department || data.meta?.department || departmentForEmployee(data.meta?.employeeName, data))}</div>
@@ -5461,7 +5475,7 @@ createApp({
     ${showMonthly ? `<div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>` : ''}
     <div>基础分：${summary.baseScore}/${summary.quarterWeight}</div>
     <div>加分项：+${summary.bonusScoreTotal}</div>
-    ${!reportOkrOnly && summary.commissionTotal ? `<div>季度业务提成：${escapeHtml(summary.currency)} ${formatMoney(summary.commissionTotal)}</div>` : ''}
+    ${!reportOkrOnly && reportCommissionSummary.totalCommission ? `<div>${escapeHtml(reportQuarterLabel)}业务提成：${escapeHtml(reportCommissionSummary.currency || summary.currency)} ${formatMoney(reportCommissionSummary.totalCommission)}</div>` : ''}
     ${!reportOkrOnly && reportQuarterlyBonusPlan ? `<div>季度奖金：${escapeHtml(reportQuarterlyBonusPlan.currency)} ${formatMoney(reportQuarterlyBonusSummary.amount)}</div>` : ''}
     <div>${escapeHtml(performanceTitle)}状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
     ${(data.quarterlyOkrs || []).length ? `<div>季度OKR完成率：${summary.quarterlyOkrCompletion}%</div>` : ''}
