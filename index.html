@@ -1731,9 +1731,9 @@ const GARY_COMMISSION_MONTHLY_HISTORY = [
   { period:"2026-01", Gary:0, Jasmine:0 },
   { period:"2026-02", Gary:4217.47, Jasmine:8873.79 },
   { period:"2026-03", Gary:1000, Jasmine:0 },
-  { period:"2026-04", Gary:0, Jasmine:0 },
-  { period:"2026-05", Gary:3434.94, Jasmine:0 },
-  { period:"2026-06", Gary:0, Jasmine:0 },
+  { period:"2026-04", Gary:3565.31, Jasmine:0 },
+  { period:"2026-05", Gary:3369.60, Jasmine:0 },
+  { period:"2026-06", Gary:1860.77, Jasmine:0 },
   { period:"2026-07", Gary:4929.60, Jasmine:0 }
 ];
 
@@ -1743,6 +1743,11 @@ function buildGary2026CommissionPlan() {
     "2026-01": { actualVolume:288, profitPerContainerCny:2733.26, gradeVolumes:{ A:41, B:63, C:12, D:172 }, note:"美东173 + 美中115；柜均毛利按合并口径测算" },
     "2026-02": { actualVolume:315, profitPerContainerCny:1984.88, gradeVolumes:{ A:41, B:44, C:4, D:226 }, note:"美东175 + 美中140；柜均毛利按合并口径测算" },
     "2026-03": { actualVolume:216, profitPerContainerCny:2275.33, gradeVolumes:{ A:24, B:52, C:9, D:131 }, note:"美东117 + 美中99；柜均毛利按合并口径测算" }
+  };
+  const q2 = {
+    "2026-04": { actualVolume:357, profitPerContainerCny:3344.49, gradeVolumes:{ A:52, B:119, C:1, D:185 }, note:"来源：美国出口区域第2季度数据.xlsx；B档按客户等级汇总表录入，含Sheet1中的无等级箱量" },
+    "2026-05": { actualVolume:406, profitPerContainerCny:2721.73, gradeVolumes:{ A:39, B:109, C:7, D:251 }, note:"来源：美国出口区域第2季度数据.xlsx；B档按客户等级汇总表录入，含Sheet1中的无等级箱量" },
+    "2026-06": { actualVolume:342, profitPerContainerCny:2428.75, gradeVolumes:{ A:44, B:58, C:4, D:236 }, note:"来源：美国出口区域第2季度数据.xlsx；B档按客户等级汇总表录入，含Sheet1中的无等级箱量" }
   };
   return {
     modelVersion: "gary-2026-hybrid-q1q2-legacy-q3q4-kpi-v2",
@@ -1765,7 +1770,7 @@ function buildGary2026CommissionPlan() {
     note: "Q1/Q2保持原客户提成模型和历史数据；Q3/Q4按新提成模型过渡，Customer、Business、Leadership结果汇总为季度业务提成。Business和Leadership由上方OKR评分自动同步。",
     months: budgetByMonth.map((budgetVolume, index) => {
       const month = `2026-${String(index + 1).padStart(2, "0")}`;
-      const actual = q1[month] || {};
+      const actual = q1[month] || q2[month] || {};
       return {
         month,
         stage: commissionStageForMonth(month),
