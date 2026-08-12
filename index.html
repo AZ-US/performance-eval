@@ -771,14 +771,14 @@ body {
             <div class="commission-panel-subtitle">Customer、Business、Leadership结果汇总；详细计算表可展开查看。</div>
           </div>
           <div class="commission-panel-actions">
-            <div class="commission-panel-total">最终提成合计<strong>{{commissionPlan.currency}} {{formatMoney(commissionSummary.totalCommission)}}</strong></div>
+            <div class="commission-panel-total">本季度提成<strong>{{commissionPlan.currency}} {{formatMoney(commissionQuarterSummary.totalCommission)}}</strong></div>
             <button type="button" class="btn btn-outline" @click="commissionExpanded=!commissionExpanded">{{commissionExpanded ? '收起季度业务提成' : '展开季度业务提成'}}</button>
           </div>
         </div>
         <div v-show="commissionExpanded">
         <div class="bonus-stats">
           <div class="bonus-stat">
-            <div class="bonus-stat-label">Customer计入 / 原模型</div>
+            <div class="bonus-stat-label">累计 Customer计入 / 原模型</div>
             <div class="bonus-stat-value">{{commissionPlan.currency}} {{formatMoney(commissionSummary.customerWeightedCommission)}} / {{formatMoney(commissionSummary.customerCommission)}}</div>
           </div>
           <div class="bonus-stat">
