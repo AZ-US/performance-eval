@@ -4607,6 +4607,16 @@ createApp({
       }
       const record = saveCurrentRecord();
       if(!record) return;
+      try {
+        const existing = await findCloudRecordById(endpoint, record.id);
+        if(existing && evaluationInputQuality(existing) > evaluationInputQuality(record)) {
+          cloudStatus.value = `云端已有更完整的 ${record.employeeName} ${record.period} 记录，未覆盖当前云端数据`;
+          showToast('云端已有更完整记录，未覆盖');
+          return;
+        }
+      } catch {
+        // 提交前检查失败时保留原有提交通道，避免网络波动阻断正常保存。
+      }
       cloudStatus.value = '正在提交云端...';
       try {
         const sentVia = await sendCloudPayload(endpoint, record);
@@ -4712,6 +4722,13 @@ createApp({
         script.src = `${endpoint}${separator}action=list&callback=${callbackName}&_=${Date.now()}`;
         document.head.appendChild(script);
       });
+    }
+
+    async function findCloudRecordById(endpoint, id) {
+      const payload = await fetchCloudJsonp(endpoint);
+      const incoming = Array.isArray(payload) ? payload : payload.records;
+      if(!Array.isArray(incoming)) throw new Error('invalid cloud payload');
+      return incoming.find(item=>item && item.id === id) || null;
     }
 
     async function verifyCloudSubmission(endpoint, record) {
