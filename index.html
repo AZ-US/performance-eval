@@ -4705,7 +4705,8 @@ createApp({
     async function syncCloudRecords(silent = false, options = {}) {
       silent = silent === true;
       const allowPeriodAutoSwitch = options.allowPeriodAutoSwitch !== false;
-      const shouldLoadCurrentRecord = options.initial === true || (!silent && options.loadCurrentRecord !== false);
+      // 手动同步只更新记录库，不覆盖当前正在编辑的表单；需要查看云端版本时通过员工卡片载入。
+      const shouldLoadCurrentRecord = options.initial === true || options.loadCurrentRecord === true;
       const endpoint = cloudEndpoint.value.trim();
       if(!endpoint) {
         if(!silent) showToast('请先配置云端提交地址');
