@@ -5467,13 +5467,24 @@ createApp({
             }).join('')}
           </tbody>
         </table>` : '';
+      const reportEmployeeName = canonicalEmployeeName(data.meta?.employeeName || '');
+      const showDetailedRubric = ['Tim', 'Gary'].includes(reportEmployeeName);
+      const kpiTierOptionsHtml = (kpi)=> (kpi.tiers || []).map(tier=>{
+        const isSelected = kpi.selectedTier === tier.grade;
+        const tierLabel = tier.label || tier.grade || '评分选项';
+        return `<div class="rubric-option${isSelected ? ' is-selected' : ''}">
+          <strong>${escapeHtml(tierLabel)}</strong>
+          <span class="rubric-points">${escapeHtml(formatScore(tier.points))}分${isSelected ? ' · 当前选择' : ''}</span>
+          <div>${escapeHtml(tier.description || '')}</div>
+        </div>`;
+      }).join('');
       const performanceHtml = (data.dimensions || []).map(dim=>`
         <h3>${escapeHtml(dim.id)} ${escapeHtml(dim.name)}</h3>
         <table>
-          <thead><tr><th>KR</th><th>关键结果</th><th>权重</th><th>目标/验收标准/证据口径</th><th>档位</th><th>得分</th><th>说明</th></tr></thead>
+          <thead><tr><th>KR</th><th>关键结果</th><th>权重</th><th>目标/验收标准/证据口径</th><th>${showDetailedRubric ? '实际选择' : '档位'}</th><th>得分</th><th>说明</th></tr></thead>
           <tbody>
-            ${(dim.kpis || []).map(kpi=>`
-              <tr>
+            ${(dim.kpis || []).map(kpi=>{
+              const resultRow = `<tr>
                 <td>${escapeHtml(kpi.id)}</td>
                 <td>${escapeHtml(kpi.name)}</td>
                 <td>${escapeHtml(kpi.weight)}</td>
@@ -5481,7 +5492,13 @@ createApp({
                 <td>${escapeHtml(selectedTierLabel(kpi))}</td>
                 <td>${escapeHtml(kpi.score || 0)}</td>
                 <td>${escapeHtml(kpi.comment || '')}</td>
-              </tr>`).join('')}
+              </tr>`;
+              if(!showDetailedRubric) return resultRow;
+              return `${resultRow}<tr class="rubric-row"><td colspan="7">
+                <div class="rubric-title">评分选项与要求</div>
+                <div class="rubric-options">${kpiTierOptionsHtml(kpi)}</div>
+              </td></tr>`;
+            }).join('')}
           </tbody>
         </table>`).join('');
       const bonusHtml = (data.bonusItems || []).length ? `
@@ -5534,6 +5551,12 @@ createApp({
   table { width:100%; border-collapse:collapse; margin-bottom:10px; font-size:11px; }
   th, td { border:1px solid #CBD5E1; padding:6px; text-align:left; vertical-align:top; }
   th { background:#F1F5F9; }
+  .rubric-row td { background:#F8FAFC; }
+  .rubric-title { color:#475569; font-size:11px; font-weight:700; margin-bottom:5px; }
+  .rubric-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+  .rubric-option { border:1px solid #E2E8F0; border-radius:5px; background:white; padding:5px; font-size:10px; line-height:1.4; }
+  .rubric-option.is-selected { border-color:#2563EB; background:#EFF6FF; color:#1E3A8A; }
+  .rubric-points { color:#64748B; margin-left:4px; font-size:10px; }
   @media print { body { padding:0; } }
 </style>
 </head>
