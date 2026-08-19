@@ -734,7 +734,7 @@ body {
             <button class="btn btn-outline" @click="syncBonusMonths">同步季度月份</button>
           </div>
           <button class="btn btn-outline" @click="monthlyBonusExpanded=!monthlyBonusExpanded" :aria-expanded="monthlyBonusExpanded">
-            {{monthlyBonusExpanded ? '收起月度奖金' : '展开月度奖金'}}
+            {{showCommissionPlan ? (monthlyBonusExpanded ? '收起季度提成' : '展开季度提成') : (monthlyBonusExpanded ? '收起月度奖金' : '展开月度奖金')}}
           </button>
         </div>
       </div>
