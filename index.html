@@ -1723,10 +1723,10 @@ function buildTimQ3Q4Dimensions(quarter) {
     ]},
     { id:"O5", name:"战略专项与能力建设", kpis:[
       timQuarterKpi(quarter, "KR1", "完成1-2项战略专项并验证可用性", 20,
-        `每季度推进1-2项长期能力建设或战略专项，必须验证可用性；例如新资源测试、航线数据库、报价规则沉淀、供应商评估模型或重点市场资源方案。`,
-        "完成2项以上专项，成果经过验证并可持续使用",
-        "完成至少1项专项，且已通过业务或团队使用验证",
-        "专项有推进但未充分验证或落地不完整",
+        `每季度推进1-2项长期能力建设或战略专项，必须验证可用性；例如新资源测试、航线数据库、重点航线商务资源与对内询报价规则沉淀、供应商评估模型或重点市场资源方案。对内询报价规则需明确适用航线/业务场景、成本与附加费口径、专项价申请条件、审批边界和更新责任人，并由至少1名同事用于实际询报价验证后完成修订。`,
+        "完成2项以上专项，成果经过验证并可持续使用；对内询报价规则已被团队实际采用",
+        "完成至少1项专项，且已通过业务或团队使用验证；如包含对内询报价规则，字段完整并完成实际验证",
+        "专项有实质推进，但未充分验证、未完成修订或落地不完整",
         "没有形成可用专项成果")
     ]}
   ];
@@ -3406,6 +3406,13 @@ createApp({
       return existingSignature === templateSignature;
     }
 
+    function dimensionTargetsMatchTemplate(existingDimensions, templateDimensions) {
+      const signature = (dimensions)=> (dimensions || []).map(dim=>
+        `${dim.id}:${(dim.kpis || []).map(kpi=>`${kpi.name}:${kpi.target || ''}`).join('|')}`
+      ).join('||');
+      return signature(existingDimensions) === signature(templateDimensions);
+    }
+
     const baseScore = computed(()=> dimensions.value.reduce((s,d)=>s+dimScore(d),0));
     const bonusScoreTotal = computed(()=> bonusItems.value.reduce((sum,item)=>sum+bonusItemScore(item),0));
     const totalScore = computed(()=> baseScore.value + bonusScoreTotal.value);
@@ -4198,7 +4205,8 @@ createApp({
       const needsTimQuarterOkrUpgrade = profile.name === 'Tim'
         && ["Q3","Q4"].includes(effectiveQuarterKey)
         && !template.isPlaceholder
-        && !dimensionsMatchTemplate(data.dimensions, template.dimensions);
+        && (!dimensionsMatchTemplate(data.dimensions, template.dimensions)
+          || !dimensionTargetsMatchTemplate(data.dimensions, template.dimensions));
       data.meta = {
         ...(data.meta || {}),
         employeeName: profile.name,
