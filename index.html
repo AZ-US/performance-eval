@@ -553,41 +553,46 @@ body {
         </div>
         <div class="quick-nav-actions">
           <button class="btn btn-outline" v-if="!isScopedViewer || isAdminMode" @click="startNewEmployee">新增员工</button>
+          <button class="btn btn-outline" @click="quickNavExpanded=!quickNavExpanded" :aria-expanded="quickNavExpanded" aria-controls="quick-employee-groups">
+            {{quickNavExpanded ? '收起人员' : '展开人员'}}
+          </button>
         </div>
       </div>
-      <div class="quick-employee-groups" v-if="quickEmployeeGroups.length">
-        <div class="quick-department-group" v-for="group in quickEmployeeGroups" :key="group.key" :class="group.departmentClass">
-          <div class="quick-department-heading">
-            <span>{{group.department}}</span>
-            <span class="quick-department-count">{{group.cards.length}} 人</span>
-          </div>
-          <div class="quick-employee-list">
-            <div class="quick-employee-btn"
-                 v-for="card in group.cards"
-                 :key="card.employeeName"
-                 :class="[{active:selectedEmployee===card.employeeName}, card.departmentClass]"
-                 role="button"
-                 tabindex="0"
-                 @click="quickOpenEmployee(card.employeeName)"
-                 @keyup.enter="quickOpenEmployee(card.employeeName)"
-                 @keyup.space.prevent="quickOpenEmployee(card.employeeName)">
-              <div class="quick-employee-name">{{card.employeeName}}</div>
-              <div class="quick-employee-dept">{{card.department}}</div>
-              <div class="quick-employee-meta">{{card.periodLabel}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
-              <div class="quick-employee-actions">
-                <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName, comparePeriod)">PDF</button>
-                <button class="quick-employee-mini"
-                        v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
-                        @click.stop="renameEmployeeRecords(card.employeeName)">编辑</button>
-                <button class="quick-employee-mini quick-employee-delete"
-                        v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
-                        @click.stop="deleteEmployeeRecords(card.employeeName)">删除</button>
+      <div v-show="quickNavExpanded" id="quick-employee-groups">
+        <div class="quick-employee-groups" v-if="quickEmployeeGroups.length">
+          <div class="quick-department-group" v-for="group in quickEmployeeGroups" :key="group.key" :class="group.departmentClass">
+            <div class="quick-department-heading">
+              <span>{{group.department}}</span>
+              <span class="quick-department-count">{{group.cards.length}} 人</span>
+            </div>
+            <div class="quick-employee-list">
+              <div class="quick-employee-btn"
+                   v-for="card in group.cards"
+                   :key="card.employeeName"
+                   :class="[{active:selectedEmployee===card.employeeName}, card.departmentClass]"
+                   role="button"
+                   tabindex="0"
+                   @click="quickOpenEmployee(card.employeeName)"
+                   @keyup.enter="quickOpenEmployee(card.employeeName)"
+                   @keyup.space.prevent="quickOpenEmployee(card.employeeName)">
+                <div class="quick-employee-name">{{card.employeeName}}</div>
+                <div class="quick-employee-dept">{{card.department}}</div>
+                <div class="quick-employee-meta">{{card.periodLabel}}<span v-if="card.savedRecordCount"> · {{card.savedRecordCount}}条记录</span></div>
+                <div class="quick-employee-actions">
+                  <button class="quick-employee-mini" @click.stop="exportEmployeePdf(card.employeeName, comparePeriod)">PDF</button>
+                  <button class="quick-employee-mini"
+                          v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
+                          @click.stop="renameEmployeeRecords(card.employeeName)">编辑</button>
+                  <button class="quick-employee-mini quick-employee-delete"
+                          v-if="isAdminMode && adminToolsOpen && card.savedRecordCount"
+                          @click.stop="deleteEmployeeRecords(card.employeeName)">删除</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
+        <div class="empty-state" v-else>保存员工后，姓名会显示在这里。</div>
       </div>
-      <div class="empty-state" v-else>保存员工后，姓名会显示在这里。</div>
     </section>
 
     <!-- Assessment mode -->
@@ -3037,6 +3042,7 @@ createApp({
     const okrExpanded = ref(false);
     const quarterlyOkrExpanded = ref(false);
     const recordsExpanded = ref(false);
+    const quickNavExpanded = ref(false);
     const saveTime = ref('');
     const toastMsg = ref('');
     const toastVisible = ref(false);
@@ -4973,6 +4979,7 @@ createApp({
       commissionExpanded.value = false;
       commissionTrendExpanded.value = false;
       recordsExpanded.value = false;
+      quickNavExpanded.value = false;
       collapseDimensionModules();
     }
 
@@ -5699,7 +5706,7 @@ createApp({
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards, quickEmployeeGroups,
-      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, recordsExpanded, monthlyBonusExpanded, monthlyEvaluationExpanded, bonusItemsExpanded, saveTime, toastMsg, toastVisible, canUndo,
+      collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, recordsExpanded, quickNavExpanded, monthlyBonusExpanded, monthlyEvaluationExpanded, bonusItemsExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
       baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, showQuarterlyBonusPlan, quarterlyBonusSummary, quarterlyOkrCompletion,
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
