@@ -1616,7 +1616,7 @@ function garyCommissionKpi(id, name, weight, module, key, target, sDesc, aDesc, 
     commissionKey: key
   };
 }
-function garyBusinessKpi(id, name, weight, key, target) {
+function garyBusinessKpi(id, name, weight, key, target, legacyNames = []) {
   const weightValue = Number(weight) || 0;
   return {
     id,
@@ -1637,7 +1637,8 @@ function garyBusinessKpi(id, name, weight, key, target) {
     score:0,
     comment:"",
     commissionModule: "business",
-    commissionKey: key
+    commissionKey: key,
+    legacyNames
   };
 }
 function garyDistributedWeights(total, ratios) {
@@ -1661,8 +1662,8 @@ function buildGaryQ3Q4Dimensions(weights = { customer:60, business:25, leadershi
       profileKpi("C1","客户贡献结果", weights.customer, "根据下方季度业务提成表录入客户箱量、单柜毛利和客户等级；系统按Customer权重计入最终提成。","客户贡献明显超预期，客户结构健康","客户贡献达到季度目标","客户贡献部分达成","客户贡献未达成")
     ]},
     { id:"BIZ", name:"Business经营动作", kpis:[
-      garyBusinessKpi("B1","Pipeline与重点客户推进",businessWeights[0],"pipelineKeyCustomer","按季度确认的重点客户及新客户清单推进，形成报价、测试出货、签约、稳定出货或问题关闭等明确阶段成果；每项须记录客户、时间、结果及证据。"),
-      garyBusinessKpi("B2","新市场、航线策略与经营复盘",businessWeights[1],"marketStrategyReview","围绕重点市场、航线或产品制定并执行行动方案；季度末完成经营复盘，说明有效做法、未达成原因及下一季度行动计划。"),
+      garyBusinessKpi("B1","Pipeline与重点客户推进",businessWeights[0],"pipelineKeyCustomer","按季度确认的重点客户及新客户清单推进，形成报价、测试出货、签约、稳定出货或问题关闭等明确阶段成果；每项须记录客户、时间、结果及证据。",["Pipeline覆盖","重点客户推进"]),
+      garyBusinessKpi("B2","新市场、航线策略与经营复盘",businessWeights[1],"marketStrategyReview","围绕重点市场、航线或产品制定并执行行动方案；季度末完成经营复盘，说明有效做法、未达成原因及下一季度行动计划。",["新客户/新市场开发","产品/航线策略执行","经营复盘质量"]),
       garyBusinessKpi("B3","AR协同回收与风险关闭",businessWeights[2],"arRecovery","以季度初由财务与Gary确认的本人客户AR清单为基数，推动逾期款及坏账回收、争议处理或责任关闭；按实际回收/关闭结果和证据评分。财务流程或客户无争议付款延迟等非销售可控事项不计入个人扣分。"),
       garyBusinessKpi("B4","CRM、数据与行动闭环",businessWeights[3],"crmActionClosure","重点客户、Pipeline、AR跟进及经营行动记录准确、及时；承诺事项按期完成，重大问题有明确责任人、节点和关闭结果。")
     ]},
@@ -3392,7 +3393,25 @@ createApp({
         ...dim,
         kpis: (dim.kpis || []).map(kpi=>{
           const existing = byName.get(kpi.name);
+          const legacyKpis = existing ? [] : (Array.isArray(kpi.legacyNames) ? kpi.legacyNames.map(name=>byName.get(name)).filter(Boolean) : []);
           if(!existing) {
+            if(legacyKpis.length) {
+              const hasLegacyProgress = legacyKpis.some(item=>item.selectedTier || Number(item.score) || String(item.comment || '').trim());
+              if(hasLegacyProgress) {
+                const legacyWeight = legacyKpis.reduce((sum, item)=>sum + (Number(item.weight) || 0), 0) || 1;
+                const relativeScore = legacyKpis.reduce((sum, item)=>{
+                  const itemWeight = Number(item.weight) || 0;
+                  return sum + itemWeight * (itemWeight ? (Number(item.score) || 0) / itemWeight : 0);
+                }, 0) / legacyWeight;
+                const score = roundScore(Math.max(0, Math.min(kpiMaxScore(kpi), (Number(kpi.weight) || 0) * relativeScore)));
+                const matchingTier = (kpi.tiers || []).find(tier=>Number(tier.points) === score);
+                const comment = legacyKpis
+                  .map(item=>String(item.comment || '').trim())
+                  .filter(Boolean)
+                  .join('；');
+                return { ...kpi, selectedTier: matchingTier?.grade || null, score, comment };
+              }
+            }
             const existingDim = dimsById.get(dim.id);
             const oldKpis = existingDim?.kpis || [];
             if((dim.kpis || []).length === 1 && oldKpis.length > 1) {
