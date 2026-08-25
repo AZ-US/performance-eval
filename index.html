@@ -240,7 +240,7 @@ body {
 .commission-panel-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .commission-panel-total { color:var(--text-light); font-size:12px; }
 .commission-panel-total strong { color:var(--text); font-size:16px; margin-left:4px; }
-.commission-quarter-summary { display:grid; grid-template-columns:minmax(150px,1.1fr) repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; padding:12px; border:1px solid #BFDBFE; border-radius:12px; background:linear-gradient(90deg,rgba(239,246,255,0.9),rgba(248,250,252,0.82)); }
+.commission-quarter-summary { display:grid; grid-template-columns:minmax(150px,1.1fr) repeat(5,minmax(0,1fr)); gap:10px; align-items:stretch; padding:12px; border:1px solid #BFDBFE; border-radius:12px; background:linear-gradient(90deg,rgba(239,246,255,0.9),rgba(248,250,252,0.82)); }
 .commission-quarter-summary-title { display:flex; flex-direction:column; justify-content:center; gap:3px; color:#1E3A8A; font-weight:800; }
 .commission-quarter-summary-title small { color:#64748B; font-size:11px; font-weight:600; }
 .commission-quarter-summary-item { padding:9px 11px; border-left:1px solid rgba(191,219,254,0.9); }
@@ -835,6 +835,14 @@ body {
           <div class="commission-quarter-summary-item">
             <div class="commission-quarter-summary-label">Customer原模型</div>
             <div class="commission-quarter-summary-value">{{commissionPlan.currency}} {{formatMoney(commissionQuarterSummary.customerCommission)}}</div>
+          </div>
+          <div class="commission-quarter-summary-item">
+            <div class="commission-quarter-summary-label">Business计入</div>
+            <div class="commission-quarter-summary-value">{{commissionPlan.currency}} {{formatMoney(commissionQuarterSummary.businessCommission)}}</div>
+          </div>
+          <div class="commission-quarter-summary-item">
+            <div class="commission-quarter-summary-label">Leadership计入</div>
+            <div class="commission-quarter-summary-value">{{commissionPlan.currency}} {{formatMoney(commissionQuarterSummary.leadershipCommission)}}</div>
           </div>
           <div class="commission-quarter-summary-item">
             <div class="commission-quarter-summary-label">季度最终提成</div>
@@ -1588,11 +1596,10 @@ const GARY_Q3_Q4_STAGE_WEIGHTS = {
   default: { customer:0.55, business:0.30, leadership:0.15 }
 };
 const GARY_BUSINESS_KPI_DEFS = [
-  { key:"pipelineCoverage", label:"Pipeline覆盖", weight:0.30, maxScore:120 },
-  { key:"keyCustomerProgress", label:"重点客户推进", weight:0.25, maxScore:120 },
-  { key:"newCustomerDevelopment", label:"新客户/新市场", weight:0.20, maxScore:120 },
-  { key:"routeStrategyExecution", label:"产品/航线策略", weight:0.15, maxScore:120 },
-  { key:"reviewQuality", label:"经营复盘质量", weight:0.10, maxScore:100 }
+  { key:"pipelineKeyCustomer", label:"Pipeline与重点客户推进", weight:0.35, scoreScale:100, maxScore:110 },
+  { key:"marketStrategyReview", label:"新市场、航线策略与经营复盘", weight:0.25, scoreScale:100, maxScore:110 },
+  { key:"arRecovery", label:"AR协同回收与风险关闭", weight:0.20, scoreScale:100, maxScore:110 },
+  { key:"crmActionClosure", label:"CRM、数据与行动闭环", weight:0.20, scoreScale:100, maxScore:110 }
 ];
 const GARY_LEADERSHIP_KPI_DEFS = [
   { key:"talentImprovement", label:"员工培养提升", weight:0.35, maxScore:100 },
@@ -1601,11 +1608,35 @@ const GARY_LEADERSHIP_KPI_DEFS = [
   { key:"sopTraining", label:"培训/SOP沉淀", weight:0.10, maxScore:100 },
   { key:"collaborationFeedback", label:"协作反馈", weight:0.10, maxScore:100 }
 ];
-const GARY_TRANSITION_COMPENSATION_NOTE = "Gary不设固定月度奖金，Q3/Q4按新提成模型过渡。Customer按客户贡献计算；Business重点看Pipeline、重点客户推进、新客户/新市场、航线策略和经营复盘；Leadership重点看员工培养、授权备份、问题关闭、SOP沉淀和协作反馈。";
+const GARY_TRANSITION_COMPENSATION_NOTE = "Gary不设固定月度奖金，Q3/Q4按新提成模型过渡并按季度统一结算。Customer按客户贡献计算；Business重点看Pipeline与重点客户推进、新市场与航线策略、AR协同回收及行动闭环；Leadership重点看员工培养、授权备份、问题关闭、SOP沉淀和协作反馈。";
 function garyCommissionKpi(id, name, weight, module, key, target, sDesc, aDesc, bDesc, cDesc) {
   return {
     ...profileKpi(id, name, weight, target, sDesc, aDesc, bDesc, cDesc),
     commissionModule: module,
+    commissionKey: key
+  };
+}
+function garyBusinessKpi(id, name, weight, key, target) {
+  const weightValue = Number(weight) || 0;
+  return {
+    id,
+    name,
+    weight: weightValue,
+    target,
+    targetLabel: "季度目标 / 验收标准",
+    weightLabel: "权重",
+    scoreStep: 0.1,
+    maxScore: roundScore(weightValue * 1.1),
+    tiers: TIM_COMPLETION_STATUS_RULES.map(rule => ({
+      grade: rule.grade,
+      label: rule.label,
+      points: roundScore(weightValue * rule.coefficient),
+      description: `${rule.label} · 系数${formatCoefficient(rule.coefficient)}｜${rule.description}`
+    })),
+    selectedTier:null,
+    score:0,
+    comment:"",
+    commissionModule: "business",
     commissionKey: key
   };
 }
@@ -1623,18 +1654,17 @@ function garyDistributedWeights(total, ratios) {
   return base;
 }
 function buildGaryQ3Q4Dimensions(weights = { customer:60, business:25, leadership:15 }) {
-  const businessWeights = garyDistributedWeights(weights.business, [0.30, 0.25, 0.20, 0.15, 0.10]);
+  const businessWeights = garyDistributedWeights(weights.business, [0.35, 0.25, 0.20, 0.20]);
   const leadershipWeights = garyDistributedWeights(weights.leadership, [0.35, 0.25, 0.20, 0.10, 0.10]);
   return [
     { id:"CUS", name:"Customer客户贡献", kpis:[
       profileKpi("C1","客户贡献结果", weights.customer, "根据下方季度业务提成表录入客户箱量、单柜毛利和客户等级；系统按Customer权重计入最终提成。","客户贡献明显超预期，客户结构健康","客户贡献达到季度目标","客户贡献部分达成","客户贡献未达成")
     ]},
     { id:"BIZ", name:"Business经营动作", kpis:[
-      garyCommissionKpi("B1","Pipeline覆盖",businessWeights[0],"business","pipelineCoverage","季度滚动Pipeline覆盖目标；以客户清单、预计箱量/利润、阶段状态和周度更新记录为证据。","覆盖≥120%，结构清楚且持续更新","覆盖≥100%，主要机会清楚","覆盖80%-99%，更新或质量不稳定","覆盖不足或缺少有效Pipeline"),
-      garyCommissionKpi("B2","重点客户推进",businessWeights[1],"business","keyCustomerProgress","围绕Top客户形成季度推进计划，记录拜访、报价、方案、异常协调和出货改善结果。","≥3个重点客户有明确进展和证据","2个以上重点客户有实质推进","有推进但结果不清或证据不足","缺少重点客户推进动作"),
-      garyCommissionKpi("B3","新客户/新市场开发",businessWeights[2],"business","newCustomerDevelopment","推进新客户、新区域或新产品机会，记录线索、报价、试单、转化和下一步动作。","形成可复制新机会并有落地结果","有有效新机会和明确跟进","有线索但转化弱","无有效新增动作"),
-      garyCommissionKpi("B4","产品/航线策略执行",businessWeights[3],"business","routeStrategyExecution","围绕航线、价格、舱位、客户结构形成策略动作，并沉淀复盘。","策略落地且对业务有明显帮助","完成主要策略动作","有想法但落地不足","缺少策略动作"),
-      garyCommissionKpi("B5","经营复盘质量",businessWeights[4],"business","reviewQuality","按月/季度复盘目标差异、客户结构、机会清单和下阶段动作，复盘需要可追踪。","复盘有数据、有判断、有动作","复盘完整且可跟进","复盘偏描述，行动弱","缺少有效复盘")
+      garyBusinessKpi("B1","Pipeline与重点客户推进",businessWeights[0],"pipelineKeyCustomer","按季度确认的重点客户及新客户清单推进，形成报价、测试出货、签约、稳定出货或问题关闭等明确阶段成果；每项须记录客户、时间、结果及证据。"),
+      garyBusinessKpi("B2","新市场、航线策略与经营复盘",businessWeights[1],"marketStrategyReview","围绕重点市场、航线或产品制定并执行行动方案；季度末完成经营复盘，说明有效做法、未达成原因及下一季度行动计划。"),
+      garyBusinessKpi("B3","AR协同回收与风险关闭",businessWeights[2],"arRecovery","以季度初由财务与Gary确认的本人客户AR清单为基数，推动逾期款及坏账回收、争议处理或责任关闭；按实际回收/关闭结果和证据评分。财务流程或客户无争议付款延迟等非销售可控事项不计入个人扣分。"),
+      garyBusinessKpi("B4","CRM、数据与行动闭环",businessWeights[3],"crmActionClosure","重点客户、Pipeline、AR跟进及经营行动记录准确、及时；承诺事项按期完成，重大问题有明确责任人、节点和关闭结果。")
     ]},
     { id:"LEAD", name:"Leadership团队管理", kpis:[
       garyCommissionKpi("L1","员工培养提升",leadershipWeights[0],"leadership","talentImprovement","明确团队成员培养目标，记录带教、能力提升、独立承接事项和阶段反馈。","培养目标清晰且有可验证提升","有持续培养和反馈","培养动作零散","缺少培养安排"),
@@ -1788,7 +1818,7 @@ function buildGary2026CommissionPlan() {
     "2026-06": { actualVolume:342, profitPerContainerCny:2428.75, gradeVolumes:{ A:44, B:58, C:4, D:236 }, note:"来源：美国出口区域第2季度数据.xlsx；B档按客户等级汇总表录入，含Sheet1中的无等级箱量" }
   };
   return {
-    modelVersion: "gary-2026-hybrid-q1q2-legacy-q3q4-kpi-v2",
+    modelVersion: "gary-2026-hybrid-q1q2-legacy-q3q4-kpi-v3",
     title: "Gary 2026季度业务提成/KPI模型",
     currency: "USD",
     marginCurrency: "CNY",
@@ -1805,7 +1835,7 @@ function buildGary2026CommissionPlan() {
     leadershipKpiDefs: GARY_LEADERSHIP_KPI_DEFS,
     scoringRules: COMMISSION_SCORE_RULES,
     customerGrades: CUSTOMER_GRADE_MULTIPLIERS,
-    note: "Q1/Q2保持原客户提成模型和历史数据；Q3/Q4按新提成模型过渡，Customer、Business、Leadership结果汇总为季度业务提成。Business和Leadership由上方OKR评分自动同步。",
+    note: "Q1/Q2保持原客户提成模型和历史数据；Q3/Q4按季度统一评分、统一结算。季度Customer原模型合计分别按Customer、Business、Leadership权重计入提成；Business和Leadership由上方OKR评分自动同步。",
     months: budgetByMonth.map((budgetVolume, index) => {
       const month = `2026-${String(index + 1).padStart(2, "0")}`;
       const actual = q1[month] || q2[month] || {};
@@ -2156,6 +2186,7 @@ function normalizeCommissionKpiDefs(defs, fallback) {
     key: String(item.key || '').trim(),
     label: String(item.label || item.key || '').trim(),
     weight: Math.max(0, Number(item.weight)||0),
+    scoreScale: Math.max(0, Number(item.scoreScale) || Number(item.maxScore) || 100),
     maxScore: Math.max(100, Number(item.maxScore)||100)
   })).filter(item=>item.key);
 }
@@ -2244,7 +2275,7 @@ function garyOkrCommissionScores(dimensionsSource, plan) {
       if(!def) return;
       const weight = Number(kpi.weight) || 0;
       const ratio = weight ? (Number(kpi.score) || 0) / weight : 0;
-      const score = Math.max(0, Math.min(Number(def.maxScore) || 100, ratio * (Number(def.maxScore) || 100)));
+      const score = Math.max(0, Math.min(Number(def.maxScore) || 100, ratio * (Number(def.scoreScale) || Number(def.maxScore) || 100)));
       scores[module][key] = Math.round(score * 100) / 100;
     });
   });
@@ -2499,14 +2530,14 @@ function commissionRowMetrics(plan, row) {
   const stageWeight = legacyModel ? { customer:1, business:0, leadership:0 } : commissionStageWeightFor(normalizedPlan, stage);
   const businessScore = weightedCommissionKpiScore(row.businessKpis, normalizedPlan.businessKpiDefs);
   const leadershipScore = weightedCommissionKpiScore(row.leadershipKpis, normalizedPlan.leadershipKpiDefs);
+  // Q3/Q4 use the quarter's Customer contribution as a common base. Summing the
+  // three monthly rows therefore produces one unified quarterly settlement.
   const customerWeightedCommission = customerCommission * stageWeight.customer;
-  const businessCommission = normalizedPlan.targetMonthlyBonus * stageWeight.business * businessScore;
-  const leadershipCommission = normalizedPlan.targetMonthlyBonus * stageWeight.leadership * leadershipScore;
+  const businessCommission = legacyModel ? 0 : customerCommission * stageWeight.business * businessScore;
+  const leadershipCommission = legacyModel ? 0 : customerCommission * stageWeight.leadership * leadershipScore;
   const rawTotalCommission = customerWeightedCommission + businessCommission + leadershipCommission;
-  const protectionFloor = !legacyModel && stage === 'Q3-2026' && businessScore >= 0.8 && leadershipScore >= 0.8
-    ? normalizedPlan.targetMonthlyBonus * normalizedPlan.protectionRate
-    : 0;
-  const totalCommission = Math.max(rawTotalCommission, protectionFloor);
+  const protectionFloor = 0;
+  const totalCommission = rawTotalCommission;
   return {
     stage,
     legacyModel,
