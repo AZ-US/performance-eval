@@ -1768,6 +1768,180 @@ function buildTimQ3Q4Dimensions(quarter) {
     ]}
   ];
 }
+const FREESIA_Q3_Q4_COMPENSATION_NOTE = "Freesia Q3/Q4按出口运营经理岗位进行季度考核，无固定月度绩效奖金。五个模块保持相同权重，Q3直接执行首版指标并在季度末复盘，Q4在已运行数据基础上提高交付、人效、风险和团队独立性要求。";
+function freesiaQuarterKpi(quarter, id, name, weight, config) {
+  const weightValue = Number(weight) || 0;
+  const target = [
+    `考核目的：${config.purpose}`,
+    `需提供数据：${config.data}`,
+    `计算指标：${config.formula}`,
+    `${quarter}达成标准：${config.achieved}`
+  ].join("｜");
+  const tierDescriptions = {
+    超额: config.exceeded,
+    达成: config.achieved,
+    主要: config.major,
+    推进: config.progress,
+    资料: "仅完成数据收集、沟通或方案准备，尚未形成可验证的运行结果",
+    未推: "未执行、无有效数据，或无法提供可验证证据"
+  };
+  return {
+    id,
+    name,
+    weight: weightValue,
+    target,
+    targetLabel: `${quarter}考核目的 / 数据指标 / 验收标准`,
+    weightLabel: "权重",
+    scoreStep: 0.1,
+    maxScore: roundScore(weightValue * 1.1),
+    tiers: TIM_COMPLETION_STATUS_RULES.map(rule => ({
+      grade: rule.grade,
+      label: rule.label,
+      points: roundScore(weightValue * rule.coefficient),
+      description: `${rule.label} · 系数${formatCoefficient(rule.coefficient)}｜${tierDescriptions[rule.grade]}`
+    })),
+    selectedTier:null,
+    score:0,
+    comment:"",
+    legacyNames: config.legacyNames || []
+  };
+}
+function buildFreesiaQ3Q4Dimensions(quarter) {
+  const isQ4 = quarter === "Q4";
+  const deviationDays = isQ4 ? 3 : 5;
+  const deviationClosure = isQ4 ? 90 : 85;
+  const milestoneTarget = isQ4 ? 97 : 95;
+  const taskClosure = isQ4 ? 90 : 85;
+  const costReduction = isQ4 ? 10 : 5;
+  const disputeClosure = isQ4 ? 90 : 85;
+  const workloadCoverage = isQ4 ? 98 : 95;
+  const workloadAccuracy = isQ4 ? 98 : 95;
+  const balancedCoverage = isQ4 ? 90 : 80;
+  const productivityGrowth = isQ4 ? 10 : 5;
+  const issueClosure = isQ4 ? 90 : 80;
+  const issueReduction = isQ4 ? 20 : 10;
+  const newcomerPass = isQ4 ? 90 : 80;
+  const backupCoverage = isQ4 ? 100 : 80;
+  return [
+    { id:"BUD", name:"美国出口整体业务预算达成", kpis:[
+      freesiaQuarterKpi(quarter, "B1", "出口箱量与毛利预算联动", 10, {
+        purpose:"让运营结果与出口业务目标保持一致，但仅承担运营协同责任，不替代销售责任。",
+        data:"财务或OMS确认的季度预算箱量、实际箱量、预算毛利、实际毛利；数据须由财务或出口业务负责人确认。",
+        formula:"综合预算达成率＝箱量完成率×50%＋毛利完成率×50%，单项完成率最高按110%计入。",
+        achieved:"综合预算达成率≥100%，且没有因运营交付造成的重大客户流失或重大可控事故。",
+        exceeded:"综合预算达成率≥105%，箱量和毛利单项均≥95%，并能证明运营改善对结果产生了额外贡献。",
+        major:"综合预算达成率90%-99.9%，已完成原因分析并采取有效运营改善动作。",
+        progress:"综合预算达成率80%-89.9%，有明确改善动作和阶段结果，但尚未达到主要目标。"
+      }),
+      freesiaQuarterKpi(quarter, "B2", "预算偏差识别与改善闭环", 5, {
+        purpose:"避免只在季度末看到结果，要求Freesia对运营相关偏差及时介入并关闭行动。",
+        data:"月度预算与实际对比、偏差原因清单、责任人、完成日期、改善动作及关闭证据。",
+        formula:"偏差响应及时率＝规定时间内形成措施的偏差项/应响应偏差项；行动关闭率＝按期关闭行动数/到期行动数。",
+        achieved:`对预计低于预算90%的偏差，在${deviationDays}个工作日内完成运营原因分析和行动计划，季度行动关闭率≥${deviationClosure}%。`,
+        exceeded:`所有重大偏差在2个工作日内响应，行动关闭率≥95%，且至少形成1项可复用的运营改善。`,
+        major:`重大偏差基本识别并有行动，响应及时率≥80%，行动关闭率达到${Math.max(70, deviationClosure - 10)}%。`,
+        progress:"已建立偏差清单并推进部分行动，但响应时效、责任人或关闭结果不完整。",
+        legacyNames:["形成运营决策视角"]
+      })
+    ]},
+    { id:"DEL", name:"运营交付质量", kpis:[
+      freesiaQuarterKpi(quarter, "D1", "关键节点准时与反馈及时", 15, {
+        purpose:"提高订舱、单证、操作和客服关键节点的稳定交付，减少因延迟或无反馈造成的客户影响。",
+        data:"Booking list或Checklist关键节点时间戳、应完成时间、实际完成时间、异常首次反馈时间及责任人。",
+        formula:"关键节点准时率＝按时完成节点数/应完成节点数；异常反馈及时率＝SLA内首次反馈异常数/异常总数。",
+        achieved:`关键节点准时率和异常反馈及时率均≥${milestoneTarget}%，数据覆盖率≥95%。`,
+        exceeded:`两项及时率均≥${Math.min(99, milestoneTarget + 2)}%，连续两个月稳定，且无重大客户投诉。`,
+        major:`两项及时率均≥${milestoneTarget - 5}%，主要延迟已有原因和改善记录。`,
+        progress:"两项及时率达到80%以上，有阶段改善，但仍存在重复延迟或数据缺口。",
+        legacyNames:["打通单证 / 操作 / 订舱三个track","推动一条龙能力建设"]
+      }),
+      freesiaQuarterKpi(quarter, "D2", "跨部门待办与事项闭环", 10, {
+        purpose:"解决客服、操作、订舱之间待办无反馈、责任不清和长期Pending的问题；Dispute不在本项重复评分。",
+        data:"跨部门待办清单、提出时间、SLA、责任人、首次反馈时间、到期时间、关闭时间和关闭结果。",
+        formula:"反馈及时率＝SLA内反馈事项/应反馈事项；按期关闭率＝按期关闭事项/到期事项。",
+        achieved:`反馈及时率≥95%，按期关闭率≥${taskClosure}%，所有逾期事项均有原因和新节点。`,
+        exceeded:"反馈及时率≥98%，按期关闭率≥95%，并关闭至少2项长期跨部门卡点。",
+        major:`反馈及时率≥90%，按期关闭率≥${Math.max(75, taskClosure - 10)}%，无重大事项失联。`,
+        progress:"已运行待办机制并形成部分关闭结果，但覆盖率、反馈时效或关闭率未达标。",
+        legacyNames:["建立责任链条和第一责任人机制","获得核心人员支持并统一管理认知"]
+      })
+    ]},
+    { id:"RSK", name:"异常成本与风险控制", kpis:[
+      freesiaQuarterKpi(quarter, "R1", "责任性费用率控制", 10, {
+        purpose:"把操作端从事后处理转向提前预防，降低可避免的责任性费用。",
+        data:"财务/SOA责任性费用明细、发生日期、客户、责任环节、原因分类、金额、季度出口箱量及改善记录。",
+        formula:"每100箱责任性费用＝责任性费用总额/实际出口箱量×100；与Q2同口径基准比较。",
+        achieved:`责任性费用明细分类完整率100%，每100箱责任性费用较Q2下降≥${costReduction}%。`,
+        exceeded:`每100箱责任性费用较Q2下降≥${costReduction + 5}%，并完成至少2项可验证的前置预防措施。`,
+        major:`费用分类完整率≥95%，每100箱责任性费用未上升，且主要费用均有关闭动作。`,
+        progress:"已完成主要费用归类和原因分析，并推进部分改善，但费用率仍上升或证据不完整。",
+        legacyNames:["参与预算结构和成本构成理解","推动异常费用和运营风险管理"]
+      }),
+      freesiaQuarterKpi(quarter, "R2", "Dispute时效、追回与重大风险", 10, {
+        purpose:"提高Dispute处理时效和损失追回能力，同时守住重大操作事故底线。",
+        data:"Dispute台账，包含发生时间、首次响应、责任人、争议金额、追回金额、到期日、关闭日和结果；主管直接处理事项也必须入表。",
+        formula:"首次响应及时率＝1个工作日内响应数/Dispute总数；按期关闭率＝按期关闭数/到期数；同时统计追回金额和未关闭风险金额。",
+        achieved:`首次响应及时率≥95%，按期关闭率≥${disputeClosure}%，重大可控操作事故为0。`,
+        exceeded:"首次响应及时率≥98%，按期关闭率≥95%，追回或避免损失结果明显，并形成至少1项预防机制。",
+        major:`首次响应及时率≥90%，按期关闭率≥${Math.max(75, disputeClosure - 10)}%，重大可控事故为0。`,
+        progress:"Dispute台账基本完整并有实质推进，但响应、关闭或追回结果未达到主要目标；发生1次重大可控事故时本项不得高于实质推进。"
+      })
+    ]},
+    { id:"EFF", name:"人效与运营管理", kpis:[
+      freesiaQuarterKpi(quarter, "E1", "工作量统计口径与数据准确性", 10, {
+        purpose:"用统一标准公平反映普通操作、BR、COD和Dispute等不同工作的真实工作量。",
+        data:"员工、工作类型、数量、首版折算系数、等效工作量、实际工作日、数据来源及抽查结果。",
+        formula:"等效工作量＝各工作类型数量×首版折算系数之和；数据覆盖率＝已统计记录/应统计记录；准确率按抽样核对计算。",
+        achieved:`首版折算规则直接上线运行，不因等待校准暂停考核；季度数据覆盖率≥${workloadCoverage}%，抽查准确率≥${workloadAccuracy}%，并完成月度汇总。`,
+        exceeded:"数据覆盖率和准确率均≥99%，按期输出团队看板，并能用数据发现至少2项人员或流程改善机会。",
+        major:`首版规则已运行，数据覆盖率和准确率均≥${Math.max(90, workloadCoverage - 5)}%，主要人员数据可用于比较。`,
+        progress:"已上线首版统计并产生部分数据，但覆盖率、准确率或持续更新未达到主要目标。",
+        legacyNames:["输出模块化操作SOP / 操作手册"]
+      }),
+      freesiaQuarterKpi(quarter, "E2", "团队工作分配与人均效率改善", 10, {
+        purpose:"根据真实工作量调整人员和任务，减少长期忙闲不均，并提高团队人均产出。",
+        data:"每人等效工作量、实际工作日、岗位饱和标准、加班/延误、任务调配记录及调整前后交付质量。",
+        formula:"人均产出＝团队等效工作量/总实际工作日；合理负荷覆盖率＝处于岗位饱和标准80%-120%的人员/适用人员。",
+        achieved:`合理负荷覆盖率≥${balancedCoverage}%，人均产出较Q2提升≥${productivityGrowth}%，关键节点准时率不得下降。`,
+        exceeded:`合理负荷覆盖率≥${Math.min(95, balancedCoverage + 5)}%，人均产出提升≥${productivityGrowth + 5}%，且交付质量同步改善。`,
+        major:`合理负荷覆盖率≥${Math.max(70, balancedCoverage - 10)}%，人均产出不低于Q2，超负荷和低负荷人员已有调整。`,
+        progress:"已根据工作量进行人员或任务调整并有阶段结果，但负荷覆盖率或人均产出未达到主要目标。",
+        legacyNames:["完成人员分层与岗位分工"]
+      }),
+      freesiaQuarterKpi(quarter, "E3", "高频问题关闭与重复率下降", 5, {
+        purpose:"推动团队从反复救火转向解决根因，减少重复性管理问题。",
+        data:"高频问题Top清单、发生次数、责任人、根因、措施、关闭日及措施后重复发生次数。",
+        formula:"问题关闭率＝已验证关闭问题/计划关闭问题；重复率下降＝改善前后同类问题发生率变化。",
+        achieved:`季度Top 3高频问题关闭率≥${issueClosure}%，同类问题重复发生率下降≥${issueReduction}%。`,
+        exceeded:`Top 3问题全部关闭，重复发生率下降≥${issueReduction + 10}%，并沉淀为团队可执行规则或SOP。`,
+        major:`Top 3问题关闭率≥${Math.max(70, issueClosure - 10)}%，至少2项问题有验证后的改善结果。`,
+        progress:"已完成问题识别和根因分析，至少1项形成阶段改善，但关闭率和重复率未达到主要目标。"
+      })
+    ]},
+    { id:"TAL", name:"人才梯队与团队独立性", kpis:[
+      freesiaQuarterKpi(quarter, "T1", "新人及初级员工成长达标", 5, {
+        purpose:"加快新人和初级员工成长，避免因过度保守分工导致长期无法独立承接。",
+        data:"适用人员名单、入职/培养日期、1个月和3个月能力清单、培训记录、独立处理数量、差错及考核结果。",
+        formula:"阶段达标率＝通过对应阶段能力评估人数/到期应评人数；无新员工时，至少指定2名初级员工执行同类成长计划。",
+        achieved:`适用人员100%建立成长计划；满1个月和满3个月人员阶段达标率均≥${newcomerPass}%。`,
+        exceeded:"阶段达标率100%，至少1人提前独立承接更复杂业务，并有质量验证。",
+        major:`成长计划覆盖率100%，阶段达标率≥${Math.max(70, newcomerPass - 10)}%，未达标人员均有补强计划。`,
+        progress:"培养计划已执行并有阶段进展，但到期评估、独立处理证据或达标率不足。",
+        legacyNames:["建立新人训练营与岗位路径图"]
+      }),
+      freesiaQuarterKpi(quarter, "T2", "关键岗位备份与团队独立运行", 10, {
+        purpose:"形成稳定人才梯队，降低关键事项对Freesia或单一骨干的依赖。",
+        data:"关键岗位清单、主责与备份人、交叉培训、独立处理案例、升级记录，以及Freesia或核心人员休假期间的运行记录。",
+        formula:"备份覆盖率＝已有合格备份的关键岗位/关键岗位总数；同时统计可独立处理复杂事项的骨干人数和上级直接介入次数。",
+        achieved:isQ4 ? "关键岗位合格备份覆盖率100%，至少2名骨干可独立处理复杂事项；Freesia连续离岗3个工作日时团队无重大服务中断。" : `关键岗位合格备份覆盖率≥${backupCoverage}%，至少2名骨干可独立处理复杂事项，核心人员临时离岗时有明确承接。`,
+        exceeded:"关键岗位备份覆盖率100%，至少3名骨干具备独立判断能力，团队可连续稳定运行且上级直接介入明显下降。",
+        major:`关键岗位备份覆盖率≥${Math.max(70, backupCoverage - 10)}%，至少1名骨干可独立承接复杂事项，主要岗位无明显断层。`,
+        progress:"已建立备份矩阵并完成部分带教，但独立承接证据、备份覆盖或团队自主运行仍不足。",
+        legacyNames:["培养操作骨干和中间层承接"]
+      })
+    ]}
+  ];
+}
 const GARY_COMMISSION_TREND_PEOPLE = [
   { key:"Gary", label:"Gary", color:"#2563EB" },
   { key:"Jasmine", label:"Jasmine（已离职）", color:"#F59E0B" }
@@ -1859,6 +2033,15 @@ const PERSON_PROFILES = {
   Freesia: {
     name: "Freesia",
     templateName: "Freesia 运营经理 Q2 OKR",
+    detailedQuarters: ["Q3","Q4"],
+    quarterTemplateNames: {
+      Q3: "Freesia Q3 美国出口运营经理绩效",
+      Q4: "Freesia Q4 美国出口运营经理绩效"
+    },
+    quarterTemplates: {
+      Q3: { dimensions: buildFreesiaQ3Q4Dimensions("Q3"), compensationNote: FREESIA_Q3_Q4_COMPENSATION_NOTE },
+      Q4: { dimensions: buildFreesiaQ3Q4Dimensions("Q4"), compensationNote: FREESIA_Q3_Q4_COMPENSATION_NOTE }
+    },
     compensationMode: "no_monthly_bonus",
     bonusBase: 0,
     bonusCurrency: "USD",
@@ -3656,6 +3839,7 @@ createApp({
     const performancePanelNote = computed(()=>{
       if(!hasConfiguredPerformanceTemplate.value) return '该员工暂未配置岗位OKR标准；不会自动套用其他部门模板。';
       if(isMonthlyKpiTemplate.value) return okrExpanded.value ? '当前正在填写月度KPI评分。' : '月度发放前建议展开填写月度KPI。';
+      if(compensationMode.value === 'no_monthly_bonus') return okrExpanded.value ? '当前正在填写季度OKR复盘。' : '建议按月更新指标数据和证据，季度末完成正式评分。';
       return okrExpanded.value ? '当前正在填写季度OKR复盘。' : '月度发放时可以先不填写；季度末复盘时再打开。';
     });
     const performanceToggleLabel = computed(()=>{
@@ -3671,6 +3855,8 @@ createApp({
           ? '季度奖金按OKR得分自动测算：完成状态先转为分数，再用分段线性系数计算奖金。'
           : compensationMode.value === 'quarterly_commission'
           ? '季度业务提成按Customer、Business、Leadership三模块测算；Business和Leadership由OKR评分自动同步到提成表。'
+          : compensationMode.value === 'no_monthly_bonus'
+          ? '本岗位不发放固定月度奖金；按月更新运营数据和完成证据，季度末依据OKR进行正式复盘和评分。'
           : '月度奖金按下方发放表正式计算；季度OKR用于复盘和下季度目标校准，不做月度奖金扣回。');
     });
     const workflowRuleSubtitle = computed(()=> isMonthlyKpiTemplate.value
@@ -3679,13 +3865,17 @@ createApp({
         ? '给考评人的口径：Tim按完成状态评分，系统自动换算季度奖金；月度只记录过程进展。'
         : compensationMode.value === 'quarterly_commission'
         ? '给考评人的口径：Gary先填写OKR评分，再录入Customer业务数据，系统自动汇总提成结果。'
+        : compensationMode.value === 'no_monthly_bonus'
+        ? '给考评人的口径：按月收集指标数据和证据，季度末按完成状态统一评分；本岗位不填写月度奖金。'
         : '给考评人的口径：月度只填写奖金发放表，季度OKR暂时不需要每月填写；到季度末复盘时再展开填写季度OKR。')
     );
     const workflowReviewTag = computed(()=> isMonthlyKpiTemplate.value ? '每月填写' : '季度末填写');
     const workflowReviewTitle = computed(()=> isMonthlyKpiTemplate.value ? '月度KPI评分' : '季度OKR复盘');
     const workflowReviewCopy = computed(()=> isMonthlyKpiTemplate.value
       ? '用于Kori当月正式评分，覆盖制度执行、AP/出纳、AR、报表分析和综合评价；季度OKR另行记录成长目标完成率。'
-      : '用于季度总结、横向校准、个人发展追踪和下季度目标设定。平时可以不填，不作为月度奖金扣回依据。'
+      : (compensationMode.value === 'no_monthly_bonus'
+        ? '用于季度总结、横向校准和个人发展追踪；建议按月补充数据与证据，季度末统一确认完成状态。'
+        : '用于季度总结、横向校准、个人发展追踪和下季度目标设定。平时可以不填，不作为月度奖金扣回依据。')
     );
     const showMonthlyBonusTable = computed(()=> !['no_monthly_bonus','quarterly_commission','quarterly_bonus'].includes(compensationMode.value));
     const compensationTitle = computed(()=>{
@@ -4264,6 +4454,11 @@ createApp({
         && !template.isPlaceholder
         && (!dimensionsMatchTemplate(data.dimensions, template.dimensions)
           || !dimensionTargetsMatchTemplate(data.dimensions, template.dimensions));
+      const needsFreesiaQuarterUpgrade = profile.name === 'Freesia'
+        && ["Q3","Q4"].includes(effectiveQuarterKey)
+        && !template.isPlaceholder
+        && (!dimensionsMatchTemplate(data.dimensions, template.dimensions)
+          || !dimensionTargetsMatchTemplate(data.dimensions, template.dimensions));
       data.meta = {
         ...(data.meta || {}),
         employeeName: profile.name,
@@ -4271,7 +4466,7 @@ createApp({
         department: departmentForEmployee(profile.name)
       };
       data.department = departmentForEmployee(profile.name);
-      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade || needsQuarterlyBonusPlanUpgrade) {
+      if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade || needsFreesiaQuarterUpgrade || needsQuarterlyBonusPlanUpgrade) {
         data.meta.templateName = template.templateName;
         data.meta.templateVersion = `${effectiveQuarterKey}-role${template.isPlaceholder ? '-placeholder' : ''}`;
         data.bonusBase = template.bonusBase;
@@ -4283,7 +4478,7 @@ createApp({
         data.dimensions = deepClone(template.dimensions);
         data.bonusItems = deepClone(template.bonusItems || []);
         data.quarterlyOkrs = deepClone(template.quarterlyOkrs || []);
-      } else if(needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade) {
+      } else if(needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade || needsFreesiaQuarterUpgrade) {
         data.dimensions = mergeTemplateDimensionsPreservingProgress(data.dimensions, template.dimensions);
         data.bonusItems = normalizeBonusItems((data.bonusItems && data.bonusItems.length) ? data.bonusItems : (template.bonusItems || []));
         data.quarterlyOkrs = (data.quarterlyOkrs && data.quarterlyOkrs.length)
