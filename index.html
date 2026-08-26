@@ -338,11 +338,37 @@ body {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius);
-  padding: 22px 26px;
-  margin-bottom: 24px;
-  box-shadow: var(--shadow);
-  border: 1px solid rgba(255,255,255,0.5);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 20px rgba(15,23,42,0.07);
+  border: 1px solid rgba(203,213,225,0.86);
 }
+.submission-card, .quick-nav-card, .mode-card, .okr-panel-card, .compensation-card { position:relative; overflow:hidden; }
+.submission-card::before, .quick-nav-card::before, .mode-card::before, .okr-panel-card::before, .compensation-card::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+}
+.submission-card { background:rgba(240,253,250,0.9); border-color:#A7F3D0; }
+.submission-card::before { background:#059669; }
+.submission-card.is-simple .section-title-row { margin-bottom:0; align-items:center; }
+.submission-card .btn-success { background:#047857; color:white; border:1px solid #047857; box-shadow:0 5px 14px rgba(4,120,87,0.22); }
+.submission-card .btn-success:hover { background:#065F46; box-shadow:0 7px 18px rgba(4,120,87,0.28); }
+.quick-nav-card { background:rgba(248,250,252,0.94); border-color:#BFDBFE; }
+.quick-nav-card::before { background:#2563EB; }
+.quick-nav-card:not(.is-expanded) .quick-nav-header { margin-bottom:0; }
+.quick-nav-card .btn-outline { border-color:#BFDBFE; color:#1E40AF; background:#FFFFFF; }
+.mode-card { background:rgba(255,254,247,0.94); border-color:#FDE68A; }
+.mode-card::before { background:#D97706; }
+.mode-metric:first-child { background:#EFF6FF; border-color:#BFDBFE; }
+.mode-metric:last-child { background:#ECFDF5; border-color:#A7F3D0; }
+.okr-panel-card { background:rgba(245,247,255,0.94); border-color:#C7D2FE; }
+.okr-panel-card::before { background:#4F46E5; }
+.okr-panel-card .btn-primary { background:#4F46E5; color:white; box-shadow:0 5px 14px rgba(79,70,229,0.22); }
+.okr-panel-card .btn-primary:hover { background:#4338CA; box-shadow:0 7px 18px rgba(79,70,229,0.28); }
+.compensation-card { border-color:#99F6E4; background:rgba(240,253,250,0.82); }
+.compensation-card::before { background:#0F766E; }
+.compensation-card.is-collapsed { padding:18px 22px; margin-bottom:16px; box-shadow:0 6px 20px rgba(15,23,42,0.07); }
+.compensation-card.is-collapsed .section-title-row { margin-bottom:0; align-items:center; }
+.compensation-card.is-collapsed .btn-outline { border-color:#5EEAD4; color:#115E59; background:#FFFFFF; }
 .workflow-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
 .workflow-grid.is-single { grid-template-columns:1fr; }
 .workflow-item { background:rgba(255,255,255,0.64); border:1px solid rgba(226,232,240,0.9); border-radius:12px; padding:14px 16px; }
@@ -456,6 +482,11 @@ body {
 }
 /* Responsive */
 @media (max-width:768px) {
+  .submission-card, .quick-nav-card, .mode-card, .okr-panel-card, .compensation-card.is-collapsed { padding:14px 16px; }
+  .submission-card.is-simple .section-title-row, .okr-panel-card, .compensation-card.is-collapsed .section-title-row { align-items:stretch; }
+  .submission-card.is-simple .records-actions, .submission-card.is-simple .btn-success, .okr-panel-card .btn, .compensation-card.is-collapsed .bonus-section-actions, .compensation-card.is-collapsed .btn { width:100%; justify-content:center; }
+  .mode-metrics { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .mode-metric { min-width:0; }
   .tier-group { grid-template-columns:repeat(2,1fr); }
   .summary-card { flex-direction:column; align-items:stretch; text-align:center; }
   .bonus-stats { grid-template-columns:1fr; }
@@ -543,7 +574,7 @@ body {
 
   <div class="main-container">
     <!-- Manager submission -->
-    <section class="workflow-card">
+    <section class="workflow-card submission-card" :class="{'is-simple':!(isAdminMode && adminToolsOpen)}">
       <div class="section-title-row">
         <div>
           <div class="section-title">提交测评</div>
@@ -765,7 +796,7 @@ body {
     </section>
 
     <!-- Monthly Bonus -->
-    <section class="bonus-card" v-if="!isOkrOnlyMode && compensationMode !== 'no_monthly_bonus'">
+    <section class="bonus-card compensation-card" :class="{'is-collapsed':!monthlyBonusExpanded}" v-if="!isOkrOnlyMode && compensationMode !== 'no_monthly_bonus'">
       <div class="section-title-row">
         <div>
           <div class="section-title">{{compensationTitle}}</div>
