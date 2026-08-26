@@ -622,12 +622,12 @@ body {
     <section class="workflow-card" v-if="isAdminMode && adminToolsOpen && !isOkrOnlyMode">
       <div class="section-title-row">
         <div>
-          <div class="section-title">{{compensationMode === 'no_monthly_bonus' ? '季度考核填写规则' : '月度与季度填写规则'}}</div>
+          <div class="section-title">{{showMonthlyBonusTable ? '月度与季度填写规则' : '季度考核填写规则'}}</div>
           <div class="section-subtitle">{{workflowRuleSubtitle}}</div>
         </div>
       </div>
-      <div class="workflow-grid" :class="{'is-single': compensationMode === 'no_monthly_bonus'}">
-        <div class="workflow-item" v-if="compensationMode !== 'no_monthly_bonus'">
+      <div class="workflow-grid" :class="{'is-single': !showMonthlyBonusTable}">
+        <div class="workflow-item" v-if="showMonthlyBonusTable">
           <div class="workflow-tag required">每月必填</div>
           <div class="workflow-title">月度绩效奖金发放</div>
           <div class="workflow-copy">用于当月正式发放奖金。只需要选择当月等级、确认应发/实发金额，并留下异常闭环、节点同步、团队动作、证据留档等说明。</div>
