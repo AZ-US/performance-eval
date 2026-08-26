@@ -740,7 +740,7 @@ body {
     </section>
 
     <!-- Monthly Bonus -->
-    <section class="bonus-card" v-if="!isOkrOnlyMode">
+    <section class="bonus-card" v-if="!isOkrOnlyMode && compensationMode !== 'no_monthly_bonus'">
       <div class="section-title-row">
         <div>
           <div class="section-title">{{compensationTitle}}</div>
