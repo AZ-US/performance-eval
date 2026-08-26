@@ -247,6 +247,29 @@ body {
 .commission-quarter-summary-label { color:#64748B; font-size:11px; margin-bottom:4px; }
 .commission-quarter-summary-value { color:#0F172A; font-size:17px; font-weight:800; white-space:nowrap; }
 .commission-quarter-summary-value strong { color:#1D4ED8; }
+.commission-simulator { border:1px solid #CBD5E1; border-radius:12px; background:rgba(255,255,255,0.66); overflow:hidden; }
+.commission-simulator-header { width:100%; border:0; background:#F8FAFC; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:14px; text-align:left; color:var(--text); cursor:pointer; font-family:inherit; }
+.commission-simulator-header:hover { background:#F1F5F9; }
+.commission-simulator-title { display:block; font-size:14px; font-weight:800; margin-bottom:3px; }
+.commission-simulator-subtitle { display:block; color:var(--text-light); font-size:12px; line-height:1.5; }
+.commission-simulator-toggle { flex-shrink:0; color:#2563EB; font-size:12px; font-weight:800; }
+.commission-simulator-body { padding:14px; border-top:1px solid #E2E8F0; }
+.commission-simulator-controls { display:grid; grid-template-columns:1.2fr repeat(3,minmax(0,1fr)); gap:12px; align-items:end; }
+.commission-simulator-control { display:flex; flex-direction:column; gap:7px; min-width:0; color:#475569; font-size:12px; font-weight:700; }
+.commission-simulator-input-row { display:flex; align-items:center; gap:7px; }
+.commission-simulator-control input[type="number"] { width:100%; min-width:0; border:1px solid #CBD5E1; border-radius:8px; padding:8px 9px; background:white; color:#0F172A; font:inherit; font-size:13px; outline:none; }
+.commission-simulator-control input[type="number"]:focus { border-color:#3B82F6; box-shadow:0 0 0 2px rgba(59,130,246,0.12); }
+.commission-simulator-control input[type="range"] { width:100%; accent-color:#2563EB; }
+.commission-simulator-unit { color:#64748B; font-size:12px; white-space:nowrap; }
+.commission-simulator-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:12px 0; padding-top:12px; border-top:1px solid #E2E8F0; }
+.commission-simulator-source { color:#64748B; font-size:12px; line-height:1.5; }
+.commission-simulator-source strong { color:#334155; }
+.commission-simulator-table { min-width:820px; }
+.commission-simulator-table th { white-space:nowrap; }
+.commission-simulator-result { font-weight:800; color:#0F172A; white-space:nowrap; }
+.commission-simulator-positive { color:#047857; font-weight:800; white-space:nowrap; }
+.commission-simulator-negative { color:#DC2626; font-weight:800; white-space:nowrap; }
+.commission-simulator-formula { margin-top:10px; color:#64748B; font-size:11px; line-height:1.6; }
 .commission-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .commission-control { display:flex; align-items:center; gap:6px; color:var(--text-light); font-size:13px; }
 .commission-control input { width:86px; border:1px solid #E2E8F0; border-radius:8px; padding:6px 9px; font-size:13px; background:white; outline:none; font-family:inherit; }
@@ -438,6 +461,7 @@ body {
   .bonus-stats { grid-template-columns:1fr; }
   .commission-quarter-summary { grid-template-columns:1fr; }
   .commission-quarter-summary-item { border-left:none; border-top:1px solid rgba(191,219,254,0.9); }
+  .commission-simulator-controls { grid-template-columns:1fr; }
   .commission-trend-metrics { grid-template-columns:1fr; }
   .commission-trend-panel { padding:14px; }
   .trend-toggle { width:100%; }
@@ -848,6 +872,72 @@ body {
           <div class="commission-quarter-summary-item">
             <div class="commission-quarter-summary-label">季度最终提成</div>
             <div class="commission-quarter-summary-value">{{commissionPlan.currency}} <strong>{{formatMoney(commissionQuarterSummary.totalCommission)}}</strong></div>
+          </div>
+        </div>
+        <div class="commission-simulator">
+          <button type="button" class="commission-simulator-header" @click="commissionSimulatorExpanded=!commissionSimulatorExpanded" :aria-expanded="commissionSimulatorExpanded">
+            <span>
+              <span class="commission-simulator-title">提成系数与原模型对比试算</span>
+              <span class="commission-simulator-subtitle">调整系数后即时比较Q3、Q4结果；仅供试算，不修改正式考核和云端记录。</span>
+            </span>
+            <span class="commission-simulator-toggle">{{commissionSimulatorExpanded ? '收起试算' : '展开试算'}}</span>
+          </button>
+          <div class="commission-simulator-body" v-show="commissionSimulatorExpanded">
+            <div class="commission-simulator-controls">
+              <label class="commission-simulator-control">
+                <span>原模型季度提成基准</span>
+                <span class="commission-simulator-input-row">
+                  <input type="number" min="0" step="0.01" v-model.number="commissionSimulatorBaseAmount">
+                  <span class="commission-simulator-unit">{{commissionPlan.currency}}</span>
+                </span>
+              </label>
+              <label class="commission-simulator-control">
+                <span>Business达成系数</span>
+                <input type="range" min="0" max="1.5" step="0.05" v-model.number="commissionSimulatorAchievedCoefficient">
+                <input type="number" min="0" max="1.5" step="0.05" v-model.number="commissionSimulatorAchievedCoefficient">
+              </label>
+              <label class="commission-simulator-control">
+                <span>Business超额达成系数</span>
+                <input type="range" min="0" max="1.5" step="0.05" v-model.number="commissionSimulatorExceededCoefficient">
+                <input type="number" min="0" max="1.5" step="0.05" v-model.number="commissionSimulatorExceededCoefficient">
+              </label>
+              <label class="commission-simulator-control">
+                <span>Leadership达成系数</span>
+                <input type="range" min="0" max="1.5" step="0.05" v-model.number="commissionSimulatorLeadershipCoefficient">
+                <input type="number" min="0" max="1.5" step="0.05" v-model.number="commissionSimulatorLeadershipCoefficient">
+              </label>
+            </div>
+            <div class="commission-simulator-toolbar">
+              <div class="commission-simulator-source"><strong>基准来源：</strong>{{commissionSimulatorBaseSource}}</div>
+              <button type="button" class="btn btn-outline" @click="resetCommissionSimulator">恢复建议值</button>
+            </div>
+            <div class="bonus-table-wrap">
+              <table class="bonus-table commission-simulator-table">
+                <thead>
+                  <tr>
+                    <th>季度</th>
+                    <th>权重</th>
+                    <th>原模型</th>
+                    <th>Business达成结果</th>
+                    <th>与原模型差异</th>
+                    <th>Business超额结果</th>
+                    <th>与原模型差异</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in commissionSimulatorRows" :key="row.period">
+                    <td><strong>{{row.period}}</strong></td>
+                    <td>Customer {{formatPercent(row.weights.customer)}} / Business {{formatPercent(row.weights.business)}} / Leadership {{formatPercent(row.weights.leadership)}}</td>
+                    <td class="commission-simulator-result">{{commissionPlan.currency}} {{formatMoney(row.originalAmount)}}</td>
+                    <td class="commission-simulator-result">{{commissionPlan.currency}} {{formatMoney(row.achieved.total)}}</td>
+                    <td :class="row.achieved.difference >= 0 ? 'commission-simulator-positive' : 'commission-simulator-negative'">{{formatSignedMoney(row.achieved.difference)}} · {{formatSignedPercent(row.achieved.rate)}}</td>
+                    <td class="commission-simulator-result">{{commissionPlan.currency}} {{formatMoney(row.exceeded.total)}}</td>
+                    <td :class="row.exceeded.difference >= 0 ? 'commission-simulator-positive' : 'commission-simulator-negative'">{{formatSignedMoney(row.exceeded.difference)}} · {{formatSignedPercent(row.exceeded.rate)}}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="commission-simulator-formula">公式：原模型基准 ×（Customer权重 + Business权重 × 所选系数 + Leadership权重 × Leadership系数）。</div>
           </div>
         </div>
         <div class="commission-controls">
@@ -2809,6 +2899,11 @@ function formatSignedMoney(value) {
   const sign = number >= 0 ? '+' : '-';
   return `${sign}USD ${formatMoney(Math.abs(number))}`;
 }
+function formatSignedPercent(value) {
+  const number = Number(value) || 0;
+  const sign = number >= 0 ? '+' : '-';
+  return `${sign}${Math.abs(number * 100).toFixed(1)}%`;
+}
 function formatCommissionMonth(value) {
   const text = String(value || '').trim();
   const match = text.match(/(?:^|\D)(\d{1,2})$/);
@@ -3247,6 +3342,11 @@ createApp({
     const quarterlyBonusPlan = ref(normalizeQuarterlyBonusPlan(initial.quarterlyBonusPlan));
     const commissionPlan = ref(normalizeCommissionPlan(initial.commissionPlan));
     const commissionExpanded = ref(false);
+    const commissionSimulatorExpanded = ref(false);
+    const commissionSimulatorBaseOverride = ref(null);
+    const commissionSimulatorAchievedCoefficient = ref(1.1);
+    const commissionSimulatorExceededCoefficient = ref(1.2);
+    const commissionSimulatorLeadershipCoefficient = ref(1.0);
     const commissionTrendView = ref('monthly');
     const commissionTrendExpanded = ref(false);
     const monthlyBonusExpanded = ref(false);
@@ -3683,6 +3783,76 @@ createApp({
     });
     const commissionSummary = computed(()=>summarizeCommissionPlan(commissionPlan.value));
     const commissionQuarterSummary = computed(()=>summarizeCommissionPlan(commissionPlan.value, meta.value.period));
+    function normalizedSimulatorCoefficient(value, fallback = 1) {
+      const number = Number(value);
+      return Number.isFinite(number) ? Math.max(0, Math.min(1.5, number)) : fallback;
+    }
+    function commissionSimulatorScenario(baseAmount, weights, businessCoefficient, leadershipCoefficient) {
+      const originalAmount = Math.max(0, Number(baseAmount) || 0);
+      const multiplier = (Number(weights.customer) || 0)
+        + (Number(weights.business) || 0) * normalizedSimulatorCoefficient(businessCoefficient)
+        + (Number(weights.leadership) || 0) * normalizedSimulatorCoefficient(leadershipCoefficient);
+      const total = roundMoney(originalAmount * multiplier);
+      const difference = roundMoney(total - originalAmount);
+      return {
+        total,
+        difference,
+        rate: originalAmount ? difference / originalAmount : 0
+      };
+    }
+    const commissionSimulatorAutoBase = computed(()=>{
+      const currentAmount = Number(commissionQuarterSummary.value.customerCommission) || 0;
+      if(currentAmount > 0) {
+        return {
+          amount:currentAmount,
+          source:`${meta.value.period || '当前季度'}已录入的Customer原模型合计`
+        };
+      }
+      const q2Amount = Number(summarizeCommissionPlan(commissionPlan.value, '2026-Q2').customerCommission) || 0;
+      if(q2Amount > 0) {
+        return {
+          amount:q2Amount,
+          source:'当前季度暂无Customer数据，暂用2026-Q2原模型合计'
+        };
+      }
+      return { amount:0, source:'尚无可用的Customer原模型数据，可手动输入基准' };
+    });
+    const commissionSimulatorBaseAmount = computed({
+      get:()=> commissionSimulatorBaseOverride.value === null
+        ? commissionSimulatorAutoBase.value.amount
+        : Math.max(0, Number(commissionSimulatorBaseOverride.value) || 0),
+      set:value=>{
+        const number = Number(value);
+        commissionSimulatorBaseOverride.value = Number.isFinite(number) ? Math.max(0, number) : null;
+      }
+    });
+    const commissionSimulatorBaseSource = computed(()=> commissionSimulatorBaseOverride.value === null
+      ? commissionSimulatorAutoBase.value.source
+      : '手动输入的原模型季度提成基准'
+    );
+    const commissionSimulatorRows = computed(()=>{
+      const baseAmount = commissionSimulatorBaseAmount.value;
+      return [
+        { period:'2026-Q3', stage:'Q3-2026' },
+        { period:'2026-Q4', stage:'Q4-2026' }
+      ].map(item=>{
+        const weights = commissionStageWeightFor(commissionPlan.value, item.stage);
+        return {
+          ...item,
+          weights,
+          originalAmount:baseAmount,
+          achieved:commissionSimulatorScenario(baseAmount, weights, commissionSimulatorAchievedCoefficient.value, commissionSimulatorLeadershipCoefficient.value),
+          exceeded:commissionSimulatorScenario(baseAmount, weights, commissionSimulatorExceededCoefficient.value, commissionSimulatorLeadershipCoefficient.value)
+        };
+      });
+    });
+    function resetCommissionSimulator() {
+      commissionSimulatorBaseOverride.value = null;
+      commissionSimulatorAchievedCoefficient.value = 1.1;
+      commissionSimulatorExceededCoefficient.value = 1.2;
+      commissionSimulatorLeadershipCoefficient.value = 1.0;
+      showToast('已恢复建议试算系数');
+    }
     const commissionTrendPeople = GARY_COMMISSION_TREND_PEOPLE;
     const showGaryCommissionTrends = computed(()=> {
       if(isOkrOnlyMode) return false;
@@ -5224,6 +5394,7 @@ createApp({
       monthlyEvaluationExpanded.value = false;
       bonusItemsExpanded.value = false;
       commissionExpanded.value = false;
+      commissionSimulatorExpanded.value = false;
       commissionTrendExpanded.value = false;
       recordsExpanded.value = false;
       quickNavExpanded.value = false;
@@ -5984,6 +6155,8 @@ createApp({
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
       monthlyKpiMonths, showMonthlyKpiMonthTabs, monthlyKpiSnapshotScore, monthlyKpiSnapshotWeight, isActiveKpiMonth,
       showCommissionPlan, commissionExpanded, commissionRows, commissionSummary, commissionQuarterSummary, formatPercent, formatMoney, formatScore, formatCoefficient, formatCommissionMonth, commissionScoreRuleLabel,
+      commissionSimulatorExpanded, commissionSimulatorBaseAmount, commissionSimulatorBaseSource, commissionSimulatorAchievedCoefficient, commissionSimulatorExceededCoefficient,
+      commissionSimulatorLeadershipCoefficient, commissionSimulatorRows, resetCommissionSimulator, formatSignedPercent,
       commissionTrendView, commissionTrendExpanded, commissionTrendPeople, showGaryCommissionTrends, commissionTrendRows, commissionTrendChart,
       commissionTrendAriaLabel, commissionTrendMetrics, formatMoneyShort, formatSignedMoney,
       compensationMode, compensationNote, showMonthlyBonusTable, compensationTitle, compensationSubtitle,
