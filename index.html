@@ -87,7 +87,7 @@ body {
 .score-ring .score-text { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
 .score-ring .score-num { font-size:36px; font-weight:800; line-height:1; }
 .score-ring .score-label { font-size:12px; color:var(--text-light); margin-top:4px; }
-.summary-details { flex:1; min-width:240px; }
+.summary-details { flex:1; min-width:0; }
 .grade-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 20px; border-radius:12px; font-size:18px; font-weight:700; margin-bottom:12px; }
 .grade-S { background:#D1FAE5; color:#059669; }
 .grade-A { background:#DBEAFE; color:#2563EB; }
@@ -96,11 +96,11 @@ body {
 .bonus-line { font-size:15px; color:var(--text-light); margin-bottom:16px; }
 .bonus-line strong { color:var(--text); font-size:20px; }
 .dim-bars { display:flex; flex-direction:column; gap:8px; }
-.dim-bar-row { display:flex; align-items:center; gap:10px; font-size:13px; }
-.dim-bar-label { width:90px; text-align:right; color:var(--text-light); white-space:nowrap; }
-.dim-bar-track { flex:1; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden; }
+.dim-bar-row { display:grid; grid-template-columns:minmax(180px,0.72fr) minmax(120px,1.65fr) 54px; align-items:center; gap:12px; font-size:13px; }
+.dim-bar-label { min-width:0; color:var(--text-light); text-align:left; line-height:1.4; overflow-wrap:anywhere; }
+.dim-bar-track { min-width:0; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden; }
 .dim-bar-fill { height:100%; border-radius:4px; transition:width 0.4s ease; }
-.dim-bar-score { width:50px; font-weight:600; font-size:12px; }
+.dim-bar-score { min-width:0; text-align:right; font-weight:600; font-size:12px; white-space:nowrap; }
 
 /* Dimension Sections */
 .dimension-section { margin-bottom:20px; }
@@ -505,7 +505,8 @@ body {
   .records-section-heading { align-items:flex-start; flex-direction:column; gap:6px; }
   .quick-nav-card { position:static; }
   .quick-employee-btn { min-width:0; flex-basis:calc(50% - 3px); }
-  .dim-bar-label { width:70px; font-size:12px; }
+  .dim-bar-row { grid-template-columns:minmax(138px,0.9fr) minmax(72px,1fr) 52px; gap:8px; }
+  .dim-bar-label { font-size:12px; }
   .header-top { flex-direction:column; }
   .kpi-list { padding-left:0; }
   .score-slider-row { grid-template-columns:1fr; }
