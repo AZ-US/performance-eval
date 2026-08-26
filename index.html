@@ -321,6 +321,7 @@ body {
   border: 1px solid rgba(255,255,255,0.5);
 }
 .workflow-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.workflow-grid.is-single { grid-template-columns:1fr; }
 .workflow-item { background:rgba(255,255,255,0.64); border:1px solid rgba(226,232,240,0.9); border-radius:12px; padding:14px 16px; }
 .workflow-tag { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:800; margin-bottom:8px; }
 .workflow-tag.required { background:#DBEAFE; color:#1D4ED8; }
@@ -621,12 +622,12 @@ body {
     <section class="workflow-card" v-if="isAdminMode && adminToolsOpen && !isOkrOnlyMode">
       <div class="section-title-row">
         <div>
-          <div class="section-title">月度与季度填写规则</div>
+          <div class="section-title">{{compensationMode === 'no_monthly_bonus' ? '季度考核填写规则' : '月度与季度填写规则'}}</div>
           <div class="section-subtitle">{{workflowRuleSubtitle}}</div>
         </div>
       </div>
-      <div class="workflow-grid">
-        <div class="workflow-item">
+      <div class="workflow-grid" :class="{'is-single': compensationMode === 'no_monthly_bonus'}">
+        <div class="workflow-item" v-if="compensationMode !== 'no_monthly_bonus'">
           <div class="workflow-tag required">每月必填</div>
           <div class="workflow-title">月度绩效奖金发放</div>
           <div class="workflow-copy">用于当月正式发放奖金。只需要选择当月等级、确认应发/实发金额，并留下异常闭环、节点同步、团队动作、证据留档等说明。</div>
