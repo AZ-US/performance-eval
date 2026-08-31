@@ -5819,6 +5819,15 @@ createApp({
       const reportQuarterlyBonusPlan = normalizeQuarterlyBonusPlan(data.quarterlyBonusPlan);
       const reportQuarterlyBonusSummary = summarizeQuarterlyBonusPlan(reportQuarterlyBonusPlan, summary.quarterScore, summary.quarterWeight);
       const hideTimQuarterlyBonusInPdf = canonicalEmployeeName(data.meta?.employeeName || '') === 'Tim' && Boolean(reportQuarterlyBonusPlan);
+      const reportCompensationModeLabel = data.compensationMode === 'no_monthly_bonus'
+        ? '季度考核'
+        : data.compensationMode === 'quarterly_commission'
+          ? '季度提成'
+          : data.compensationMode === 'quarterly_bonus'
+            ? '季度奖金'
+            : data.compensationMode === 'monthly_accelerator'
+              ? '月度加成'
+              : '月度奖金';
       const reportCommissionPlan = normalizeCommissionPlan(data.commissionPlan);
       const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan, reportPeriod);
       const reportCommissionMonths = reportCommissionPlan && reportPeriod
@@ -5920,7 +5929,7 @@ createApp({
           </tbody>
         </table>` : '';
       const reportEmployeeName = canonicalEmployeeName(data.meta?.employeeName || '');
-      const showDetailedRubric = ['Tim', 'Gary'].includes(reportEmployeeName);
+      const showDetailedRubric = ['Tim', 'Gary', 'Freesia'].includes(reportEmployeeName);
       const kpiTierOptionsHtml = (kpi)=> (kpi.tiers || []).map(tier=>{
         const isSelected = kpi.selectedTier === tier.grade;
         const tierLabel = tier.label || tier.grade || '评分选项';
@@ -6019,7 +6028,7 @@ createApp({
     <div><strong>部门：</strong>${escapeHtml(data.department || data.meta?.department || departmentForEmployee(data.meta?.employeeName, data))}</div>
     <div><strong>考核人：</strong>${escapeHtml(data.meta?.evaluatorName || '')}</div>
     <div><strong>期间：</strong>${escapeHtml(data.meta?.period || '')}</div>
-    ${reportOkrOnly || hideTimQuarterlyBonusInPdf ? '' : `<div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>`}
+    ${reportOkrOnly || hideTimQuarterlyBonusInPdf ? '' : `<div><strong>考核模式：</strong>${escapeHtml(reportCompensationModeLabel)}</div>`}
     <div><strong>${escapeHtml(performanceTitle)}得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
     <div><strong>等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
     ${showMonthly ? `<div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>` : ''}
