@@ -475,6 +475,7 @@ body {
 /* Print styles */
 @media print {
   .app-header, .header-actions, .save-indicator, .drawer, .drawer-overlay, .kpi-comment, .btn { display:none !important; }
+  body.print-hide-tim-quarterly-bonus .tim-quarterly-bonus-sensitive { display:none !important; }
   body { background:white !important; }
   .summary-card, .bonus-card, .dimension-header, .kpi-card { box-shadow:none !important; border:1px solid #ddd !important; backdrop-filter:none !important; background:white !important; break-inside:avoid; }
   .tier-btn:not(.selected) { opacity:0.3; }
@@ -797,7 +798,7 @@ body {
     </section>
 
     <!-- Monthly Bonus -->
-    <section class="bonus-card compensation-card" :class="{'is-collapsed':!monthlyBonusExpanded}" v-if="!isOkrOnlyMode && compensationMode !== 'no_monthly_bonus'">
+    <section class="bonus-card compensation-card" :class="{'is-collapsed':!monthlyBonusExpanded, 'tim-quarterly-bonus-sensitive':isTimQuarterlyBonusSensitive}" v-if="!isOkrOnlyMode && compensationMode !== 'no_monthly_bonus'">
       <div class="section-title-row">
         <div>
           <div class="section-title">{{compensationTitle}}</div>
@@ -3792,6 +3793,7 @@ createApp({
     const totalWeight = computed(()=> dimensions.value.reduce((s,d)=>s+dimWeight(d),0));
     const scoreRingPercent = computed(()=> totalWeight.value ? Math.min(100, Math.max(0, totalScore.value / totalWeight.value * 100)) : 0);
     const showQuarterlyBonusPlan = computed(()=> compensationMode.value === 'quarterly_bonus' && Boolean(quarterlyBonusPlan.value));
+    const isTimQuarterlyBonusSensitive = computed(()=>canonicalName(meta.value.employeeName) === 'Tim' && showQuarterlyBonusPlan.value);
     const quarterlyBonusSummary = computed(()=>summarizeQuarterlyBonusPlan(quarterlyBonusPlan.value, totalScore.value, totalWeight.value));
     const quarterlyOkrCompletion = computed(()=>{
       const krs = quarterlyOkrs.value.flatMap(item=>item.krs || []);
@@ -5816,6 +5818,7 @@ createApp({
       const performanceTitle = isMonthlyKpiReport ? '月度KPI' : '季度OKR';
       const reportQuarterlyBonusPlan = normalizeQuarterlyBonusPlan(data.quarterlyBonusPlan);
       const reportQuarterlyBonusSummary = summarizeQuarterlyBonusPlan(reportQuarterlyBonusPlan, summary.quarterScore, summary.quarterWeight);
+      const hideTimQuarterlyBonusInPdf = canonicalEmployeeName(data.meta?.employeeName || '') === 'Tim' && Boolean(reportQuarterlyBonusPlan);
       const reportCommissionPlan = normalizeCommissionPlan(data.commissionPlan);
       const reportCommissionSummary = summarizeCommissionPlan(reportCommissionPlan, reportPeriod);
       const reportCommissionMonths = reportCommissionPlan && reportPeriod
@@ -5849,7 +5852,7 @@ createApp({
             }).join('')}
           </tbody>
         </table>` : '';
-      const quarterlyBonusHtml = !reportOkrOnly && reportQuarterlyBonusPlan ? `
+      const quarterlyBonusHtml = !reportOkrOnly && reportQuarterlyBonusPlan && !hideTimQuarterlyBonusInPdf ? `
         <h2>季度奖金自动测算</h2>
         <div class="summary">
           <div>季度奖金基准：${escapeHtml(reportQuarterlyBonusPlan.currency)} ${formatMoney(reportQuarterlyBonusPlan.baseAmount)}</div>
@@ -6016,7 +6019,7 @@ createApp({
     <div><strong>部门：</strong>${escapeHtml(data.department || data.meta?.department || departmentForEmployee(data.meta?.employeeName, data))}</div>
     <div><strong>考核人：</strong>${escapeHtml(data.meta?.evaluatorName || '')}</div>
     <div><strong>期间：</strong>${escapeHtml(data.meta?.period || '')}</div>
-    ${reportOkrOnly ? '' : `<div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>`}
+    ${reportOkrOnly || hideTimQuarterlyBonusInPdf ? '' : `<div><strong>考核模式：</strong>${escapeHtml(data.compensationMode || '')}</div>`}
     <div><strong>${escapeHtml(performanceTitle)}得分：</strong>${summary.quarterScore}/${summary.quarterWeight}</div>
     <div><strong>等级：</strong>${escapeHtml(summary.quarterGrade)}</div>
     ${showMonthly ? `<div><strong>月度应发：</strong>${escapeHtml(summary.currency)} ${summary.monthlyDueTotal}</div>` : ''}
@@ -6024,13 +6027,13 @@ createApp({
     ${reportOkrOnly ? `<div><strong>月度评估：</strong>${summary.ratedMonthCount}/${summary.monthCount}</div>` : ''}
     <div><strong>保存时间：</strong>${escapeHtml(savedAt ? formatDateTime(savedAt) : new Date().toLocaleString('zh-CN'))}</div>
   </div>
-  ${reportOkrOnly ? '' : `<div class="note">${escapeHtml(data.compensationNote || '')}</div>`}
+  ${reportOkrOnly || hideTimQuarterlyBonusInPdf ? '' : `<div class="note">${escapeHtml(data.compensationNote || '')}</div>`}
   <div class="summary">
     ${showMonthly ? `<div>已评月份：${summary.ratedMonthCount}/${summary.monthCount}</div>` : ''}
     <div>基础分：${summary.baseScore}/${summary.quarterWeight}</div>
     <div>加分项：+${summary.bonusScoreTotal}</div>
     ${!reportOkrOnly && reportCommissionSummary.totalCommission ? `<div>${escapeHtml(reportQuarterLabel)}业务提成：${escapeHtml(reportCommissionSummary.currency || summary.currency)} ${formatMoney(reportCommissionSummary.totalCommission)}</div>` : ''}
-    ${!reportOkrOnly && reportQuarterlyBonusPlan ? `<div>季度奖金：${escapeHtml(reportQuarterlyBonusPlan.currency)} ${formatMoney(reportQuarterlyBonusSummary.amount)}</div>` : ''}
+    ${!reportOkrOnly && reportQuarterlyBonusPlan && !hideTimQuarterlyBonusInPdf ? `<div>季度奖金：${escapeHtml(reportQuarterlyBonusPlan.currency)} ${formatMoney(reportQuarterlyBonusSummary.amount)}</div>` : ''}
     <div>${escapeHtml(performanceTitle)}状态：${summary.okrFilledCount ? '已填写' : '暂未填写'}</div>
     ${(data.quarterlyOkrs || []).length ? `<div>季度OKR完成率：${summary.quarterlyOkrCompletion}%</div>` : ''}
   </div>
@@ -6047,7 +6050,12 @@ createApp({
 </html>`;
     }
 
-    function printPage() { window.print(); }
+    function printPage() {
+      const hideQuarterlyBonus = canonicalName(meta.value.employeeName) === 'Tim' && showQuarterlyBonusPlan.value;
+      if(hideQuarterlyBonus) document.body.classList.add('print-hide-tim-quarterly-bonus');
+      window.print();
+      if(hideQuarterlyBonus) document.body.classList.remove('print-hide-tim-quarterly-bonus');
+    }
 
     function resetAll() {
       if(!confirm('确定要重置所有评分？重置后可立即点击“撤销”恢复。')) return;
@@ -6181,7 +6189,7 @@ createApp({
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards, quickEmployeeGroups,
       collapsedDims, drawerOpen, okrExpanded, quarterlyOkrExpanded, recordsExpanded, quickNavExpanded, monthlyBonusExpanded, monthlyEvaluationExpanded, bonusItemsExpanded, saveTime, toastMsg, toastVisible, canUndo,
       fileInput, templateInput, recordInput,
-      baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, showQuarterlyBonusPlan, quarterlyBonusSummary, quarterlyOkrCompletion,
+      baseScore, bonusScoreTotal, totalScore, totalWeight, scoreRingPercent, showQuarterlyBonusPlan, isTimQuarterlyBonusSensitive, quarterlyBonusSummary, quarterlyOkrCompletion,
       quarterlyOkrPanelNote, quarterlyOkrToggleLabel,
       finalGrade, gradeColor, bonusAmount,
       monthlyDueTotal, monthlyPaidTotal, ratedMonthCount, monthlyEvaluationRows,
