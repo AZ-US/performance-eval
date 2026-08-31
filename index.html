@@ -533,7 +533,7 @@ body {
       <div class="app-title">月度奖金与季度OKR系统</div>
       <div class="header-inputs">
         <label>被考核人 <input v-model="meta.employeeName" placeholder="姓名"></label>
-        <label>考核人 <input v-model="meta.evaluatorName" placeholder="姓名"></label>
+        <label>考核人 <input :value="requiredEvaluatorName" readonly title="Kori由Agnes考评，其他员工由Damon考评"></label>
         <label>季度
           <select :value="meta.period" @change="changeAssessmentPeriod($event.target.value)">
             <option v-for="period in assessmentPeriodOptions" :key="period" :value="period">{{period}}</option>
@@ -3283,6 +3283,10 @@ function canonicalEmployeeName(name, renameMap = {}) {
   return current;
 }
 
+function evaluatorForEmployee(name) {
+  return canonicalEmployeeName(name) === 'Kori' ? 'Agnes' : 'Damon';
+}
+
 function isEmployeeRuleRecord(record) {
   return Boolean(record && (record.recordType === 'employee_rule' || String(record.id || '').startsWith(CLOUD_RULE_PREFIX)));
 }
@@ -3361,8 +3365,13 @@ createApp({
     if(!initial.monthlyBonuses) {
       initial.monthlyBonuses = buildMonthlyBonuses(initial.meta?.period || currentQuarterLabel(), initial.bonusBase || 300);
     }
+    initial.meta = {
+      ...(initial.meta || DEFAULT_TEMPLATE.meta),
+      evaluatorName: evaluatorForEmployee(initial.meta?.employeeName)
+    };
 
     const meta = ref(initial.meta);
+    const requiredEvaluatorName = computed(()=>evaluatorForEmployee(meta.value.employeeName));
     const bonusBase = ref(initial.bonusBase);
     const bonusCurrency = ref(initial.bonusCurrency);
     const compensationMode = ref(initial.compensationMode || DEFAULT_TEMPLATE.compensationMode);
@@ -4376,7 +4385,10 @@ createApp({
       const profile = profileForEmployee(data.meta?.employeeName);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period);
       normalizeMonthlyKpiState(data, profile, data.meta?.period);
-      meta.value = data.meta || meta.value;
+      meta.value = {
+        ...(data.meta || meta.value),
+        evaluatorName: evaluatorForEmployee(data.meta?.employeeName)
+      };
       bonusBase.value = data.bonusBase ?? bonusBase.value;
       bonusCurrency.value = data.bonusCurrency || bonusCurrency.value;
       compensationMode.value = data.compensationMode || DEFAULT_TEMPLATE.compensationMode;
@@ -4514,7 +4526,10 @@ createApp({
       if(!data.monthlyBonuses) data.monthlyBonuses = buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase ?? fallbackBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel());
       normalizeMonthlyKpiState(data, profile, data.meta?.period || record.period || meta.value.period || currentQuarterLabel());
-      meta.value = data.meta || meta.value;
+      meta.value = {
+        ...(data.meta || meta.value),
+        evaluatorName: evaluatorForEmployee(data.meta?.employeeName)
+      };
       bonusBase.value = data.bonusBase ?? fallbackBase;
       bonusCurrency.value = data.bonusCurrency || profileTemplate?.bonusCurrency || bonusCurrency.value;
       compensationMode.value = data.compensationMode || profileTemplate?.compensationMode || DEFAULT_TEMPLATE.compensationMode;
@@ -4667,6 +4682,7 @@ createApp({
       data.meta = {
         ...(data.meta || {}),
         employeeName: profile.name,
+        evaluatorName: evaluatorForEmployee(profile.name),
         period: effectivePeriod,
         department: departmentForEmployee(profile.name)
       };
@@ -4784,11 +4800,20 @@ createApp({
       return department;
     }
 
+    function normalizeCurrentEvaluator() {
+      const evaluatorName = evaluatorForEmployee(meta.value.employeeName);
+      if(meta.value.evaluatorName !== evaluatorName) {
+        meta.value = { ...meta.value, evaluatorName };
+      }
+      return evaluatorName;
+    }
+
     function normalizeRecordForLibrary(record) {
       const data = deepClone(record.data);
       const employeeName = canonicalName(record.employeeName || data.meta?.employeeName);
       data.meta = data.meta || {};
       if(employeeName) data.meta.employeeName = employeeName;
+      data.meta.evaluatorName = evaluatorForEmployee(employeeName);
       if(record.period && !data.meta.period) data.meta.period = record.period;
       const profile = profileForEmployee(employeeName);
       upgradeDataForProfileTemplate(data, profile, data.meta?.period || record.period || currentQuarterLabel());
@@ -4892,7 +4917,7 @@ createApp({
           templateName: template.templateName,
           templateVersion: `${quarterKey}-role${template.isPlaceholder ? '-placeholder' : ''}`,
           employeeName: profile.name,
-          evaluatorName: meta.value.evaluatorName || '',
+          evaluatorName: evaluatorForEmployee(profile.name),
           period,
           department: departmentForEmployee(profile.name)
         },
@@ -5007,7 +5032,8 @@ createApp({
         ...meta.value,
         templateName:'新员工OKR空白模板',
         templateVersion:'blank',
-        employeeName:''
+        employeeName:'',
+        evaluatorName:evaluatorForEmployee('')
       };
       compensationMode.value = DEFAULT_TEMPLATE.compensationMode;
       compensationNote.value = '新员工暂未配置岗位OKR标准；待上传正式文件后再补充，不自动套用其他部门或岗位OKR。';
@@ -5445,6 +5471,7 @@ createApp({
     let saveTimer = null;
     let cloudSyncTimer = null;
     function getData() {
+      normalizeCurrentEvaluator();
       saveActiveMonthlyKpiSnapshot();
       autoSyncAllMonthlyKpiBonuses();
       syncGaryOkrToCommissionPlan();
@@ -5459,6 +5486,7 @@ createApp({
       }, 2000);
     }
     watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan], autoSave, {deep:true});
+    watch(()=>meta.value.employeeName, ()=>normalizeCurrentEvaluator());
     watch(()=>meta.value.period, (period)=>{
       if(period) comparePeriod.value = period;
     });
@@ -5468,6 +5496,7 @@ createApp({
       normalizeCurrentMonthlyBonuses();
       normalizeCurrentMonthlyKpiState();
       normalizeCurrentDepartment();
+      normalizeCurrentEvaluator();
       syncGaryOkrToCommissionPlan();
       records.value = normalizeRecordList(records.value);
       focusLatestVisibleRecordPeriodIfNeeded();
@@ -5475,6 +5504,7 @@ createApp({
       persistRecords();
       if(cloudEndpoint.value.trim()) await syncCloudRecords(true, { initial:true, allowPeriodAutoSwitch:false });
       autoLoadInitialVisibleRecord();
+      normalizeCurrentEvaluator();
       collapseAllDetailModules();
       if(isAdminMode.value && cloudEndpoint.value.trim()) {
         cloudSyncTimer = setInterval(()=>{
@@ -5786,7 +5816,11 @@ createApp({
       data.compensationMode = data.compensationMode || profileTemplate?.compensationMode || DEFAULT_TEMPLATE.compensationMode;
       data.compensationNote = data.compensationNote || profileTemplate?.compensationNote || DEFAULT_TEMPLATE.compensationNote;
       data.department = departmentForEmployee(data.meta?.employeeName || employeeName, data);
-      data.meta = { ...(data.meta || {}), department:data.department };
+      data.meta = {
+        ...(data.meta || {}),
+        department:data.department,
+        evaluatorName:evaluatorForEmployee(data.meta?.employeeName || employeeName)
+      };
       data.gradeScale = normalizeGradeScale(data.gradeScale || DEFAULT_TEMPLATE.gradeScale);
       data.monthlyBonuses = data.monthlyBonuses || buildMonthlyBonuses(data.meta?.period || currentQuarterLabel(), data.bonusBase);
       normalizeProfileMonthlyBonuses(data, profile, data.meta?.period || currentQuarterLabel());
@@ -6191,7 +6225,7 @@ createApp({
     }
 
     return {
-      meta, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan,
+      meta, requiredEvaluatorName, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan,
       publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, okrGroupUrl, cloudEndpoint, cloudStatus,
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
@@ -6273,6 +6307,7 @@ function buildRecordFromData(data) {
   const department = departmentForEmployee(employeeName, data);
   data.meta = data.meta || {};
   data.meta.department = department;
+  data.meta.evaluatorName = evaluatorForEmployee(employeeName);
   data.department = department;
   return {
     id: `${employeeName}__${period}`,
