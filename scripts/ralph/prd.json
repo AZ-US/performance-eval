@@ -123,6 +123,19 @@
       "priority": 9,
       "passes": true,
       "notes": "Amy反馈'Kori月度绩效奖金发放这里，填完等级和实发奖金后，一点击Kori的名字就消失了'——这是和US-007/US-008同一个bug家族的第三个变种，但触发方式不同：这次不是刷新页面或切季度，而是在'人员切换'面板里重新点击你已经在看的那个人自己的名字。quickOpenEmployee(name)（index.html ~5074）原来完全没有'我是不是已经在这个人这个期间了'的判断，每次点击都无条件重新查找record或套用空白模板applyProfile(profile)——如果这次填写还没点过保存（saveCurrentRecord），records.value里就没有对应记录，于是查找结果为null，直接applyProfile套用空白模板，把刚填的等级和金额清空。修复：函数开头加一个'已经是同一个人同一个期间'的判断，是则直接return（仅做滚动定位），不触碰任何数据。用git show HEAD:index.html对照复现：旧代码下点两次Kori（先选中，填等级A+实发500，再点一次Kori）后两个值被清空为未评/0；新代码下点两次后A/500都保留。"
+    },
+    {
+      "id": "US-010",
+      "title": "'被考核人'输入框旁边增加快速切换员工下拉框",
+      "description": "As Amy, 我需要在'被考核人'输入框旁边直接放一个下拉框，选中某个名字就能立刻切到那个人，不用先展开'人员切换'面板再从卡片列表里找。",
+      "acceptanceCriteria": [
+        "在header-inputs区域、'被考核人'输入框后面新增一个下拉框，选项来自employeeNames（已经是viewer-scoped，Agnes财务链接只会看到财务部的人）",
+        "下拉框:value绑定meta.employeeName，@change调用quickOpenEmployee，复用已有的切换逻辑（包括US-009修的'已经是同一个人就不重置'保护）",
+        "在浏览器里验证：选中一个名字后被考核人输入框正确显示该员工姓名"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Amy觉得每次都要展开'人员切换'面板再从卡片列表里点选有点繁琐，问有没有更快的方式，讨论后确定直接在'被考核人'输入框旁边加一个下拉框。直接复用了quickOpenEmployee(name)这个已有函数（人员切换卡片点击调的也是它），所以US-009修的'已经在这个人这个期间就不重置数据'保护对这个新下拉框同样生效，不用额外处理。已在浏览器验证选择后能正确加载。"
     }
   ]
 }

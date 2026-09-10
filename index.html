@@ -533,6 +533,12 @@ body {
       <div class="app-title">月度奖金与季度OKR系统</div>
       <div class="header-inputs">
         <label>被考核人 <input v-model="meta.employeeName" placeholder="姓名"></label>
+        <label v-if="employeeNames.length">快速切换
+          <select :value="meta.employeeName" @change="quickOpenEmployee($event.target.value)">
+            <option value="">选择员工</option>
+            <option v-for="name in employeeNames" :key="name" :value="name">{{name}}</option>
+          </select>
+        </label>
         <label>考核人 <input :value="requiredEvaluatorName" readonly title="Kori由Agnes考评，其他员工由Damon考评"></label>
         <label>季度
           <select :value="meta.period" @change="changeAssessmentPeriod($event.target.value)">
