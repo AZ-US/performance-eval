@@ -81,7 +81,21 @@
       ],
       "priority": 6,
       "passes": true,
-      "notes": "这是Amy在本轮ralph批次之外直接反馈的真实bug（'财务做完我很多时候看不到结果'），调查后确认根因就是这里：submitCurrentToCloud原逻辑在existing更完整时直接return，提交请求根本没发出去，只有提交人自己能看到一闪而过的toast，Amy完全不知情。已改为confirm()弹窗，取消维持原有保护（不覆盖），确认则照常提交。已用monkey-patch的document.head.appendChild拦截JSONP脚本请求模拟'云端已有更完整记录'的场景，在浏览器里分别验证了取消和确认两条路径：取消时fetch POST未触发，确认时触发。另外记录了一个未在本次修复范围内的次要相关风险：整条记录按'员工+期间'存成一整块JSON，云端同步走的是纯时间戳last-write-wins合并，没有逐字段merge，也没有冲突提示——如果Amy和财务前后脚编辑同一条记录，仍可能互相覆盖，值得作为独立story以后再处理。"
+      "notes": "这是Amy在本轮ralph批次之外直接反馈的真实bug（'财务做完我很多时候看不到结果'），调查后确认根因就是这里：submitCurrentToCloud原逻辑在existing更完整时直接return，提交请求根本没发出去，只有提交人自己能看到一闪而过的toast，Amy完全不知情。已改为confirm()弹窗，取消维持原有保护（不覆盖），确认则照常提交。已用monkey-patch的document.head.appendChild拦截JSONP脚本请求模拟'云端已有更完整记录'的场景，在浏览器里分别验证了取消和确认两条路径：取消时fetch POST未触发，确认时触发。另外记录了一个未在本次修复范围内的次要相关风险：整条记录按'员工+期间'存成一整块JSON，云端同步走的是纯时间戳last-write-wins合并，没有逐字段merge，也没有冲突提示——如果Amy和财务前后脚编辑同一条记录，仍可能互相覆盖，值得作为独立story以后再处理。后续发现Agnes在中国大陆完全无法访问Google（无VPN），这才是'看不到结果'更根本的原因——云端同步整条链路对她来说从一开始就走不通，需要另外换一套国内可访问的后端（讨论倾向飞书多维表格+Webhook自动化），属于更大的架构改动，本次未处理，先让Agnes暂停用云端提交，改走本地导出文件人工发送给Amy再导入的临时流程。"
+    },
+    {
+      "id": "US-007",
+      "title": "总经理链接填月度奖金刷新后丢失——修复自动载入静默覆盖草稿的问题",
+      "description": "As Amy, 我需要总经理/其他人在'月度绩效奖金发放'表格里填完某个员工当月等级/金额后，刷新页面不会把刚填的内容丢掉。",
+      "acceptanceCriteria": [
+        "复现根因：loadBestVisibleRecordForCurrentView()在页面挂载时会用evaluationInputQuality()比较当前草稿和记录库/云端里同一员工同期间的候选记录，谁'字段更多'就自动载入谁，而月度奖金字段在这个质量分公式里权重很低（monthlyCount*10 vs KPI打分的kpiCount*1000），导致只填了月度奖金、没碰KPI打分的草稿几乎必然被判定为'更不完整'，被静默替换掉",
+        "hasQuarterProgress()补充对monthlyBonuses的检测（grade/paid/comment任一有值即算有进度）",
+        "loadBestVisibleRecordForCurrentView()里，当草稿已经是同一员工+期间（preferred命中）且hasQuarterProgress()为真时，不再用质量分比较，直接保留当前草稿，不自动载入候选记录",
+        "在浏览器里用旧代码复现问题（草稿的月度奖金被静默清空），再用修复后代码验证同样的场景下草稿保留"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Amy反馈'总经理链接月度绩效奖金发放这里Mia的填好已刷新就又没有了'，排查后定位到loadBestVisibleRecordForCurrentView()（index.html ~4503）的自动载入逻辑：只要visibleRecords里有一条同员工同期间、KPI打分更多的候选记录，纯用evaluationInputQuality()数值比较，草稿的月度奖金分量权重太低几乎总是输，于是刷新页面时被自动替换。用git show HEAD:index.html对照复现：seed一条Mia已有KPI打分的记录+一份Mia只填了月度奖金没碰KPI的草稿，用旧代码加载会把草稿的月度奖金清空，用修复后代码加载则保留。修复分两处：(1) hasQuarterProgress()新增对monthlyBonuses的检测；(2) loadBestVisibleRecordForCurrentView()在preferred命中且hasQuarterProgress()为真时直接return null，不再走质量分比较，草稿永远优先于自动载入。"
     }
   ]
 }

@@ -4509,7 +4509,19 @@ createApp({
         : null;
       // 有明确季度时只允许载入该季度，不能用上一季度记录兜底。
       const candidate = preferred || candidates[0];
-      if(!candidate || currentDraftInputQuality() > evaluationInputQuality(candidate)) return null;
+      if(!candidate) return null;
+      // 当前草稿如果已经是同一个员工+期间、并且已经有真实填写内容（哪怕只是月度奖金等级/金额，
+      // 没有动KPI打分），就说明用户正在这条记录上工作，不应该被"质量分"更高的云端/记录库版本
+      // 静默替换——月度奖金在质量分里权重很低，很容易被任何有KPI打分的旧记录判定为"更完整"而覆盖，
+      // 这正是"填完月度奖金一刷新就没了"的根因。只有确实还没开始填这条记录时才允许自动载入。
+      if(preferred && hasQuarterProgress({
+        dimensions: dimensions.value,
+        bonusItems: bonusItems.value,
+        quarterlyOkrs: quarterlyOkrs.value,
+        commissionPlan: commissionPlan.value,
+        monthlyBonuses: monthlyBonuses.value
+      })) return null;
+      if(currentDraftInputQuality() > evaluationInputQuality(candidate)) return null;
       loadRecord(candidate);
       return candidate;
     }
@@ -4696,7 +4708,9 @@ createApp({
         .some(kr=>String(kr.actual || '').trim() || Number(kr.completion));
       const commissionSummary = summarizeCommissionPlan(data.commissionPlan);
       const hasCommissionProgress = Boolean(commissionSummary.filledMonthCount);
-      return hasKpiProgress || hasBonusProgress || hasQuarterlyOkrProgress || hasCommissionProgress;
+      const hasMonthlyBonusProgress = (data.monthlyBonuses || [])
+        .some(row=>String(row.grade || '').trim() || Number(row.paid) || String(row.comment || '').trim());
+      return hasKpiProgress || hasBonusProgress || hasQuarterlyOkrProgress || hasCommissionProgress || hasMonthlyBonusProgress;
     }
 
     function upgradeDataForProfileTemplate(data, profile, period) {
