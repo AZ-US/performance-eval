@@ -67,8 +67,8 @@
         "确认已被 git 跟踪的文件不受影响（.gitignore 只对未跟踪文件生效，不需要额外 git rm --cached）"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "新增.gitignore后git status确认.server.log/outputs//.tmp_gary_tim_ppt//.tmp_bonus_dashboard//.codex-spreadsheet-analysis//.claude//ralph//.DS_Store都不再出现在untracked列表里；scripts/（含ralph/prd.json等任务跟踪文件）按计划保持被跟踪，未受影响。未对已跟踪文件做git rm --cached。"
     }
   ]
 }

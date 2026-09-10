@@ -1,0 +1,18 @@
+# 本地日志/系统文件
+.server.log
+.DS_Store
+
+# 一次性生成物/沟通材料输出目录（含真实薪酬数字，不应进公开仓库）
+outputs/
+.tmp_gary_tim_ppt/
+.tmp_bonus_dashboard/
+.codex-spreadsheet-analysis/
+
+# 本地工具配置与vendored工具（根目录ralph/自带独立.git，不作为子模块跟踪；
+# scripts/ralph/ 是本仓库自己的任务跟踪文件，需要保持跟踪，所以这里要用根路径锚定）
+.claude/
+/ralph/
+
+# 依赖与Office临时锁文件
+node_modules/
+~$*

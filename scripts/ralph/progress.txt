@@ -49,3 +49,15 @@ Started: 2026-09-10 (manual session-based ralph, no autonomous subprocess)
   - Pure business-logic functions declared at the top level of the single `<script>` block (not a module, no IIFE) are attached to `window` — e.g. `window.commissionRowMetrics`, `window.buildGary2026CommissionPlan`, `window.commissionStageForMonth` are directly callable from the browser console. This is a handy way to unit-test this codebase's calculation functions in isolation without going through the UI (construct a fake plan/row object, call the function, inspect the returned metrics object).
   - Before "fixing" a bug a PRD story describes, re-derive the claim from the actual current code rather than trusting the earlier research pass at face value — code can have moved on, or the research can simply have been wrong.
 ---
+
+## [2026-09-10] - US-005
+- Implemented: added root `.gitignore` covering `.server.log`, `outputs/`, `.tmp_gary_tim_ppt/`, `.tmp_bonus_dashboard/`, `.codex-spreadsheet-analysis/`, `.claude/`, `ralph/` (the vendored Ralph tool clone — it carries its own nested `.git`, so it must NOT be tracked as a normal subdirectory of this repo), `.DS_Store`, `node_modules/`, Office lock files (`~$*`). Deliberately did NOT ignore `scripts/` — `scripts/ralph/{prd.json,progress.txt,ralph.sh,CLAUDE.md}` is this repo's own tracked task-state, already committed in earlier stories.
+- Files changed: `.gitignore` (new).
+- **Learnings for future iterations:**
+  - Confirmed via `git status` that all the target directories dropped out of the untracked list and `scripts/` is unaffected (it's already tracked from US-001/002/003/004 commits).
+  - Did not `git rm --cached` anything — nothing matching these patterns was tracked to begin with, so this was purely forward-looking.
+
+## All PRD stories complete
+- US-001 through US-005 all `passes:true`. This was the first batch (candidate items 1, 2, 5, 8 from the initial codebase review) that Amy approved.
+- Remaining candidates from the original review that were NOT included in this batch and would need a fresh PRD if picked up later: eliminating name-based hardcoding in PDF/UI logic (`showDetailedRubric`, `hideTimQuarterlyBonusInPdf`, etc.), generalizing `evaluatorForEmployee`, auditing other modules for the same "文字遮挡/溢出" class of CSS bug fixed in `4e99eb6`, adding console.error logging to cloud-sync catch blocks, deciding whether to fold the PPT/Bonus-Dashboard generation scripts into the main app, unifying the PDF-export vs on-screen rendering logic, consolidating the `xxxExpanded` collapse-state refs, and basic accessibility (`aria-*`) coverage on the highest-traffic interactive components. See the conversation where these were first surfaced for full detail on each.
+---
