@@ -69,6 +69,19 @@
       "priority": 5,
       "passes": true,
       "notes": "新增.gitignore后git status确认.server.log/outputs//.tmp_gary_tim_ppt//.tmp_bonus_dashboard//.codex-spreadsheet-analysis//.claude//ralph//.DS_Store都不再出现在untracked列表里；scripts/（含ralph/prd.json等任务跟踪文件）按计划保持被跟踪，未受影响。未对已跟踪文件做git rm --cached。"
+    },
+    {
+      "id": "US-006",
+      "title": "提交前完整度拦截改为可确认覆盖，而不是静默丢弃提交",
+      "description": "As Amy, 我需要 submitCurrentToCloud（index.html）在发现云端已有记录看起来比当前提交内容更完整时，不再静默放弃提交（只给提交人自己看2秒toast），而是弹确认框让提交人自己决定是否强制覆盖，避免财务/其他考核人真实完成的新提交被这个粗糙的完整度启发式规则悄悄拦截，导致Amy一直看不到最新结果。",
+      "acceptanceCriteria": [
+        "existing完整度>当前记录完整度时，用confirm()弹窗明确告知：云端已有更完整记录（含保存时间），询问是否强制覆盖",
+        "确认后继续走原提交流程（sendCloudPayload等），取消则不提交且状态栏说明未覆盖原因",
+        "在浏览器里用mock的云端返回值验证：取消时不会发出POST请求；确认时会正常发出POST请求"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "这是Amy在本轮ralph批次之外直接反馈的真实bug（'财务做完我很多时候看不到结果'），调查后确认根因就是这里：submitCurrentToCloud原逻辑在existing更完整时直接return，提交请求根本没发出去，只有提交人自己能看到一闪而过的toast，Amy完全不知情。已改为confirm()弹窗，取消维持原有保护（不覆盖），确认则照常提交。已用monkey-patch的document.head.appendChild拦截JSONP脚本请求模拟'云端已有更完整记录'的场景，在浏览器里分别验证了取消和确认两条路径：取消时fetch POST未触发，确认时触发。另外记录了一个未在本次修复范围内的次要相关风险：整条记录按'员工+期间'存成一整块JSON，云端同步走的是纯时间戳last-write-wins合并，没有逐字段merge，也没有冲突提示——如果Amy和财务前后脚编辑同一条记录，仍可能互相覆盖，值得作为独立story以后再处理。"
     }
   ]
 }

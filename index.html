@@ -5203,9 +5203,13 @@ createApp({
       try {
         const existing = await findCloudRecordById(endpoint, record.id);
         if(existing && evaluationInputQuality(existing) > evaluationInputQuality(record)) {
-          cloudStatus.value = `云端已有更完整的 ${record.employeeName} ${record.period} 记录，未覆盖当前云端数据`;
-          showToast('云端已有更完整记录，未覆盖');
-          return;
+          const proceed = confirm(`云端已有一份看起来更完整的 ${record.employeeName} ${record.period} 记录（云端保存于 ${formatDateTime(existing.savedAt)}）。\n\n如果你确定当前内容才是最新、正确的版本，可以选择"确定"强制覆盖云端；选择"取消"则不提交，保留云端原有记录。`);
+          if(!proceed) {
+            cloudStatus.value = `云端已有更完整的 ${record.employeeName} ${record.period} 记录，未覆盖当前云端数据`;
+            showToast('已取消，未覆盖云端记录');
+            return;
+          }
+          cloudStatus.value = `已选择强制覆盖 ${record.employeeName} ${record.period} 的云端记录`;
         }
       } catch {
         // 提交前检查失败时保留原有提交通道，避免网络波动阻断正常保存。
