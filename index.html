@@ -2156,6 +2156,26 @@ function buildGary2026CommissionPlan() {
   };
 }
 
+function buildKoriQ4QuarterlyOkrs() {
+  return [
+    { id:"O1", objective:"AR应收款超账期条数显著下降，建立独立催收工作节奏", krs:[
+      { id:"KR1", name:"4月止183条超账期：Q4阶段目标待更新", target:"待Amy确认", actual:"", completion:0, comment:"⚠Q4具体条数门槛待Amy确认；Q3阶段目标为7月止≤100条、8月止≤50条，请参照实际账龄回收情况更新为9-11月对应门槛后再评分。" },
+      { id:"KR2", name:"5月业务超账期：Q4阶段目标待更新", target:"待Amy确认", actual:"", completion:0, comment:"⚠Q4具体条数门槛待Amy确认；Q3阶段目标为7月止≤120条、8月止≤80条，请参照实际账龄回收情况更新为9-11月对应门槛后再评分。" },
+      { id:"KR3", name:"每周按时发送应收款汇总表，无漏发", target:"13周全部发送", actual:"", completion:0, comment:"记录漏发次数及原因。" },
+      { id:"KR4", name:"异常账款识别及升级：季度内升级处理≥3个案例", target:"≥3个", actual:"", completion:0, comment:"列举实际升级案例。" }
+    ]},
+    { id:"O2", objective:"AP日常工作零差错，流程执行规范达标", krs:[
+      { id:"KR1", name:"付款零失误：季度内无未经审批付款、无付款错误", target:"0次失误", actual:"", completion:0, comment:"记录发生次数。" },
+      { id:"KR2", name:"报表按时提交：应收应付报表及资金预算表均按时提交", target:"0次延迟", actual:"", completion:0, comment:"记录延迟天数。" },
+      { id:"KR3", name:"车队对账：季度内所有账单15天内完成对账", target:"100%完成", actual:"", completion:0, comment:"记录未完成家数及原因。" }
+    ]},
+    { id:"O3", objective:"主动学习，每月输出可见的成长内容", krs:[
+      { id:"KR1", name:"每月提交1份自学总结或工作改进建议", target:"3份", actual:"", completion:0, comment:"可附文件链接。" },
+      { id:"KR2", name:"季度末能独立处理AR全流程，无需逐步指导", target:"可独立完成", actual:"", completion:0, comment:"由财务主管评定。" }
+    ]}
+  ];
+}
+
 const PERSON_PROFILES = {
   Freesia: {
     name: "Freesia",
@@ -2317,9 +2337,13 @@ const PERSON_PROFILES = {
     bonusBase: 500,
     bonusCurrency: "USD",
     compensationNote: "Kori基础月度绩效奖金USD500。本模板按V1.0方案采用双轨制：月度KPI满分100分，用于当月执行质量和奖金核算；季度OKR用于季初设定成长目标、季末复盘完成率。2025年止历史欠款催回效果明显者，每回收一条额外+1分，不受100分上限约束。",
-    detailedQuarters: ["Q3"],
+    detailedQuarters: ["Q3","Q4"],
     quarterTemplateNames: {
-      Q3: "Kori Finance 月度KPI Q3考核表"
+      Q3: "Kori Finance 月度KPI Q3考核表",
+      Q4: "Kori Finance 月度KPI Q4考核表"
+    },
+    quarterTemplates: {
+      Q4: { quarterlyOkrs: buildKoriQ4QuarterlyOkrs() }
     },
     bonusItems: [
       { id:"B1", name:"2025年止历史欠款催回", quantity:0, pointsPerUnit:1, score:0, comment:"催款回收效果明显者，每回收一条额外+1分，不受100分上限约束。" }

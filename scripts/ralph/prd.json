@@ -41,8 +41,8 @@
         "在浏览器里验证：Kori 的 Q4 页面和PDF导出不再显示占位提示，正常展示OKR评分明细"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Amy选择先用Q3结构占位、数值标注待确认。dimensions沿用Q3原样（AR的KR1本身已是覆盖到11月的通用催收计划文案，不需要改）。quarterlyOkrs新增buildKoriQ4QuarterlyOkrs()：O1.KR1/KR2把Q3专属的7月/8月条数目标换成'待Amy确认'+comment警示（说明Q3原目标数值供参考），O1.KR3/KR4和O2/O3保持不变（本身是可跨季度复用的通用流程目标）。已在浏览器验证Q4模板名、OKR objective结构正常显示，且旧的Q3月份数字不再出现。"
     },
     {
       "id": "US-004",
