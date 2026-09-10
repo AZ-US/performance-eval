@@ -4792,6 +4792,16 @@ createApp({
     function rolloverDraftToPeriod(targetPeriod) {
       if(!targetPeriod || meta.value.period === targetPeriod) return false;
       const targetEmployee = scopedEmployeeName || canonicalName(meta.value.employeeName);
+      // 切季度前先查一下记录库里有没有这个员工这个季度的真实存档，有的话必须载入它，
+      // 不能无条件套用空白模板——否则会出现"切到某个季度，之前存的东西看起来消失了"的假象
+      // （其实只是被空白模板盖住了显示，数据本身还在）。
+      const existingRecord = targetEmployee
+        ? visibleRecords.value.find(record=>canonicalName(record.employeeName) === targetEmployee && record.period === targetPeriod)
+        : null;
+      if(existingRecord) {
+        loadRecord(existingRecord);
+        return true;
+      }
       meta.value = { ...meta.value, period:targetPeriod };
       comparePeriod.value = targetPeriod;
       const profile = profileForEmployee(targetEmployee);

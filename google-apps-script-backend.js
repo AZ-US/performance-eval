@@ -1,5 +1,5 @@
 const SHEET_NAME = 'records';
-const SPREADSHEET_ID = '1lZPkM8gHSKKh31szuB2OFkSf5cjoMTnJoGcpnIiB9WY';
+const SPREADSHEET_ID = '1f-1wwb2UAznOrOdx42srZqBCqZRCXHvZtXztFyEvWeI';
 
 // 共享密钥不写在代码里：在 Apps Script 编辑器里点"项目设置" -> "脚本属性"，
 // 新增一条 SHARED_TOKEN = <你自己生成的随机字符串>，然后把同样的值配置到

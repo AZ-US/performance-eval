@@ -96,6 +96,20 @@
       "priority": 7,
       "passes": true,
       "notes": "Amy反馈'总经理链接月度绩效奖金发放这里Mia的填好已刷新就又没有了'，排查后定位到loadBestVisibleRecordForCurrentView()（index.html ~4503）的自动载入逻辑：只要visibleRecords里有一条同员工同期间、KPI打分更多的候选记录，纯用evaluationInputQuality()数值比较，草稿的月度奖金分量权重太低几乎总是输，于是刷新页面时被自动替换。用git show HEAD:index.html对照复现：seed一条Mia已有KPI打分的记录+一份Mia只填了月度奖金没碰KPI的草稿，用旧代码加载会把草稿的月度奖金清空，用修复后代码加载则保留。修复分两处：(1) hasQuarterProgress()新增对monthlyBonuses的检测；(2) loadBestVisibleRecordForCurrentView()在preferred命中且hasQuarterProgress()为真时直接return null，不再走质量分比较，草稿永远优先于自动载入。"
+    },
+    {
+      "id": "US-008",
+      "title": "切换季度下拉框会用空白模板覆盖已存在的该员工该季度真实记录",
+      "description": "As Amy, 我需要页面顶部'季度'下拉框切换到某个季度时，如果员工记录库里已经有这个员工这个季度的真实存档，应该载入那条记录，而不是无条件套用空白岗位模板。",
+      "acceptanceCriteria": [
+        "rolloverDraftToPeriod(targetPeriod)在套用空白模板前，先在visibleRecords里查找同员工(canonicalName)+同期间(targetPeriod)的已存记录",
+        "找到就调用loadRecord(existingRecord)，不再调用applyProfileWithoutUndo(profile)覆盖",
+        "找不到时保留原有行为（套用该员工该季度的空白岗位模板）",
+        "在浏览器里用旧代码复现问题（切换季度后真实月度奖金数据被空白模板覆盖），再用修复后代码验证同样场景下真实数据被正确载入"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "这是Amy在实际生产环境操作时发现的：她说'Mia的Q2记录，每次点开总经理链接都显示0，之前存的东西没了'。排查发现和当天的密钥迁移/新Sheet无关——是同一台电脑同一个浏览器，本地记录库里的数据还在。真正原因是rolloverDraftToPeriod()（index.html ~4792，changeAssessmentPeriod切换季度下拉框时调用）只要员工有对应岗位模板，无条件调用applyProfileWithoutUndo(profile)套用空白模板，从来不检查记录库里是否已经有这个员工这个季度的存档——所以'切季度'这个动作本身就会把已存的真实数据用空白模板盖掉（数据在visibleRecords/localStorage里其实还在，只是被覆盖了当前表单显示）。修复：切季度前先在visibleRecords里按canonicalName(employeeName)+targetPeriod精确匹配已存记录，找到就loadRecord()而不是套用空白模板。用git show HEAD:index.html对照复现验证：旧代码切到Q2后月度奖金变blank，新代码切到Q2后正确显示真实存的grade/paid/comment。测试方法学习到一点：Vue的autoSave有2秒防抖，测试时读localStorage要等够2.5秒以上，否则会读到防抖尚未写入的旧值，之前因此误判过一次。"
     }
   ]
 }
