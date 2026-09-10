@@ -1,0 +1,20 @@
+# Ralph Progress Log
+Started: 2026-09-10 (manual session-based ralph, no autonomous subprocess)
+---
+
+## Codebase Patterns
+- index.html is one giant Vue 3 Composition API file (`createApp({setup(){...}})`, ~6400 lines). No build step, no tests. All refs/functions used in the template must be added to the big `return {...}` object at the end of `setup()`.
+- Cloud sync has three transports that must all carry the same fields: GET via JSONP (`fetchCloudJsonp`, script-tag with query params — used for `list`/verify), POST via `fetch(mode:'no-cors')` with a `sendBeacon` fallback and an iframe+form fallback (`submitCloudPayloadByForm`) — all three POST paths reuse the same serialized `body` string, so adding a field to that one `JSON.stringify({...})` call covers all three.
+- Share links are built by 4 near-duplicate functions (`buildSharedUrl`, `buildScopedSharedUrl`, `buildEmployeeSharedUrl`, `buildOkrGroupSharedUrl`) that each independently set `cloud=` (and now `token=`) as URL params — remember to update all four when changing what a share link carries.
+- The Google Apps Script backend (`google-apps-script-backend.js`) is a separate file that Amy manually pastes into her Apps Script project and redeploys — editing it in this repo does NOT update her live deployment. Any backend change must be called out explicitly as a manual step for Amy.
+
+## [2026-09-10] - US-001
+- Implemented: shared-secret token auth for the Google Apps Script cloud sync endpoint.
+  - `google-apps-script-backend.js`: added `requireToken_()` checked in both `doGet` and `doPost`, reading the expected value from `PropertiesService.getScriptProperties().getProperty('SHARED_TOKEN')` (not hardcoded, so the secret never enters git history).
+  - `index.html`: removed the hardcoded working `DEFAULT_CLOUD_ENDPOINT` (was a real, live Apps Script URL committed in plaintext to the public repo — meant anyone visiting the public GitHub Pages site with zero params got full read access to all employee comp data). Added `cloudToken` ref (localStorage-backed, same pattern as `cloudEndpoint`), a "云端密钥" password input next to "云端提交地址" in the admin toolbar, and threaded the token through `fetchCloudJsonp` (query param), `sendCloudPayload` and `submitEmployeeRuleToCloud` (JSON body field), and all 4 `build*SharedUrl` functions (`token=` query param).
+- Files changed: `google-apps-script-backend.js`, `index.html`, `云端同步设置指南.md`, `scripts/ralph/prd.json`.
+- **Learnings for future iterations:**
+  - Verified in browser (local `python3 -m http.server` via `.claude/launch.json` "绩效考核" config): after clearing localStorage, cloud endpoint shows "云端地址未配置" (no auto-connect) and there are no console errors. Confirmed via `navigator.clipboard.writeText` override that a generated share link (e.g. "复制Agnes财务链接") correctly includes both `cloud=` and `token=`.
+  - This is a manual-deploy-required change: the code fix alone does nothing until Amy (a) adds `SHARED_TOKEN` to her Apps Script project's Script Properties, (b) redeploys the web app (or it's already deployed and just needs the code update pasted in + a new deployment version), (c) fills in "云端密钥" in the admin panel locally, (d) re-generates and re-sends the per-viewer share links (old links without `token=` will now fail auth). Flag this to Amy before considering US-001 fully "done" in the real-world sense — the code/PRD side is complete but the operational rollout is on her.
+  - Pattern for future secret-bearing config in this app: don't hardcode a working default in index.html; require it to be filled in via the admin panel (persisted to localStorage) or passed via URL param on a privately-shared link, mirroring how `cloudEndpoint` itself is already handled.
+---

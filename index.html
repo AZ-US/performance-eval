@@ -566,6 +566,9 @@ body {
         <span>云端提交地址</span>
         <input v-model="cloudEndpoint" placeholder="Google Apps Script Web App URL" style="min-width:360px">
         <button class="btn btn-outline" @click="saveCloudEndpoint">保存地址</button>
+        <span>云端密钥</span>
+        <input v-model="cloudToken" type="password" placeholder="与Apps Script脚本属性SHARED_TOKEN一致" style="min-width:220px">
+        <button class="btn btn-outline" @click="saveCloudToken">保存密钥</button>
         <span>{{cloudStatus}}</span>
       </div>
     </div>
@@ -3341,7 +3344,10 @@ createApp({
     const STORAGE_KEY = 'monthly_bonus_okr_draft_v3';
     const RECORDS_KEY = 'employee_eval_records_v1';
     const CLOUD_ENDPOINT_KEY = 'employee_eval_cloud_endpoint_v1';
-    const DEFAULT_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwkGHCMY1NoYJGswSnMUTPBnoQ1UCaJcNe7_vA2_mls9HiOJPNIIoYkuNx4bNjF1KGz/exec';
+    const CLOUD_TOKEN_KEY = 'employee_eval_cloud_token_v1';
+    // 不再内置默认可用的云端地址：公开仓库源码里放一个随时能用的地址等于把全员数据钥匙交给任何访客。
+    // 首次使用需要管理员在下方"云端提交地址/云端密钥"里手动填入并保存，或通过 Amy 私下发送的专属链接（带 cloud=、token=）打开。
+    const DEFAULT_CLOUD_ENDPOINT = '';
     const LEGACY_CLOUD_ENDPOINTS = [
       'https://script.google.com/macros/s/AKfycbyiWj6bwh46kOm_OGdRep8uYOqbURJP_bK0wVl19cZBcpn5o1gJpW3Ks5Thgc9bkjaiOg/exec'
     ];
@@ -3452,12 +3458,18 @@ createApp({
     const initialCloudEndpoint = urlCloudEndpoint || savedCloudEndpoint || DEFAULT_CLOUD_ENDPOINT;
     const cloudEndpoint = ref(initialCloudEndpoint);
     if(rawUrlCloudEndpoint || rawSavedCloudEndpoint !== initialCloudEndpoint) localStorage.setItem(CLOUD_ENDPOINT_KEY, initialCloudEndpoint);
+    const rawUrlCloudToken = (urlParams.get('token') || '').trim();
+    const rawSavedCloudToken = (localStorage.getItem(CLOUD_TOKEN_KEY) || '').trim();
+    const initialCloudToken = rawUrlCloudToken || rawSavedCloudToken;
+    const cloudToken = ref(initialCloudToken);
+    if(rawUrlCloudToken && rawUrlCloudToken !== rawSavedCloudToken) localStorage.setItem(CLOUD_TOKEN_KEY, initialCloudToken);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
     let initialCloudRecordLoaded = false;
     function buildSharedUrl(includeAdmin = false) {
       const endpoint = cloudEndpoint.value.trim();
       const url = new URL(publicUrl);
       if(endpoint) url.searchParams.set('cloud', endpoint);
+      if(cloudToken.value.trim()) url.searchParams.set('token', cloudToken.value.trim());
       if(includeAdmin) url.searchParams.set('admin', '1');
       return url.toString();
     }
@@ -3465,6 +3477,7 @@ createApp({
       const endpoint = cloudEndpoint.value.trim();
       const url = new URL(publicUrl);
       if(endpoint) url.searchParams.set('cloud', endpoint);
+      if(cloudToken.value.trim()) url.searchParams.set('token', cloudToken.value.trim());
       url.searchParams.set('viewer', viewer);
       url.searchParams.set('dept', dept);
       return url.toString();
@@ -3473,6 +3486,7 @@ createApp({
       const endpoint = cloudEndpoint.value.trim();
       const url = new URL(publicUrl);
       if(endpoint) url.searchParams.set('cloud', endpoint);
+      if(cloudToken.value.trim()) url.searchParams.set('token', cloudToken.value.trim());
       url.searchParams.set('viewer', viewer);
       url.searchParams.set('employee', employee);
       return url.toString();
@@ -3481,6 +3495,7 @@ createApp({
       const endpoint = cloudEndpoint.value.trim();
       const url = new URL(publicUrl);
       if(endpoint) url.searchParams.set('cloud', endpoint);
+      if(cloudToken.value.trim()) url.searchParams.set('token', cloudToken.value.trim());
       url.searchParams.set('viewer', 'Damon');
       url.searchParams.set('okrOnly', '1');
       url.searchParams.set('employees', okrGroupEmployeeDefaults.join(','));
@@ -4900,7 +4915,7 @@ createApp({
           method: 'POST',
           mode: 'no-cors',
           headers: {'Content-Type':'text/plain;charset=utf-8'},
-          body: JSON.stringify({version:1, submittedAt:new Date().toISOString(), record:rule})
+          body: JSON.stringify({version:1, submittedAt:new Date().toISOString(), record:rule, token:cloudToken.value.trim()})
         });
       } catch {
         // Local rule still applies; Amy can retry by syncing/submitting later.
@@ -5142,6 +5157,12 @@ createApp({
       showToast(cloudEndpoint.value ? '云端地址已保存，专用链接已生成' : '云端地址已清空');
     }
 
+    function saveCloudToken() {
+      cloudToken.value = cloudToken.value.trim();
+      localStorage.setItem(CLOUD_TOKEN_KEY, cloudToken.value);
+      showToast(cloudToken.value ? '云端密钥已保存，专用链接已生成' : '云端密钥已清空');
+    }
+
     async function submitCurrentToCloud() {
       const endpoint = cloudEndpoint.value.trim();
       if(!endpoint) {
@@ -5185,7 +5206,7 @@ createApp({
     }
 
     async function sendCloudPayload(endpoint, record) {
-      const body = JSON.stringify({version:1, submittedAt:new Date().toISOString(), record});
+      const body = JSON.stringify({version:1, submittedAt:new Date().toISOString(), record, token:cloudToken.value.trim()});
       try {
         await fetch(endpoint, {
           method: 'POST',
@@ -5262,7 +5283,7 @@ createApp({
           cleanup();
           reject(new Error('cloud sync failed'));
         };
-        script.src = `${endpoint}${separator}action=list&callback=${callbackName}&_=${Date.now()}`;
+        script.src = `${endpoint}${separator}action=list&callback=${callbackName}&token=${encodeURIComponent(cloudToken.value.trim())}&_=${Date.now()}`;
         document.head.appendChild(script);
       });
     }
@@ -6226,7 +6247,7 @@ createApp({
 
     return {
       meta, requiredEvaluatorName, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan,
-      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, okrGroupUrl, cloudEndpoint, cloudStatus,
+      publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, okrGroupUrl, cloudEndpoint, cloudToken, saveCloudToken, cloudStatus,
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards, quickEmployeeGroups,

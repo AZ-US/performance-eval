@@ -1,9 +1,23 @@
 const SHEET_NAME = 'records';
 const SPREADSHEET_ID = '1lZPkM8gHSKKh31szuB2OFkSf5cjoMTnJoGcpnIiB9WY';
 
+// 共享密钥不写在代码里：在 Apps Script 编辑器里点"项目设置" -> "脚本属性"，
+// 新增一条 SHARED_TOKEN = <你自己生成的随机字符串>，然后把同样的值配置到
+// index.html 的"云端密钥"输入框里。这样密钥不会随代码一起提交进公开仓库。
+function requireToken_(providedToken) {
+  const expected = PropertiesService.getScriptProperties().getProperty('SHARED_TOKEN');
+  if (!expected) {
+    throw new Error('SHARED_TOKEN 未在脚本属性中配置，请先在 Apps Script 项目设置里添加');
+  }
+  if (!providedToken || providedToken !== expected) {
+    throw new Error('unauthorized');
+  }
+}
+
 function doPost(e) {
   try {
     const payload = parsePayload_(e);
+    requireToken_(payload.token || (e.parameter && e.parameter.token));
     const record = payload.record || payload;
     upsertRecord_(record);
     return json_({ok: true, savedAt: new Date().toISOString(), id: record.id});
@@ -13,9 +27,20 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  const callback = e.parameter.callback;
+  try {
+    requireToken_(e.parameter.token);
+  } catch (err) {
+    const payload = {ok: false, error: String(err)};
+    if (callback) {
+      return ContentService
+        .createTextOutput(`${callback}(${JSON.stringify(payload)})`)
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return json_(payload);
+  }
   const records = getRecords_();
   const payload = {ok: true, records};
-  const callback = e.parameter.callback;
   if (callback) {
     return ContentService
       .createTextOutput(`${callback}(${JSON.stringify(payload)})`)

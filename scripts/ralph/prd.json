@@ -1,0 +1,74 @@
+{
+  "project": "月度奖金与季度OKR系统",
+  "branchName": "main",
+  "description": "第一批修复：云端同步接口鉴权、Mia/Kori Q4季度模板补齐、Gary提成权重兜底、补充.gitignore",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "云端同步接口增加共享密钥校验",
+      "description": "As Amy, 我需要云端同步接口（google-apps-script-backend.js 的 doGet/doPost）不再对任何请求都明文返回全员薪酬数据，防止公开仓库里硬编码的 DEFAULT_CLOUD_ENDPOINT（index.html 约第3344行）被外部人拿到后读取全员数据。",
+      "acceptanceCriteria": [
+        "doGet/doPost 增加一个共享密钥参数（如 e.parameter.token）校验，密钥不匹配时返回错误而非数据",
+        "index.html 里所有调用云端接口的地方（fetch cloud endpoint）带上该密钥参数",
+        "密钥本身不硬编码明文提交到仓库最终版本前需与Amy确认存放方式（如作为 localStorage 配置项，而不是写死在index.html里）",
+        "更新 云端同步设置指南.md，加一段说明这个密钥是什么、如何配置、以及该链接等同于全员薪酬数据钥匙的风险提示",
+        "在浏览器里验证：不带密钥访问接口应被拒绝，带正确密钥的现有同步流程（提交/拉取记录）仍正常工作"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "SHARED_TOKEN 存放在 Apps Script 脚本属性里（不写入代码）；index.html 移除了默认可用的 DEFAULT_CLOUD_ENDPOINT；新增云端密钥输入框及 token 参数贯穿 GET(JSONP)/POST(fetch+beacon+form) 三条通道；四个分享链接生成函数都会带上 token。Amy 需要手动在 Apps Script 项目设置里配置 SHARED_TOKEN 并重新生成分享链接后功能才可用（本地代码改动无法自动同步到已部署的 Apps Script）。"
+    },
+    {
+      "id": "US-002",
+      "title": "补齐 Mia 的 Q4 季度OKR模板",
+      "description": "As Amy, 我需要 Mia 的 Q4 页面/PDF 显示正式的季度OKR评分明细，而不是退回占位模板，因为 index.html 里 PERSON_PROFILES.Mia.detailedQuarters 目前只有 [\"Q3\"]。",
+      "acceptanceCriteria": [
+        "PERSON_PROFILES.Mia.detailedQuarters 增加 \"Q4\"",
+        "参照 Freesia/Gary/Tim 已有的 Q4 detailedQuarterProfile 结构，为 Mia 补充对应的 Q4 KPI/KR 明细（沿用 Mia 现有 Q3 的KPI维度和权重结构，不臆造无关业务指标，若某些KPI具体达标数值需要Amy确认，用profile里已有的Q3同类指标的评分标准做同构映照并在notes里注明"待Amy核对具体数值"）",
+        "在浏览器里验证：Mia 的 Q4 页面和PDF导出不再显示占位提示，正常展示OKR评分明细"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "补齐 Kori 的 Q4 季度OKR模板",
+      "description": "As Amy, 我需要 Kori 的 Q4 页面/PDF 显示正式的季度OKR评分明细，而不是退回占位模板，因为 index.html 里 PERSON_PROFILES.Kori.detailedQuarters 目前只有 [\"Q3\"]。",
+      "acceptanceCriteria": [
+        "PERSON_PROFILES.Kori.detailedQuarters 增加 \"Q4\"",
+        "参照 Kori 现有 Q3 的KPI维度结构补充对应 Q4 明细，具体达标数值不确定处在notes里注明"待Amy核对具体数值"",
+        "在浏览器里验证：Kori 的 Q4 页面和PDF导出不再显示占位提示，正常展示OKR评分明细"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Gary提成阶段权重表增加默认兜底，避免静默算错",
+      "description": "As Amy, 我需要 normalizeCommissionStageWeights（index.html 约2512行）在找不到对应季度的 GARY_Q3_Q4_STAGE_WEIGHTS key 时，不再静默 fallback 到错误的 {customer:1,business:0,leadership:0}，而是有明确提示，避免 Q1-2027 之后提成计算悄悄出错。",
+      "acceptanceCriteria": [
+        "GARY_Q3_Q4_STAGE_WEIGHTS 增加一个合理的 default 权重，或在取不到对应季度权重时通过 UI 提示（如 toast/警示文案）告知'该季度提成权重未配置，当前使用默认值，请确认'",
+        "不影响已有 Q3/Q4 2026 的提成计算结果（回归验证）",
+        "在浏览器里验证：切换到一个权重表里不存在的季度时能看到明确提示，而不是静默使用错误权重"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "补充项目级 .gitignore",
+      "description": "As Amy, 我需要项目根目录有 .gitignore，避免误提交临时产物、生成物和敏感数据（.tmp_bonus_dashboard/build_bonus_dashboard.mjs 里硬编码了员工真实底薪数字）。",
+      "acceptanceCriteria": [
+        "新增 .gitignore，忽略：.server.log、outputs/、.tmp_gary_tim_ppt/、.tmp_bonus_dashboard/、.codex-spreadsheet-analysis/、.claude/、ralph/（vendored工具本身带有嵌套.git，不应被主仓库跟踪）、.DS_Store、node_modules/、Office临时锁文件（~$*）。注意：scripts/ralph/（prd.json、progress.txt等任务跟踪文件）不要忽略，这是有意跟踪进主仓库的任务状态",
+        "不改动任何业务代码",
+        "确认已被 git 跟踪的文件不受影响（.gitignore 只对未跟踪文件生效，不需要额外 git rm --cached）"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
