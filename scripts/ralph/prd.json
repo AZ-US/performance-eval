@@ -28,8 +28,8 @@
         "在浏览器里验证：Mia 的 Q4 页面和PDF导出不再显示占位提示，正常展示OKR评分明细"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Mia的Q3维度内容本身没有quarter专属数值（写的是通用管理框架，不是像Gary/Tim那样按季度变化的硬指标），所以Q4沿用与Q3完全相同的O1-O4维度/KPI/权重（未新增quarterTemplates override，交由现有fallback逻辑复用profile.dimensions），只新增了detailedQuarters里的Q4和对应quarterTemplateNames.Q4标题。已在浏览器验证Q4模板名和维度正常渲染，不再显示占位提示。若Amy希望Q4有区别于Q3的具体考核重点，需要另外提供内容。"
     },
     {
       "id": "US-003",
