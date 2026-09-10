@@ -54,8 +54,8 @@
         "在浏览器里验证：切换到一个权重表里不存在的季度时能看到明确提示，而不是静默使用错误权重"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "实现前重新核实代码发现原始bug描述不成立：GARY_Q3_Q4_STAGE_WEIGHTS早已有default:{customer:0.55,business:0.30,leadership:0.15}（2026-07-21就加了），不会静默用{1,0,0}算错。跟Amy确认后改为只加一个小提示：commissionRowMetrics新增stageWeightIsDefault字段，当某月的stage不在plan配置的stageWeights里（且不是legacyModel）时为true；在屏幕表格状态列、Excel导出状态列、PDF导出状态列都加了'权重未配置，用默认值'提示。已在浏览器用console直接调用commissionRowMetrics验证：Q3-2026/Q4-2026(已配置)为false，虚构的Q3-2027(未配置)为true且沿用合理default权重而非硬编码1/0/0。"
     },
     {
       "id": "US-005",
