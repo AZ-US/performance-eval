@@ -110,6 +110,19 @@
       "priority": 8,
       "passes": true,
       "notes": "这是Amy在实际生产环境操作时发现的：她说'Mia的Q2记录，每次点开总经理链接都显示0，之前存的东西没了'。排查发现和当天的密钥迁移/新Sheet无关——是同一台电脑同一个浏览器，本地记录库里的数据还在。真正原因是rolloverDraftToPeriod()（index.html ~4792，changeAssessmentPeriod切换季度下拉框时调用）只要员工有对应岗位模板，无条件调用applyProfileWithoutUndo(profile)套用空白模板，从来不检查记录库里是否已经有这个员工这个季度的存档——所以'切季度'这个动作本身就会把已存的真实数据用空白模板盖掉（数据在visibleRecords/localStorage里其实还在，只是被覆盖了当前表单显示）。修复：切季度前先在visibleRecords里按canonicalName(employeeName)+targetPeriod精确匹配已存记录，找到就loadRecord()而不是套用空白模板。用git show HEAD:index.html对照复现验证：旧代码切到Q2后月度奖金变blank，新代码切到Q2后正确显示真实存的grade/paid/comment。测试方法学习到一点：Vue的autoSave有2秒防抖，测试时读localStorage要等够2.5秒以上，否则会读到防抖尚未写入的旧值，之前因此误判过一次。"
+    },
+    {
+      "id": "US-009",
+      "title": "人员切换点同一个员工的名字会把未保存的填写内容清空",
+      "description": "As Amy, 我需要'人员切换'面板里点击某个员工的名字时，如果已经在这个员工这个期间的页面上，不应该重新加载/清空当前正在填写但还没保存的内容。",
+      "acceptanceCriteria": [
+        "quickOpenEmployee(name)开头判断：canonicalName(name)===canonicalName(meta.value.employeeName)且期间也一致时，视为'已经在这个人这个期间'，直接return（只做滚动定位），不再走record查找/applyProfile重置流程",
+        "点击切换到不同员工或不同期间时行为不变（原有查找已存记录/套用空白模板的逻辑保留）",
+        "在浏览器里用旧代码复现问题（填完Kori的等级和实发金额后，点一次Kori的名字，两个值被清空），再用修复后代码验证同样操作下数据保留"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Amy反馈'Kori月度绩效奖金发放这里，填完等级和实发奖金后，一点击Kori的名字就消失了'——这是和US-007/US-008同一个bug家族的第三个变种，但触发方式不同：这次不是刷新页面或切季度，而是在'人员切换'面板里重新点击你已经在看的那个人自己的名字。quickOpenEmployee(name)（index.html ~5074）原来完全没有'我是不是已经在这个人这个期间了'的判断，每次点击都无条件重新查找record或套用空白模板applyProfile(profile)——如果这次填写还没点过保存（saveCurrentRecord），records.value里就没有对应记录，于是查找结果为null，直接applyProfile套用空白模板，把刚填的等级和金额清空。修复：函数开头加一个'已经是同一个人同一个期间'的判断，是则直接return（仅做滚动定位），不触碰任何数据。用git show HEAD:index.html对照复现：旧代码下点两次Kori（先选中，填等级A+实发500，再点一次Kori）后两个值被清空为未评/0；新代码下点两次后A/500都保留。"
     }
   ]
 }

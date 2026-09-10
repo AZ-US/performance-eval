@@ -5078,6 +5078,15 @@ createApp({
         return;
       }
       const targetPeriod = normalizePeriodParam(comparePeriod.value || meta.value.period || currentQuarterLabel());
+      // 已经在这个员工这个期间的页面上时，再点一次同一个名字不应该重新加载——
+      // 否则会把还没保存的当前填写内容（比如刚填的月度奖金）用记录库里的旧版本或空白模板覆盖掉。
+      if(canonicalName(name) === canonicalName(meta.value.employeeName) && (!targetPeriod || meta.value.period === targetPeriod)) {
+        quickEmployeeSelect.value = name;
+        setTimeout(()=>{
+          document.querySelector('.bonus-card')?.scrollIntoView({ behavior:'smooth', block:'start' });
+        }, 60);
+        return;
+      }
       const record = visibleRecords.value
         .filter(item=>canonicalName(item.employeeName) === canonicalName(name) && (!targetPeriod || item.period === targetPeriod))
         .sort((a,b)=>new Date(b.savedAt) - new Date(a.savedAt))[0] || null;
