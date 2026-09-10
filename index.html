@@ -542,6 +542,7 @@ body {
       </div>
       <div class="header-actions">
         <button class="btn btn-outline" :disabled="!canUndo" @click="undoLastAction">撤销</button>
+        <button class="btn btn-outline" v-if="cloudEndpoint.trim() && !isAdminMode && !isOkrOnlyMode" @click="syncCloudRecords()">同步云端记录</button>
         <button class="btn btn-outline" v-if="isAdminMode" @click="adminToolsOpen=!adminToolsOpen">{{adminToolsOpen ? '收起Amy管理' : 'Amy管理'}}</button>
         <input type="file" ref="fileInput" class="hidden-input" accept=".json" @change="importJSON">
       </div>
