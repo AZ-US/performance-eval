@@ -51,6 +51,12 @@ body {
 .admin-cloud-row { width:100%; margin-bottom:0 !important; }
 .viewer-scope-bar { margin-top:12px; padding:9px 12px; border-radius:10px; background:#FFFBEB; color:#92400E; font-size:13px; font-weight:800; border:1px solid #FDE68A; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .viewer-scope-bar span { color:#78350F; }
+.cloud-update-bar { margin-top:12px; padding:10px 14px; border-radius:10px; background:#ECFDF5; color:#065F46; font-size:13px; font-weight:800; border:1px solid #6EE7B7; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cloud-update-bar .cloud-update-text { flex:1; min-width:220px; font-weight:700; color:#065F46; }
+.cloud-update-bar .cloud-update-text b { color:#047857; }
+.cloud-update-bar .btn-success { background:#047857; color:#fff; border:1px solid #047857; }
+.cloud-update-bar .btn-success:hover { background:#065F46; }
+.cloud-status-bar { margin-top:8px; padding:7px 12px; border-radius:10px; background:#F1F5F9; color:var(--text-light); font-size:12px; border:1px solid #E2E8F0; }
 .btn { border:none; border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
 .btn:disabled { opacity:0.45; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
 .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
@@ -581,6 +587,16 @@ body {
     </div>
     <div class="viewer-scope-bar" v-if="isScopedViewer">
       当前查看身份：<span>{{viewerScopeLabel}}</span>，{{viewerScopeDescription}}
+    </div>
+    <div class="cloud-update-bar" v-if="pendingCloudRecord">
+      <span class="cloud-update-text">
+        云端有更新的 <b>{{pendingCloudRecord.employeeName}} {{pendingCloudRecord.period}}</b> 记录（{{formatDateTime(pendingCloudRecord.savedAt)}} 提交），当前页面显示的还是你自己未保存的填写。
+      </span>
+      <button class="btn btn-success" @click="loadPendingCloudRecord">载入云端版本</button>
+      <button class="btn btn-outline" @click="dismissPendingCloudRecord">保留我的填写</button>
+    </div>
+    <div class="cloud-status-bar" v-if="cloudEndpoint.trim() && !(isAdminMode && adminToolsOpen)">
+      云端状态：{{cloudStatus}}
     </div>
   </header>
 
@@ -3244,6 +3260,7 @@ const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 const HIDDEN_EMPLOYEE_NAMES = ['测试员工'];
 const EMPLOYEE_RENAME_KEY = 'employee_eval_rename_map_v1';
 const EMPLOYEE_HIDE_KEY = 'employee_eval_hidden_names_v1';
+const SEEN_RECORD_VERSION_KEY = 'employee_eval_seen_record_version_v1';
 const CLOUD_RULE_PREFIX = '__employee_rule__';
 const DEFAULT_EMPLOYEE_RENAMES = {
   timlau: 'Tim',
@@ -3308,6 +3325,29 @@ function loadEmployeeHiddenNames() {
 
 function saveEmployeeHiddenNames(names) {
   localStorage.setItem(EMPLOYEE_HIDE_KEY, JSON.stringify([...new Set((names || []).map(name=>String(name || '').trim()).filter(Boolean))]));
+}
+
+// 记住每条记录"本机已经见过哪个版本"，这样刷新页面不会对同一个版本反复提示载入。
+function seenRecordVersion(id) {
+  if(!id) return null;
+  try {
+    const data = JSON.parse(localStorage.getItem(SEEN_RECORD_VERSION_KEY) || '{}');
+    return data && typeof data === 'object' && !Array.isArray(data) ? (data[id] || null) : null;
+  } catch {
+    localStorage.removeItem(SEEN_RECORD_VERSION_KEY);
+    return null;
+  }
+}
+
+function markRecordVersionSeen(record) {
+  if(!record || !record.id || !record.savedAt) return;
+  let data = {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SEEN_RECORD_VERSION_KEY) || '{}');
+    if(parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;
+  } catch { data = {}; }
+  data[record.id] = record.savedAt;
+  localStorage.setItem(SEEN_RECORD_VERSION_KEY, JSON.stringify(data));
 }
 
 function canonicalEmployeeName(name, renameMap = {}) {
@@ -3500,6 +3540,16 @@ createApp({
     const cloudToken = ref(initialCloudToken);
     if(rawUrlCloudToken && rawUrlCloudToken !== rawSavedCloudToken) localStorage.setItem(CLOUD_TOKEN_KEY, initialCloudToken);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
+    const pendingCloudRecordRaw = ref(null);
+    // 只在提示条指向的记录确实就是当前正在看的员工+季度时才显示，切换人员/季度后自动收起。
+    const pendingCloudRecord = computed(()=>{
+      const record = pendingCloudRecordRaw.value;
+      if(!record) return null;
+      if(canonicalName(record.employeeName) !== canonicalName(meta.value.employeeName)) return null;
+      const targetPeriod = normalizePeriodParam(comparePeriod.value || meta.value.period);
+      if(targetPeriod && record.period !== targetPeriod) return null;
+      return record;
+    });
     let initialCloudRecordLoaded = false;
     function buildSharedUrl(includeAdmin = false) {
       const endpoint = cloudEndpoint.value.trim();
@@ -4533,6 +4583,38 @@ createApp({
       return candidate;
     }
 
+    // 云端有比当前表单更新的版本时（例如管理员刚录入了这名员工的KPI），在页面上挂一条提示条。
+    // 不自动覆盖——那会吃掉未保存的填写；也不能不提示——否则考评人根本不知道有新数据。
+    function detectNewerCloudRecordForCurrentView() {
+      const currentName = canonicalName(meta.value.employeeName);
+      if(!currentName) return;
+      const targetPeriod = normalizePeriodParam(urlPeriod || comparePeriod.value || meta.value.period);
+      const candidate = visibleRecords.value
+        .filter(record=>canonicalName(record.employeeName) === currentName && (!targetPeriod || record.period === targetPeriod))
+        .sort((a,b)=>new Date(b.savedAt) - new Date(a.savedAt))[0];
+      if(!candidate || !candidate.savedAt) return;
+      const seen = seenRecordVersion(candidate.id);
+      if(seen && new Date(candidate.savedAt) <= new Date(seen)) return;
+      pendingCloudRecordRaw.value = candidate;
+    }
+
+    function loadPendingCloudRecord() {
+      const record = pendingCloudRecord.value;
+      if(!record) return;
+      pendingCloudRecordRaw.value = null;
+      loadRecord(record);
+      flushAutoSave();
+      showToast(`已载入云端版本：${record.employeeName} ${record.period}`);
+    }
+
+    function dismissPendingCloudRecord() {
+      const record = pendingCloudRecord.value;
+      if(!record) return;
+      // 记下这个版本，避免每次同步/刷新都再提示同一条记录。
+      markRecordVersionSeen(record);
+      pendingCloudRecordRaw.value = null;
+    }
+
     function autoLoadInitialVisibleRecord() {
       if(initialCloudRecordLoaded) return false;
       const candidate = loadBestVisibleRecordForCurrentView();
@@ -4570,6 +4652,7 @@ createApp({
       comparePeriod.value = record.period;
       selectedEmployee.value = record.employeeName;
       persistRecords();
+      markRecordVersionSeen(record);
       showToast('已保存到员工记录库');
       return record;
     }
@@ -4580,6 +4663,7 @@ createApp({
         return;
       }
       pushUndoSnapshot(`载入 ${record.employeeName}`);
+      markRecordVersionSeen(record);
       const data = deepClone(record.data);
       const profile = profileForEmployee(record.employeeName);
       const period = data.meta?.period || record.period || meta.value.period || currentQuarterLabel();
@@ -5415,6 +5499,8 @@ createApp({
           normalizeCurrentMonthlyKpiState();
         }
         const loadedRecord = shouldLoadCurrentRecord ? loadBestVisibleRecordForCurrentView() : null;
+        if(loadedRecord) pendingCloudRecordRaw.value = null;
+        else detectNewerCloudRecordForCurrentView();
         cloudStatus.value = `已同步 ${incoming.length} 条记录，当前查看 ${comparePeriod.value}`;
         if(loadedRecord) cloudStatus.value = `已同步 ${incoming.length} 条记录，已载入 ${loadedRecord.employeeName} ${loadedRecord.period}`;
         if(!silent) showToast(`云端记录已同步，当前查看 ${comparePeriod.value}`);
@@ -5578,6 +5664,12 @@ createApp({
         localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
         saveTime.value = new Date().toLocaleTimeString('zh-CN');
       }, 2000);
+    }
+    // 立刻落盘，不等2秒防抖——载入云端版本后马上刷新/关页面时，草稿不能还是旧内容。
+    function flushAutoSave() {
+      clearTimeout(saveTimer);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getData()));
+      saveTime.value = new Date().toLocaleTimeString('zh-CN');
     }
     watch([meta, bonusBase, bonusCurrency, compensationMode, compensationNote, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan], autoSave, {deep:true});
     watch(()=>meta.value.employeeName, ()=>normalizeCurrentEvaluator());
@@ -6321,6 +6413,7 @@ createApp({
     return {
       meta, requiredEvaluatorName, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan,
       publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, okrGroupUrl, cloudEndpoint, cloudToken, saveCloudToken, cloudStatus,
+      pendingCloudRecord, loadPendingCloudRecord, dismissPendingCloudRecord,
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards, quickEmployeeGroups,
