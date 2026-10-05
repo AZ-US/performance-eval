@@ -57,6 +57,12 @@ body {
 .cloud-update-bar .btn-success { background:#047857; color:#fff; border:1px solid #047857; }
 .cloud-update-bar .btn-success:hover { background:#065F46; }
 .cloud-status-bar { margin-top:8px; padding:7px 12px; border-radius:10px; background:#F1F5F9; color:var(--text-light); font-size:12px; border:1px solid #E2E8F0; }
+.cloud-fail-bar { margin-top:12px; padding:11px 14px; border-radius:10px; background:#FEF2F2; color:#991B1B; font-size:13px; font-weight:800; border:1px solid #FCA5A5; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cloud-fail-bar .cloud-fail-text { flex:1; min-width:240px; font-weight:700; color:#991B1B; line-height:1.55; }
+.cloud-fail-bar .cloud-fail-text b { color:#7F1D1D; }
+.cloud-fail-bar .cloud-fail-safe { display:block; font-weight:600; color:#9A3412; margin-top:3px; }
+.cloud-fail-bar .btn-danger { background:#B91C1C; color:#fff; border:1px solid #B91C1C; }
+.cloud-fail-bar .btn-danger:hover { background:#7F1D1D; }
 .btn { border:none; border-radius:10px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:inherit; display:inline-flex; align-items:center; gap:6px; }
 .btn:disabled { opacity:0.45; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
 .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:white; }
@@ -594,6 +600,14 @@ body {
       </span>
       <button class="btn btn-success" @click="loadPendingCloudRecord">载入云端版本</button>
       <button class="btn btn-outline" @click="dismissPendingCloudRecord">保留我的填写</button>
+    </div>
+    <div class="cloud-fail-bar" v-if="cloudSaveIssue">
+      <span class="cloud-fail-text">
+        <b>{{cloudSaveIssue.label}} 没有保存到云端。</b>{{cloudSaveIssue.reason}}
+        <span class="cloud-fail-safe">你刚才打的分已经存在本机，刷新页面不会丢；解决后点"重试提交"即可同步。</span>
+      </span>
+      <button class="btn btn-danger" @click="retryCloudSubmit">重试提交</button>
+      <button class="btn btn-outline" @click="cloudSaveIssue = null">知道了</button>
     </div>
     <div class="cloud-status-bar" v-if="cloudEndpoint.trim() && !(isAdminMode && adminToolsOpen)">
       云端状态：{{cloudStatus}}
@@ -3339,6 +3353,15 @@ function seenRecordVersion(id) {
   }
 }
 
+function snapshotSeenRecordVersions() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SEEN_RECORD_VERSION_KEY) || '{}');
+    return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+  } catch {
+    return {};
+  }
+}
+
 function markRecordVersionSeen(record) {
   if(!record || !record.id || !record.savedAt) return;
   let data = {};
@@ -3540,6 +3563,8 @@ createApp({
     const cloudToken = ref(initialCloudToken);
     if(rawUrlCloudToken && rawUrlCloudToken !== rawSavedCloudToken) localStorage.setItem(CLOUD_TOKEN_KEY, initialCloudToken);
     const cloudStatus = ref(cloudEndpoint.value ? '云端地址已配置' : '云端地址未配置');
+    // 云端没存上时的常驻提示：toast 会消失、状态行字太小，考评人很容易以为已经保存。
+    const cloudSaveIssue = ref(null);
     const pendingCloudRecordRaw = ref(null);
     // 只在提示条指向的记录确实就是当前正在看的员工+季度时才显示，切换人员/季度后自动收起。
     const pendingCloudRecord = computed(()=>{
@@ -5322,23 +5347,39 @@ createApp({
         showToast('请先配置云端提交地址');
         return;
       }
+      // saveCurrentRecord 会把"已见版本"刷新成当前时间，所以要先把旧快照留下来。
+      const seenBefore = snapshotSeenRecordVersions();
       const record = saveCurrentRecord();
       if(!record) return;
       try {
         const existing = await findCloudRecordById(endpoint, record.id);
-        if(existing && evaluationInputQuality(existing) > evaluationInputQuality(record)) {
-          const proceed = confirm(`云端已有一份看起来更完整的 ${record.employeeName} ${record.period} 记录（云端保存于 ${formatDateTime(existing.savedAt)}）。\n\n如果你确定当前内容才是最新、正确的版本，可以选择"确定"强制覆盖云端；选择"取消"则不提交，保留云端原有记录。`);
+        // 只在真正有冲突时才拦：云端这条在我打开之后被别人改过，或者我根本没看过云端已有的内容。
+        // 原来按"字段填得多不多"判断，考评人只补打分、天然比管理员建的底稿"少"，每次保存都会被拦下。
+        const baseVersion = seenBefore[record.id] || null;
+        const cloudChangedSinceIOpened = Boolean(existing && existing.savedAt && baseVersion
+          && new Date(existing.savedAt) > new Date(baseVersion));
+        const neverSawCloudVersion = Boolean(existing && !baseVersion && recordHasAnyEvaluationInput(existing));
+        if(cloudChangedSinceIOpened || neverSawCloudVersion) {
+          const why = cloudChangedSinceIOpened
+            ? `云端的 ${record.employeeName} ${record.period} 在你打开之后被改过（云端保存于 ${formatDateTime(existing.savedAt)}）。`
+            : `云端已有一份 ${record.employeeName} ${record.period} 的记录（保存于 ${formatDateTime(existing.savedAt)}），你这次打开没有载入过它。`;
+          const proceed = confirm(`${why}\n\n确定＝用你现在页面上的内容覆盖云端；\n取消＝先不提交，点"同步云端记录"看看云端那份是什么。`);
           if(!proceed) {
-            cloudStatus.value = `云端已有更完整的 ${record.employeeName} ${record.period} 记录，未覆盖当前云端数据`;
-            showToast('已取消，未覆盖云端记录');
+            cloudSaveIssue.value = {
+              label: `${record.employeeName} ${record.period}`,
+              reason: '你选择了不覆盖云端，所以这次打分没有提交上去。'
+            };
+            cloudStatus.value = `${record.employeeName} ${record.period} 未提交（已取消覆盖）`;
+            showToast('已取消，未提交到云端');
             return;
           }
-          cloudStatus.value = `已选择强制覆盖 ${record.employeeName} ${record.period} 的云端记录`;
+          cloudStatus.value = `已选择覆盖 ${record.employeeName} ${record.period} 的云端记录`;
         }
       } catch {
         // 提交前检查失败时保留原有提交通道，避免网络波动阻断正常保存。
       }
       cloudStatus.value = '正在提交云端...';
+      const label = `${record.employeeName} ${record.period}`;
       try {
         const sentVia = await sendCloudPayload(endpoint, record);
         const channelLabel = sentVia === 'form' ? '表单通道' : (sentVia === 'beacon' ? '备用通道' : '云端');
@@ -5346,20 +5387,39 @@ createApp({
         try {
           const verified = await verifyCloudSubmission(endpoint, record);
           if(verified) {
-            cloudStatus.value = `云端已确认：${record.employeeName} ${record.period} ${formatDateTime(verified.savedAt)}`;
+            cloudSaveIssue.value = null;
+            cloudStatus.value = `云端已确认：${label} ${formatDateTime(verified.savedAt)}`;
             showToast('云端已确认保存');
           } else {
-            cloudStatus.value = '已发送，但云端暂未确认；请稍后点“同步云端记录”检查';
-            showToast('已发送，但云端暂未确认');
+            // 提交通道用的是 no-cors，服务端拒绝时 fetch 也不会报错，只能靠这一步回查来判断。
+            cloudSaveIssue.value = { label, reason: '云端查不到这条记录，说明它没有真正写入。' };
+            cloudStatus.value = `${label} 未写入云端`;
+            showToast('未写入云端，请看页面顶部提示');
           }
-        } catch {
-          cloudStatus.value = '已发送，但确认失败；请稍后点“同步云端记录”检查';
-          showToast('已发送，云端确认失败');
+        } catch (err) {
+          cloudSaveIssue.value = { label, reason: describeCloudError(err) };
+          cloudStatus.value = `${label} 未写入云端`;
+          showToast('未写入云端，请看页面顶部提示');
         }
-      } catch {
-        cloudStatus.value = '云端提交失败，请导出提交包兜底';
-        showToast('云端提交失败');
+      } catch (err) {
+        cloudSaveIssue.value = { label, reason: describeCloudError(err) };
+        cloudStatus.value = `${label} 未写入云端`;
+        showToast('未写入云端，请看页面顶部提示');
       }
+    }
+
+    async function retryCloudSubmit() {
+      cloudSaveIssue.value = null;
+      await submitCurrentToCloud();
+    }
+
+    function describeCloudError(err) {
+      const text = String((err && err.message) || err || '').trim();
+      if(/unauthorized/i.test(text)) return '云端密钥无效或链接已失效，请向 Amy 重新索取你的专用链接。';
+      if(/SHARED_TOKEN/i.test(text)) return '云端后台还没配置密钥，请让 Amy 在 Apps Script 里设置 SHARED_TOKEN。';
+      if(/cloud sync failed/i.test(text)) return '连不上云端地址，可能是网络问题或云端地址已变更。';
+      if(/invalid cloud payload/i.test(text)) return '云端返回的内容无法识别，请让 Amy 确认后台版本。';
+      return text ? `云端返回：${text}` : '云端没有确认保存。';
     }
 
     async function sendCloudPayload(endpoint, record) {
@@ -5434,6 +5494,12 @@ createApp({
         };
         window[callbackName] = (payload)=>{
           cleanup();
+          // 后端对密钥错误等情况返回 {ok:false,error:...}，不往下传就只剩"同步失败"四个字，
+          // 考评人无从判断是网络问题还是链接失效。
+          if(payload && payload.ok === false) {
+            reject(new Error(String(payload.error || 'cloud rejected')));
+            return;
+          }
           resolve(payload);
         };
         script.onerror = ()=>{
@@ -5504,11 +5570,14 @@ createApp({
         cloudStatus.value = `已同步 ${incoming.length} 条记录，当前查看 ${comparePeriod.value}`;
         if(loadedRecord) cloudStatus.value = `已同步 ${incoming.length} 条记录，已载入 ${loadedRecord.employeeName} ${loadedRecord.period}`;
         if(!silent) showToast(`云端记录已同步，当前查看 ${comparePeriod.value}`);
-      } catch {
-        if(!silent) {
-          cloudStatus.value = '云端同步失败，请检查地址或先用JSON导入';
-          showToast('云端同步失败');
+      } catch (err) {
+        const reason = describeCloudError(err);
+        cloudStatus.value = `云端同步失败：${reason}`;
+        // 密钥失效这类问题要在打开页面时就说清楚，否则考评人会一路打完分才发现存不上。
+        if(/失效|密钥|SHARED_TOKEN/.test(reason)) {
+          cloudSaveIssue.value = { label: '云端连接', reason };
         }
+        if(!silent) showToast('云端同步失败');
       }
     }
 
@@ -6414,6 +6483,7 @@ createApp({
       meta, requiredEvaluatorName, bonusBase, bonusCurrency, monthlyBonuses, gradeScale, dimensions, bonusItems, monthlyKpiSnapshots, activeKpiMonth, quarterlyOkrs, quarterlyBonusPlan, commissionPlan,
       publicUrl, managerShareUrl, amyAdminUrl, agnesFinanceUrl, chrisXuManagerUrl, okrGroupUrl, cloudEndpoint, cloudToken, saveCloudToken, cloudStatus,
       pendingCloudRecord, loadPendingCloudRecord, dismissPendingCloudRecord,
+      cloudSaveIssue, retryCloudSubmit,
       isAdminMode, adminToolsOpen, isScopedViewer, isOkrOnlyMode, viewerScopeLabel, viewerScopeDescription,
       records, comparePeriod, selectedEmployee, quickEmployeeSelect, assessmentPeriodOptions,
       employeeNames, departmentCount, comparisonRecords, timelineRecords, quickEmployeeCards, quickEmployeeGroups,
