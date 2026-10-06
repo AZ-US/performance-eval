@@ -551,7 +551,7 @@ body {
             <option v-for="name in employeeNames" :key="name" :value="name">{{name}}</option>
           </select>
         </label>
-        <label>考核人 <input :value="requiredEvaluatorName" readonly title="Kori由Agnes考评，其他员工由Damon考评"></label>
+        <label>考核人 <input :value="requiredEvaluatorName" readonly title="Kori、Vicky由Agnes考评，其他员工由Damon考评"></label>
         <label>季度
           <select :value="meta.period" @change="changeAssessmentPeriod($event.target.value)">
             <option v-for="period in assessmentPeriodOptions" :key="period" :value="period">{{period}}</option>
@@ -2368,6 +2368,50 @@ const PERSON_PROFILES = {
       ]}
     ]
   },
+  Vicky: {
+    name: "Vicky",
+    templateName: "Vicky Finance 月度KPI考核表",
+    compensationMode: "monthly_bonus",
+    bonusBase: 300,
+    bonusBaseHistory: [ { before: "2026-Q2", base: 500 } ],
+    bonusCurrency: "USD",
+    compensationNote: "Vicky（卓乃芬）财务主管，按月度考核，满分100分。月度绩效奖金基数：2026-Q2起USD300，2026-Q1及更早为USD500。发放系数：低于60分不发放，60-69分0.6，70-79分0.8，80-89分1.0，90分及以上1.2。",
+    detailedQuarters: ["Q3","Q4"],
+    quarterTemplateNames: {
+      Q3: "Vicky Finance 月度KPI Q3考核表",
+      Q4: "Vicky Finance 月度KPI Q4考核表"
+    },
+    gradeScale: [
+      { grade:"S", label:"90分及以上", minScore:90, maxScore:100, coefficient:1.2 },
+      { grade:"A", label:"80-89分", minScore:80, maxScore:89, coefficient:1.0 },
+      { grade:"B", label:"70-79分", minScore:70, maxScore:79, coefficient:0.8 },
+      { grade:"C", label:"60-69分", minScore:60, maxScore:69, coefficient:0.6 },
+      { grade:"D", label:"低于60分 不发放", minScore:0, maxScore:59, coefficient:0 }
+    ],
+    dimensions: [
+      { id:"JC", name:"基础工作", kpis:[
+        profileKpi("KR1","资金结报单录入",5,"每日系统录入资金结报单余额并完成审核，确保现金银行实际余额和系统录入一致，并与日记账余额一致。评分依据：未在系统内及时录入结报单，每发现一笔扣1分；BI系统日记账余额和资金结报单比对结果每发现一个账户差异扣1分。","全月每日及时录入，无账户差异","按要求录入，无实质差异","偶有延迟或个别账户差异","多次未录入或差异未处理"),
+        profileKpi("KR2","日记账录入及付款核销",5,"当天发生的收支在次日中午之前录入完成，审核科目合理性及日记账余额和实际余额一致性，在次日下班前核销完成。评分依据：根据日记账延期报表统计，每发现一笔因主观原因晚录入或晚核销的情况扣1分。","全月无主观原因延迟，科目准确","主要事项按期完成","偶有主观原因延迟","多次延迟录入或核销缺失"),
+        profileKpi("KR3","OMS付款及U8费用报销审批",10,"核查OMS付款信息，核查付款合理性；核对费用报销单据。评分依据：如有未走付款流程先付款的，每发现一笔扣1分。","审核严谨，无一笔先付款后补流程","按流程审核，单据齐全","偶有单据缺漏需返工","出现未走流程先付款")
+      ]},
+      { id:"ZK", name:"账款管理", kpis:[
+        profileKpi("KR1","应收款管理",10,"及时发送应收款追踪表给各业务部门，对账龄（按业务日期）超过2个月的未收款或超期未收款进行滚动追踪，沟通并解决未收款存在的问题，直至款项收回。评分依据：同分公司总经理考核标准，详见应收款考核方案。","追踪表按时发送，超期账款显著下降","按期追踪，主要问题有推进","追踪不够滚动或沟通不足","未发送追踪表或账款长期悬置"),
+        profileKpi("KR2","应收款核销",5,"当天发生的收支在次日中午之前在OMS系统完成录入，审核科目合理性及日记账余额和实际余额一致性，在次次日下班前核销完成。评分依据：根据日记账报表统计，每发现一笔延迟或未完成核销的情况扣1分。非主观原因导致的晚核销，经申请确认可以免考核；周末顺延，节假日导致的延期可提交申请。","全月按期核销，无延迟","主要核销按期完成","偶有延迟但已申请说明","多笔延迟或未完成核销")
+      ]},
+      { id:"JY", name:"经营管理", kpis:[
+        profileKpi("KR1","管理报表",10,"1. 每月5日前提交应收应付报表，要求数据准确，每延迟一天扣1分，数据问题扣2分；2. 次次月3日之前提交关账利润报表，要求格式统一、附表完整、数据准确；3. 次月15日之前提交预算完成报告及分析说明。","三类报表全部按时且数据准确","按时提交，个别数据需微调","有报表延迟或数据问题","多份报表延迟或数据不可用"),
+        profileKpi("KR2","经营分析与预算监控",15,"每月监控费用和毛利预算完成的联动情况，并对异常情况分析说明。评分依据：次月22日之前提交经营分析报告，出具分部门净利表，和总经办沟通存在问题及改进措施；报表按时提交，每延迟一天扣1分，数据质量问题扣2分。","按时提交且能指出问题并提出改进措施","按时提交，分析到位","提交延迟或分析偏描述","未提交或数据质量问题突出"),
+        profileKpi("KR3","异常订单监管",10,"次月15日前检查费用录入情况，关账前对异常订单进行核查，监督费用及时录入，减少补单。评分依据：补单毛利影响率上限4%、下限2%；高于4%零分，低于2%满分，介于2%-4%按比例打分。","补单毛利影响率低于2%","影响率接近2%，核查到位","影响率介于2%-4%","影响率高于4%"),
+        profileKpi("KR4","线上管报核对",10,"每月关账前检查核对预估管报和线上管报的差异，并在15号前完成差异调整。评分依据：净利差异率不超过5%满分，超过7%零分，介于5%-7%按比例打分。剔除U8外币评估产生的汇兑损益影响。","净利差异率不超过5%且按期调整","差异率接近5%，已完成调整","差异率介于5%-7%","差异率超过7%或未完成调整")
+      ]},
+      { id:"SW", name:"税务管理", kpis:[
+        profileKpi("KR1","财务核算",10,"每月15号前完成账务处理及税务申报；及时完成费用下推及月度关账模板填写。评分依据：1. 次月15号前完成U8账务处理，每延迟一天扣1分；2. 次日下班前完成前一天已付款U8管理费用下推，每存在一笔延迟下推或者下推错误扣1分。","账务与申报均按期，无下推差错","按期完成，个别下推需修正","有延迟或多笔下推错误","超期申报或核算差错较多")
+      ]},
+      { id:"ZH", name:"综合评价", kpis:[
+        profileKpi("KR1","总体工作评价",10,"对整体工作情况综合评价。","主动补位，整体表现突出","工作稳定，达到岗位要求","部分工作需要提醒推动","整体表现未达岗位要求")
+      ]}
+    ]
+  },
   Kori: {
     name: "Kori",
     templateName: "Kori Finance 月度KPI考核表",
@@ -2492,6 +2536,7 @@ function prepareQuarterProfileTemplates() {
       quarterlyOkrs: deepClone(profile.quarterlyOkrs || []),
       quarterlyBonusPlan: deepClone(profile.quarterlyBonusPlan || null),
       commissionPlan: deepClone(profile.commissionPlan || null),
+      gradeScale: deepClone(profile.gradeScale || null),
       dimensions: profile.dimensions,
       isPlaceholder: false
     };
@@ -2510,6 +2555,7 @@ function prepareQuarterProfileTemplates() {
         quarterlyOkrs: deepClone(override.quarterlyOkrs ?? q2.quarterlyOkrs ?? []),
         quarterlyBonusPlan: deepClone(override.quarterlyBonusPlan ?? q2.quarterlyBonusPlan ?? null),
         commissionPlan: deepClone(override.commissionPlan ?? q2.commissionPlan ?? null),
+        gradeScale: deepClone(override.gradeScale ?? q2.gradeScale ?? null),
         dimensions: deepClone(override.dimensions ?? q2.dimensions ?? []),
         isPlaceholder: false
       };
@@ -2529,6 +2575,7 @@ function buildPlaceholderQuarterProfile(profile, quarter) {
     bonusBase: profile.bonusBase,
     bonusCurrency: profile.bonusCurrency,
     compensationNote: `${profile.name} ${quarter}暂未配置岗位OKR标准；待上传${quarter}正式文件后再补充，不自动套用其他部门或岗位OKR。${profile.compensationNote}`,
+    gradeScale: deepClone(profile.gradeScale || null),
     bonusItems: deepClone(profile.bonusItems || []),
     quarterlyOkrs: [],
     quarterlyBonusPlan: null,
@@ -2685,6 +2732,20 @@ function periodYear(period) {
 function periodSortValue(period) {
   const match = String(period || '').trim().match(/^(\d{4})-Q([1-4])$/i);
   return match ? Number(match[1]) * 10 + Number(match[2]) : 0;
+}
+
+// 奖金基数按期间分段：bonusBaseHistory 里每条 {before, base} 表示"在该期间之前用这个基数"。
+// 没配置 bonusBaseHistory 的人（目前除 Vicky 外的所有人）原样返回模板基数，行为不变。
+function resolveProfileBonusBase(template, profile, period) {
+  const base = template?.bonusBase;
+  const history = profile?.bonusBaseHistory;
+  if(!Array.isArray(history) || !history.length) return base;
+  const current = periodSortValue(normalizePeriodParam(period) || period);
+  if(!current) return base;
+  const hit = [...history]
+    .sort((a, b) => periodSortValue(a.before) - periodSortValue(b.before))
+    .find(item => current < periodSortValue(item.before));
+  return hit ? hit.base : base;
 }
 
 function buildAssessmentPeriodOptions(anchorPeriod) {
@@ -3297,7 +3358,8 @@ const EMPLOYEE_DEPARTMENT_OVERRIDES = {
   Gary: '出口部',
   'Chris Xu': '进口部',
   ChrisXu: '进口部',
-  Kori: '财务部'
+  Kori: '财务部',
+  Vicky: '财务部'
 };
 
 function isHiddenEmployeeName(name) {
@@ -3385,8 +3447,10 @@ function canonicalEmployeeName(name, renameMap = {}) {
   return current;
 }
 
+const AGNES_EVALUATED_EMPLOYEES = ['Kori', 'Vicky'];
+
 function evaluatorForEmployee(name) {
-  return canonicalEmployeeName(name) === 'Kori' ? 'Agnes' : 'Damon';
+  return AGNES_EVALUATED_EMPLOYEES.includes(canonicalEmployeeName(name)) ? 'Agnes' : 'Damon';
 }
 
 function isEmployeeRuleRecord(record) {
@@ -4864,7 +4928,7 @@ createApp({
       if(matchesProfileTemplate || canReplaceQuarterTemplate || needsKoriV1Upgrade || needsGaryCommissionOkrUpgrade || needsTimQuarterOkrUpgrade || needsFreesiaQuarterUpgrade || needsQuarterlyBonusPlanUpgrade) {
         data.meta.templateName = template.templateName;
         data.meta.templateVersion = `${effectiveQuarterKey}-role${template.isPlaceholder ? '-placeholder' : ''}`;
-        data.bonusBase = template.bonusBase;
+        data.bonusBase = resolveProfileBonusBase(template, profile, effectivePeriod);
         data.bonusCurrency = template.bonusCurrency;
         data.compensationMode = template.compensationMode;
         data.compensationNote = template.compensationNote;
@@ -5106,12 +5170,12 @@ createApp({
           department: departmentForEmployee(profile.name)
         },
         department: departmentForEmployee(profile.name),
-        bonusBase: template.bonusBase,
+        bonusBase: resolveProfileBonusBase(template, profile, period),
         bonusCurrency: template.bonusCurrency,
         compensationMode: template.compensationMode,
         compensationNote: template.compensationNote,
-        monthlyBonuses: withTimQ1FixedBonuses(buildMonthlyBonuses(period, template.bonusBase), profile, period),
-        gradeScale: normalizeGradeScale(DEFAULT_TEMPLATE.gradeScale),
+        monthlyBonuses: withTimQ1FixedBonuses(buildMonthlyBonuses(period, resolveProfileBonusBase(template, profile, period)), profile, period),
+        gradeScale: normalizeGradeScale(template.gradeScale || DEFAULT_TEMPLATE.gradeScale),
         dimensions: deepClone(template.dimensions),
         bonusItems: deepClone(template.bonusItems || []),
         quarterlyOkrs: deepClone(template.quarterlyOkrs || []),
